@@ -1,0 +1,6 @@
+@ReadingTracker.Library_HostAddress = http://localhost:5180
+
+GET {{ReadingTracker.Library_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
