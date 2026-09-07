@@ -8,9 +8,9 @@ namespace ReadingTracker.Catalog.Books;
 /// and falls back to an external provider only for titles it has never seen — persisting
 /// them on first reference so every later lookup has a stable BookId to point at.
 /// </summary>
-public sealed class BookCatalog(CatalogDbContext database, IBookProvider provider, TimeProvider clock)
+public sealed class BookCatalog(CatalogDbContext database, BookProviderChain providers, TimeProvider clock)
 {
-    public async Task<IReadOnlyList<Book>> SearchByIsbnAsync(string isbn, CancellationToken cancellationToken)
+    public async Task<CatalogSearch> SearchByIsbnAsync(string isbn, CancellationToken cancellationToken)
     {
         var alreadyCached = await database.Books
             .Where(book => book.Isbn == isbn)
@@ -18,14 +18,22 @@ public sealed class BookCatalog(CatalogDbContext database, IBookProvider provide
 
         if (alreadyCached.Count > 0)
         {
-            return alreadyCached;
+            // Already known, so a provider outage is irrelevant here.
+            return CatalogSearch.Completed(alreadyCached);
         }
 
-        var found = await provider.SearchByIsbnAsync(isbn, cancellationToken);
+        var search = await providers.SearchByIsbnAsync(isbn, cancellationToken);
+
+        if (search.Status is SearchStatus.ProvidersUnavailable)
+        {
+            return CatalogSearch.Unavailable;
+        }
+
+        var found = search.Results;
 
         if (found.Count == 0)
         {
-            return [];
+            return CatalogSearch.Completed([]);
         }
 
         // A provider can return the same ISBN more than once in one response; those are the
@@ -50,12 +58,12 @@ public sealed class BookCatalog(CatalogDbContext database, IBookProvider provide
                 entry.State = EntityState.Detached;
             }
 
-            return await database.Books
+            return CatalogSearch.Completed(await database.Books
                 .Where(book => book.Isbn == isbn)
-                .ToListAsync(cancellationToken);
+                .ToListAsync(cancellationToken));
         }
 
-        return books;
+        return CatalogSearch.Completed(books);
     }
 
     public Task<Book?> FindAsync(Guid bookId, CancellationToken cancellationToken) =>

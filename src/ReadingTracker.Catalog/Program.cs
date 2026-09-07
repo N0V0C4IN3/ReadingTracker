@@ -23,8 +23,20 @@ builder.Services.Configure<GoogleBooksOptions>(
 builder.Services.PostConfigure<GoogleBooksOptions>(googleBooks =>
     googleBooks.ApiKey ??= builder.Configuration["GOOGLE_BOOKS_API_KEY"]);
 
-builder.Services.AddHttpClient<IBookProvider, GoogleBooksProvider>((serviceProvider, client) =>
+builder.Services.Configure<OpenLibraryOptions>(
+    builder.Configuration.GetSection(OpenLibraryOptions.SectionName));
+
+builder.Services.AddHttpClient<GoogleBooksProvider>((serviceProvider, client) =>
     client.BaseAddress = serviceProvider.GetRequiredService<IOptions<GoogleBooksOptions>>().Value.BaseAddress);
+
+builder.Services.AddHttpClient<OpenLibraryProvider>((serviceProvider, client) =>
+    client.BaseAddress = serviceProvider.GetRequiredService<IOptions<OpenLibraryOptions>>().Value.BaseAddress);
+
+// Order matters: Google Books has the more consistent metadata, so it answers first and
+// Open Library covers its gaps and outages.
+builder.Services.AddScoped<IBookProvider>(services => services.GetRequiredService<GoogleBooksProvider>());
+builder.Services.AddScoped<IBookProvider>(services => services.GetRequiredService<OpenLibraryProvider>());
+builder.Services.AddScoped<BookProviderChain>();
 
 // Fail at startup with a clear message rather than deep inside Npgsql on first query.
 var catalogDbConnectionString = builder.Configuration.GetConnectionString("CatalogDb")
