@@ -1,9 +1,47 @@
+using Microsoft.AspNetCore.Mvc;
+
 namespace ReadingTracker.Catalog.Books;
 
 public static class BookEndpoints
 {
+    /// <summary>
+    /// Enough for any one page of a reader's library, while stopping a single request from
+    /// asking for the whole table.
+    /// </summary>
+    private const int MaxBooksPerLookup = 200;
+
     public static void MapBookEndpoints(this IEndpointRouteBuilder endpoints)
     {
+        // Lets a caller render a list of Books without one request per Book.
+        endpoints.MapGet("/api/books", async (
+            [FromQuery] Guid[]? ids,
+            BookCatalog catalog,
+            CancellationToken cancellationToken) =>
+        {
+            if (ids is null || ids.Length == 0)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["ids"] = ["Supply at least one book id."],
+                });
+            }
+
+            if (ids.Length > MaxBooksPerLookup)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["ids"] = [$"Ask for at most {MaxBooksPerLookup} books at a time."],
+                });
+            }
+
+            var books = await catalog.FindAllAsync(ids, cancellationToken);
+
+            // Ids matching nothing are simply absent: a caller rendering a list should not
+            // lose every Book because one id went stale.
+            return Results.Ok(books.Select(BookResponse.From));
+        })
+        .WithName("GetBooks");
+
         endpoints.MapGet("/api/books/search", async (
             string? isbn,
             string? title,

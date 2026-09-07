@@ -93,6 +93,17 @@ public sealed class BookCatalog(
         return book;
     }
 
+    /// <summary>
+    /// Looks up many Books at once. Ids matching nothing are left out rather than reported,
+    /// so one stale id doesn't spoil a whole page of results.
+    /// </summary>
+    public async Task<IReadOnlyList<Book>> FindAllAsync(
+        IReadOnlyList<Guid> bookIds,
+        CancellationToken cancellationToken) =>
+        await database.Books
+            .Where(book => bookIds.Contains(book.Id))
+            .ToListAsync(cancellationToken);
+
     public Task<Book?> FindAsync(Guid bookId, CancellationToken cancellationToken) =>
         database.Books.FirstOrDefaultAsync(book => book.Id == bookId, cancellationToken);
 
