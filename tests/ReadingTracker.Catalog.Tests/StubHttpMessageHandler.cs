@@ -13,10 +13,16 @@ public sealed class StubHttpMessageHandler : HttpMessageHandler
 
     public HttpRequestMessage? LastRequest { get; private set; }
 
+    /// <summary>How many times the provider has actually been reached over the network.</summary>
+    public int RequestCount => _requestCount;
+
+    private int _requestCount;
+
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
+        Interlocked.Increment(ref _requestCount);
         LastRequest = request;
         return Task.FromResult(Respond(request));
     }

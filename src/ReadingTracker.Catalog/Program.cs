@@ -1,5 +1,6 @@
 using DotNetEnv;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using ReadingTracker.Catalog.Books;
 using ReadingTracker.Catalog.Persistence;
@@ -34,6 +35,9 @@ builder.Services.AddDbContext<CatalogDbContext>(options =>
     options.UseNpgsql(
         catalogDbConnectionString,
         npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", CatalogDbContext.Schema)));
+
+builder.Services.AddScoped<BookCatalog>();
+builder.Services.TryAddSingleton(TimeProvider.System);
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<CatalogDbContext>("catalog-db");
