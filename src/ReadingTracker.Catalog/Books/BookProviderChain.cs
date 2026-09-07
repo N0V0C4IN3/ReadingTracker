@@ -25,7 +25,25 @@ public sealed record ProviderSearch(SearchStatus Status, IReadOnlyList<BookSearc
 /// </summary>
 public sealed class BookProviderChain(IEnumerable<IBookProvider> providers, ILogger<BookProviderChain> logger)
 {
-    public async Task<ProviderSearch> SearchByIsbnAsync(string isbn, CancellationToken cancellationToken)
+    public Task<ProviderSearch> SearchByIsbnAsync(string isbn, CancellationToken cancellationToken) =>
+        AskEachAsync(
+            provider => provider.SearchByIsbnAsync(isbn, cancellationToken),
+            isbn,
+            cancellationToken);
+
+    public Task<ProviderSearch> SearchByTitleAndAuthorAsync(
+        string? title,
+        string? author,
+        CancellationToken cancellationToken) =>
+        AskEachAsync(
+            provider => provider.SearchByTitleAndAuthorAsync(title, author, cancellationToken),
+            $"{title} / {author}",
+            cancellationToken);
+
+    private async Task<ProviderSearch> AskEachAsync(
+        Func<IBookProvider, Task<IReadOnlyList<BookSearchResult>>> ask,
+        string searchedFor,
+        CancellationToken cancellationToken)
     {
         var someProviderAnswered = false;
 
@@ -33,7 +51,7 @@ public sealed class BookProviderChain(IEnumerable<IBookProvider> providers, ILog
         {
             try
             {
-                var results = await provider.SearchByIsbnAsync(isbn, cancellationToken);
+                var results = await ask(provider);
                 someProviderAnswered = true;
 
                 if (results.Count > 0)
@@ -45,9 +63,9 @@ public sealed class BookProviderChain(IEnumerable<IBookProvider> providers, ILog
             {
                 logger.LogWarning(
                     exception,
-                    "Book provider {Provider} could not be reached for ISBN {Isbn}",
+                    "Book provider {Provider} could not be reached while searching for {SearchedFor}",
                     provider.GetType().Name,
-                    isbn);
+                    searchedFor);
             }
         }
 

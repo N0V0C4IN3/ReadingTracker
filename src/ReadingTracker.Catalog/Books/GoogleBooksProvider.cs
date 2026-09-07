@@ -7,11 +7,39 @@ public sealed class GoogleBooksProvider(HttpClient httpClient, IOptions<GoogleBo
 {
     private readonly GoogleBooksOptions _options = options.Value;
 
-    public async Task<IReadOnlyList<BookSearchResult>> SearchByIsbnAsync(
+    public Task<IReadOnlyList<BookSearchResult>> SearchByIsbnAsync(
         string isbn,
+        CancellationToken cancellationToken) =>
+        SearchAsync($"isbn:{isbn}", isbn, cancellationToken);
+
+    public Task<IReadOnlyList<BookSearchResult>> SearchByTitleAndAuthorAsync(
+        string? title,
+        string? author,
         CancellationToken cancellationToken)
     {
-        var query = $"volumes?q=isbn:{Uri.EscapeDataString(isbn)}";
+        var terms = new List<string>(2);
+
+        if (!string.IsNullOrWhiteSpace(title))
+        {
+            terms.Add($"intitle:{title.Trim()}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(author))
+        {
+            terms.Add($"inauthor:{author.Trim()}");
+        }
+
+        return terms.Count == 0
+            ? Task.FromResult<IReadOnlyList<BookSearchResult>>([])
+            : SearchAsync(string.Join(' ', terms), searchedIsbn: null, cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<BookSearchResult>> SearchAsync(
+        string searchTerms,
+        string? searchedIsbn,
+        CancellationToken cancellationToken)
+    {
+        var query = $"volumes?q={Uri.EscapeDataString(searchTerms)}";
 
         if (!string.IsNullOrWhiteSpace(_options.ApiKey))
         {
@@ -21,10 +49,10 @@ public sealed class GoogleBooksProvider(HttpClient httpClient, IOptions<GoogleBo
         var payload = await httpClient.GetFromJsonAsync<VolumesResponse>(query, cancellationToken);
 
         // Google omits "items" entirely when nothing matches, rather than returning an empty array.
-        return payload?.Items?.Select(item => ToSearchResult(item, isbn)).ToArray() ?? [];
+        return payload?.Items?.Select(item => ToSearchResult(item, searchedIsbn)).ToArray() ?? [];
     }
 
-    private static BookSearchResult ToSearchResult(VolumeItem item, string searchedIsbn)
+    private static BookSearchResult ToSearchResult(VolumeItem item, string? searchedIsbn)
     {
         var info = item.VolumeInfo;
 

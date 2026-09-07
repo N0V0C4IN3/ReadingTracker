@@ -5,11 +5,26 @@ public static class BookEndpoints
     public static void MapBookEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapGet("/api/books/search", async (
-            string isbn,
+            string? isbn,
+            string? title,
+            string? author,
             BookCatalog catalog,
             CancellationToken cancellationToken) =>
         {
-            var search = await catalog.SearchByIsbnAsync(isbn, cancellationToken);
+            if (string.IsNullOrWhiteSpace(isbn)
+                && string.IsNullOrWhiteSpace(title)
+                && string.IsNullOrWhiteSpace(author))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["query"] = ["Search by isbn, or by title and/or author."],
+                });
+            }
+
+            // An ISBN names one edition exactly, so it wins over the fuzzier fields.
+            var search = string.IsNullOrWhiteSpace(isbn)
+                ? await catalog.SearchByTitleAndAuthorAsync(title, author, cancellationToken)
+                : await catalog.SearchByIsbnAsync(isbn.Trim(), cancellationToken);
 
             return search.Status switch
             {

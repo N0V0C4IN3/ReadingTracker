@@ -2,7 +2,8 @@ using System.Net;
 
 namespace ReadingTracker.Catalog.Tests;
 
-public sealed class HealthCheckTests(CatalogApiFixture fixture) : IClassFixture<CatalogApiFixture>
+[Collection(CatalogApiCollection.Name)]
+public sealed class HealthCheckTests(CatalogApiFixture fixture)
 {
     [Fact]
     public async Task Reports_healthy_when_the_service_can_reach_its_own_database()
