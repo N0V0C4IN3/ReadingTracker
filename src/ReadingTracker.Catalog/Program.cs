@@ -40,11 +40,9 @@ builder.Services.AddHealthChecks()
 
 var app = builder.Build();
 
-// Catalog owns its schema (ADR-0004), so it brings it up to date on boot.
-await using (var scope = app.Services.CreateAsyncScope())
-{
-    await scope.ServiceProvider.GetRequiredService<CatalogDbContext>().Database.MigrateAsync();
-}
+// Catalog owns its schema (ADR-0004), so it brings it up to date on boot, taking a lock
+// so concurrent replicas serialise rather than race (ADR-0006).
+await CatalogSchema.MigrateAsync(app.Services);
 
 if (app.Environment.IsDevelopment())
 {
