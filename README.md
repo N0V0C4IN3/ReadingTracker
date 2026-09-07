@@ -11,7 +11,7 @@ The **Catalog** service is complete. The rest is designed but not yet built.
 | Service | What it does | Status |
 | --- | --- | --- |
 | Catalog | Finds books via Google Books and Open Library, caches them, gives them stable ids | Built |
-| Library | A reader's own books: reading status, progress, and reading history | Designed |
+| Library | A reader's own books: reading status, progress, and reading history | In progress |
 | Identity | Maps a Google account to an internal user | Designed |
 | Gateway | Single entry point; validates the caller's Google token | Designed |
 | Web | Blazor WebAssembly front end | Designed |
@@ -27,11 +27,12 @@ docker compose up -d
 # 2. Configure the Google Books API key (see below)
 cp .env.example .env   # then fill in GOOGLE_BOOKS_API_KEY
 
-# 3. Run the Catalog service
-dotnet run --project src/ReadingTracker.Catalog
+# 3. Run a service
+dotnet run --project src/ReadingTracker.Catalog   # http://localhost:5103
+dotnet run --project src/ReadingTracker.Library   # http://localhost:5110
 ```
 
-Then open <http://localhost:5103/health> — it returns `Healthy` only when the service can actually reach its database.
+Each service exposes `/health`, which returns `Healthy` only when it can actually reach its own database. Catalog and Library share one Postgres instance but own separate schemas and never read each other's tables.
 
 > **Ports.** Postgres is on **55432** and RabbitMQ on **55672** (management UI on **55673**), deliberately off the default ports so they don't collide with anything already installed locally.
 
