@@ -1,7 +1,9 @@
 using DotNetEnv;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using ReadingTracker.Library.Catalog;
+using ReadingTracker.Library.Entries;
 using ReadingTracker.Library.Persistence;
 
 // Load .env before the builder reads environment variables, so local development can keep
@@ -28,6 +30,9 @@ builder.Services.AddDbContext<LibraryDbContext>(options =>
         libraryDbConnectionString,
         npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", LibraryDbContext.Schema)));
 
+builder.Services.AddScoped<ReadingLibrary>();
+builder.Services.TryAddSingleton(TimeProvider.System);
+
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<LibraryDbContext>("library-db");
 
@@ -43,6 +48,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapHealthChecks("/health");
+app.MapLibraryEndpoints();
 
 app.Run();
 
