@@ -1,5 +1,8 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using ReadingTracker.Catalog.Books;
 using Testcontainers.PostgreSql;
 
 namespace ReadingTracker.Catalog.Tests;
@@ -8,15 +11,27 @@ namespace ReadingTracker.Catalog.Tests;
 /// Boots the real Catalog application in-process against a throwaway Postgres container.
 /// This is the single seam the Catalog test suite exercises: tests drive the service through
 /// its HTTP surface, never through its internals.
+///
+/// External book providers are stubbed at the network boundary rather than at
+/// <see cref="IBookProvider"/>, so provider code (including how it reads a provider's JSON)
+/// runs for real while no test ever touches the live API.
 /// </summary>
 public sealed class CatalogApiFixture : WebApplicationFactory<Program>, IAsyncLifetime
 {
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine").Build();
 
+    public StubHttpMessageHandler GoogleBooks { get; } = new();
+
     public async Task InitializeAsync() => await _postgres.StartAsync();
 
-    protected override void ConfigureWebHost(IWebHostBuilder builder) =>
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
         builder.UseSetting("ConnectionStrings:CatalogDb", _postgres.GetConnectionString());
+
+        builder.ConfigureTestServices(services =>
+            services.AddHttpClient<IBookProvider, GoogleBooksProvider>()
+                .ConfigurePrimaryHttpMessageHandler(() => GoogleBooks));
+    }
 
     async Task IAsyncLifetime.DisposeAsync()
     {

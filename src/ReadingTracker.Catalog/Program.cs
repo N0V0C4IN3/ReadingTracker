@@ -1,9 +1,17 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using ReadingTracker.Catalog.Books;
 using ReadingTracker.Catalog.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
+
+builder.Services.Configure<GoogleBooksOptions>(
+    builder.Configuration.GetSection(GoogleBooksOptions.SectionName));
+
+builder.Services.AddHttpClient<IBookProvider, GoogleBooksProvider>((serviceProvider, client) =>
+    client.BaseAddress = serviceProvider.GetRequiredService<IOptions<GoogleBooksOptions>>().Value.BaseAddress);
 
 // Fail at startup with a clear message rather than deep inside Npgsql on first query.
 var catalogDbConnectionString = builder.Configuration.GetConnectionString("CatalogDb")
@@ -32,6 +40,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapHealthChecks("/health");
+app.MapBookEndpoints();
 
 app.Run();
 
