@@ -46,7 +46,55 @@ public sealed class OpenLibraryProvider(HttpClient httpClient) : IBookProvider
         ];
     }
 
+    public async Task<IReadOnlyList<BookSearchResult>> SearchByTitleAndAuthorAsync(
+        string? title,
+        string? author,
+        CancellationToken cancellationToken)
+    {
+        var terms = new List<string>(3) { "fields=key,title,author_name,isbn,number_of_pages_median,cover_i", "limit=10" };
+
+        if (!string.IsNullOrWhiteSpace(title))
+        {
+            terms.Add($"title={Uri.EscapeDataString(title.Trim())}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(author))
+        {
+            terms.Add($"author={Uri.EscapeDataString(author.Trim())}");
+        }
+
+        if (terms.Count == 2)
+        {
+            return [];
+        }
+
+        var payload = await httpClient
+            .GetFromJsonAsync<OpenLibrarySearch>($"search.json?{string.Join('&', terms)}", cancellationToken);
+
+        return payload?.Docs?.Select(ToSearchResult).ToArray() ?? [];
+    }
+
+    private static BookSearchResult ToSearchResult(OpenLibraryDoc doc) => new(
+        Title: doc.Title ?? string.Empty,
+        Authors: doc.AuthorName ?? [],
+        // Open Library lists every edition's ISBN; prefer a 13-digit one.
+        Isbn: doc.Isbn?.FirstOrDefault(isbn => isbn.Length == 13) ?? doc.Isbn?.FirstOrDefault(),
+        CoverUrl: doc.CoverId is null ? null : $"https://covers.openlibrary.org/b/id/{doc.CoverId}-L.jpg",
+        TotalPages: doc.NumberOfPagesMedian,
+        Source: BookSource.OpenLibrary,
+        ExternalId: doc.Key);
+
     // Open Library's response shape, narrowed to the fields Catalog actually uses.
+    private sealed record OpenLibrarySearch(IReadOnlyList<OpenLibraryDoc>? Docs);
+
+    private sealed record OpenLibraryDoc(
+        string? Key,
+        string? Title,
+        [property: JsonPropertyName("author_name")] IReadOnlyList<string>? AuthorName,
+        IReadOnlyList<string>? Isbn,
+        [property: JsonPropertyName("number_of_pages_median")] int? NumberOfPagesMedian,
+        [property: JsonPropertyName("cover_i")] int? CoverId);
+
     private sealed record OpenLibraryBook(
         string? Key,
         string? Title,

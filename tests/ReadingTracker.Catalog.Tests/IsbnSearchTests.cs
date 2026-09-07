@@ -3,7 +3,8 @@ using System.Net.Http.Json;
 
 namespace ReadingTracker.Catalog.Tests;
 
-public sealed class IsbnSearchTests(CatalogApiFixture fixture) : IClassFixture<CatalogApiFixture>
+[Collection(CatalogApiCollection.Name)]
+public sealed class IsbnSearchTests(CatalogApiFixture fixture)
 {
     // Trimmed from a real Google Books volumes response for ISBN 9780441013593.
     private const string DuneVolume = """

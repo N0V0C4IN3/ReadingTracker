@@ -3,7 +3,8 @@ using System.Net.Http.Json;
 
 namespace ReadingTracker.Catalog.Tests;
 
-public sealed class ProviderFallbackTests(CatalogApiFixture fixture) : IClassFixture<CatalogApiFixture>
+[Collection(CatalogApiCollection.Name)]
+public sealed class ProviderFallbackTests(CatalogApiFixture fixture)
 {
     private const string GoogleNoMatches = """{ "kind": "books#volumes", "totalItems": 0 }""";
 

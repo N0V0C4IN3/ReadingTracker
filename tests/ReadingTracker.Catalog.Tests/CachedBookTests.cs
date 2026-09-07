@@ -3,7 +3,8 @@ using System.Net.Http.Json;
 
 namespace ReadingTracker.Catalog.Tests;
 
-public sealed class CachedBookTests(CatalogApiFixture fixture) : IClassFixture<CatalogApiFixture>
+[Collection(CatalogApiCollection.Name)]
+public sealed class CachedBookTests(CatalogApiFixture fixture)
 {
     private static string VolumeFor(string isbn, string volumeId, string title) => $$"""
         {

@@ -3,7 +3,8 @@ using System.Net.Http.Json;
 
 namespace ReadingTracker.Catalog.Tests;
 
-public sealed class ManualBookEntryTests(CatalogApiFixture fixture) : IClassFixture<CatalogApiFixture>
+[Collection(CatalogApiCollection.Name)]
+public sealed class ManualBookEntryTests(CatalogApiFixture fixture)
 {
     [Fact]
     public async Task Creates_a_book_from_details_typed_in_by_hand()
