@@ -48,6 +48,11 @@ builder.Services.AddDbContext<CatalogDbContext>(options =>
         catalogDbConnectionString,
         npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", CatalogDbContext.Schema)));
 
+builder.Services.Configure<RabbitMqOptions>(
+    builder.Configuration.GetSection(RabbitMqOptions.SectionName));
+
+builder.Services.AddSingleton<IBookEvents, RabbitMqBookEvents>();
+
 builder.Services.AddScoped<BookCatalog>();
 builder.Services.TryAddSingleton(TimeProvider.System);
 

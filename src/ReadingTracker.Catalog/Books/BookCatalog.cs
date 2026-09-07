@@ -8,7 +8,11 @@ namespace ReadingTracker.Catalog.Books;
 /// where it can, and falls back to external providers otherwise — persisting what they
 /// return so every later lookup has a stable BookId to point at.
 /// </summary>
-public sealed class BookCatalog(CatalogDbContext database, BookProviderChain providers, TimeProvider clock)
+public sealed class BookCatalog(
+    CatalogDbContext database,
+    BookProviderChain providers,
+    IBookEvents events,
+    TimeProvider clock)
 {
     public async Task<CatalogSearch> SearchByIsbnAsync(string isbn, CancellationToken cancellationToken)
     {
@@ -84,6 +88,8 @@ public sealed class BookCatalog(CatalogDbContext database, BookProviderChain pro
             return null;
         }
 
+        await AnnounceAsync([book], cancellationToken);
+
         return book;
     }
 
@@ -156,7 +162,20 @@ public sealed class BookCatalog(CatalogDbContext database, BookProviderChain pro
             return await FindKnownAsync(isbns, externalIds, cancellationToken);
         }
 
+        // Only the newly stored ones: re-referencing a Book we already had is not news.
+        await AnnounceAsync(toInsert, cancellationToken);
+
         return books;
+    }
+
+    private async Task AnnounceAsync(IReadOnlyList<Book> newlyStored, CancellationToken cancellationToken)
+    {
+        foreach (var book in newlyStored)
+        {
+            await events.PublishAsync(
+                new BookCached(book.Id, book.Title, book.Isbn, book.Source.ToString(), book.CreatedAt),
+                cancellationToken);
+        }
     }
 
     private Task<List<Book>> FindKnownAsync(
