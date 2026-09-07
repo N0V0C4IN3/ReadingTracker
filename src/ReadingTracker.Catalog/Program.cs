@@ -1,9 +1,29 @@
+using DotNetEnv;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using ReadingTracker.Catalog.Books;
 using ReadingTracker.Catalog.Persistence;
+
+// Load .env into the process before the builder reads environment variables, so local
+// development can keep secrets in a gitignored file. Deployed environments have no .env
+// and supply configuration directly; TraversePath finds the file from the repo root when
+// running via `dotnet run --project`.
+Env.TraversePath().Load();
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
+
+builder.Services.Configure<GoogleBooksOptions>(
+    builder.Configuration.GetSection(GoogleBooksOptions.SectionName));
+
+// GOOGLE_BOOKS_API_KEY is accepted as an alias for GoogleBooks:ApiKey, since a flat
+// name is what .env files and container platforms conventionally use.
+builder.Services.PostConfigure<GoogleBooksOptions>(googleBooks =>
+    googleBooks.ApiKey ??= builder.Configuration["GOOGLE_BOOKS_API_KEY"]);
+
+builder.Services.AddHttpClient<IBookProvider, GoogleBooksProvider>((serviceProvider, client) =>
+    client.BaseAddress = serviceProvider.GetRequiredService<IOptions<GoogleBooksOptions>>().Value.BaseAddress);
 
 // Fail at startup with a clear message rather than deep inside Npgsql on first query.
 var catalogDbConnectionString = builder.Configuration.GetConnectionString("CatalogDb")
@@ -32,6 +52,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapHealthChecks("/health");
+app.MapBookEndpoints();
 
 app.Run();
 
