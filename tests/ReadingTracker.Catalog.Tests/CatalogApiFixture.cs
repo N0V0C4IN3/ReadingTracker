@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using ReadingTracker.Catalog.Books;
 using Testcontainers.PostgreSql;
+using Testcontainers.RabbitMq;
 
 namespace ReadingTracker.Catalog.Tests;
 
@@ -20,6 +21,10 @@ public sealed class CatalogApiFixture : WebApplicationFactory<Program>, IAsyncLi
 {
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine").Build();
 
+    private readonly RabbitMqContainer _rabbitMq = new RabbitMqBuilder("rabbitmq:3.13-management").Build();
+
+    public string RabbitMqConnectionString => _rabbitMq.GetConnectionString();
+
     public StubHttpMessageHandler GoogleBooks { get; } = new();
 
     public StubHttpMessageHandler OpenLibrary { get; } = new();
@@ -28,11 +33,13 @@ public sealed class CatalogApiFixture : WebApplicationFactory<Program>, IAsyncLi
         // Unless a test says otherwise, Open Library simply has no match for the ISBN.
         OpenLibrary.Respond = _ => StubHttpMessageHandler.Json("{}");
 
-    public async Task InitializeAsync() => await _postgres.StartAsync();
+    public async Task InitializeAsync() =>
+        await Task.WhenAll(_postgres.StartAsync(), _rabbitMq.StartAsync());
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("ConnectionStrings:CatalogDb", _postgres.GetConnectionString());
+        builder.UseSetting("RabbitMq:ConnectionString", _rabbitMq.GetConnectionString());
 
         builder.ConfigureTestServices(services =>
         {
@@ -46,5 +53,6 @@ public sealed class CatalogApiFixture : WebApplicationFactory<Program>, IAsyncLi
         // Shut the host down first so its pooled connections close before the database goes away.
         await base.DisposeAsync();
         await _postgres.DisposeAsync();
+        await _rabbitMq.DisposeAsync();
     }
 }

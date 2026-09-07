@@ -18,5 +18,24 @@ services:
       timeout: 5s
       retries: 5
 
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: readingtracker-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: readingtracker
+      RABBITMQ_DEFAULT_PASS: readingtracker
+    # Off the default ports for the same reason as Postgres above.
+    ports:
+      - "55672:5672"
+      - "55673:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres-data:
+  rabbitmq-data:
