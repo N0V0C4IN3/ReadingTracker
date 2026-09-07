@@ -7,6 +7,7 @@ public static class LibraryEndpoints
     public static void MapLibraryEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapGet("/api/library", async (
+            string? status,
             HttpRequest request,
             ReadingLibrary library,
             CatalogClient catalog,
@@ -17,7 +18,19 @@ public static class LibraryEndpoints
                 return NotSaidWhoIsAsking();
             }
 
-            var entries = await library.ListAsync(readerId, cancellationToken);
+            ReadingStatus? filter = null;
+
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                if (!Enum.TryParse<ReadingStatus>(status, ignoreCase: true, out var parsed))
+                {
+                    return UnknownReadingStatus(status);
+                }
+
+                filter = parsed;
+            }
+
+            var entries = await library.ListAsync(readerId, filter, cancellationToken);
 
             // One trip to Catalog for the whole shelf, not one per book. Best-effort: if
             // Catalog is unreachable the entries still come back, just without book details.
@@ -82,7 +95,36 @@ public static class LibraryEndpoints
             };
         })
         .WithName("AddToLibrary");
+
+        endpoints.MapPut("/api/library/{entryId:guid}/status", async (
+            Guid entryId,
+            SetStatusRequest body,
+            HttpRequest request,
+            ReadingLibrary library,
+            CancellationToken cancellationToken) =>
+        {
+            if (Reader.From(request) is not { } readerId)
+            {
+                return NotSaidWhoIsAsking();
+            }
+
+            if (!Enum.TryParse<ReadingStatus>(body.Status, ignoreCase: true, out var status))
+            {
+                return UnknownReadingStatus(body.Status);
+            }
+
+            var entry = await library.SetStatusAsync(readerId, entryId, status, cancellationToken);
+
+            return entry is null ? Results.NotFound() : Results.Ok(LibraryEntryResponse.From(entry));
+        })
+        .WithName("SetReadingStatus");
     }
+
+    private static IResult UnknownReadingStatus(string? given) =>
+        Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["status"] = [$"'{given}' is not a reading status. Use one of: {string.Join(", ", Enum.GetNames<ReadingStatus>())}."],
+        });
 
     private static IResult NotSaidWhoIsAsking() =>
         Results.Problem(
@@ -91,6 +133,8 @@ public static class LibraryEndpoints
             statusCode: StatusCodes.Status401Unauthorized);
 
     private sealed record AddToLibraryRequest(Guid BookId);
+
+    private sealed record SetStatusRequest(string? Status);
 
     private sealed record LibraryEntryResponse(
         Guid Id,

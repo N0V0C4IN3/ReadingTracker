@@ -17,13 +17,60 @@ public enum AddToLibraryFailure
 /// One reader's collection of books. Holds the reader's relationship to a Book — status and
 /// tracking method — and never a copy of the Book itself, which stays Catalog's to own.
 /// </summary>
-public sealed class ReadingLibrary(LibraryDbContext database, TimeProvider clock)
+public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents events, TimeProvider clock)
 {
-    public Task<List<LibraryEntry>> ListAsync(string readerId, CancellationToken cancellationToken) =>
+    public Task<List<LibraryEntry>> ListAsync(
+        string readerId,
+        ReadingStatus? withStatus,
+        CancellationToken cancellationToken) =>
         database.LibraryEntries
             .Where(entry => entry.ReaderId == readerId)
+            .Where(entry => withStatus == null || entry.Status == withStatus)
             .OrderByDescending(entry => entry.AddedAt)
             .ToListAsync(cancellationToken);
+
+    /// <summary>
+    /// Moves an entry to a new ReadingStatus. Returns null when the entry is not in this
+    /// reader's library — including when it is in someone else's, which is not this reader's
+    /// business to know about.
+    /// </summary>
+    public async Task<LibraryEntry?> SetStatusAsync(
+        string readerId,
+        Guid entryId,
+        ReadingStatus status,
+        CancellationToken cancellationToken)
+    {
+        var entry = await database.LibraryEntries
+            .FirstOrDefaultAsync(e => e.Id == entryId && e.ReaderId == readerId, cancellationToken);
+
+        if (entry is null)
+        {
+            return null;
+        }
+
+        var previous = entry.Status;
+
+        if (previous == status)
+        {
+            // Nothing changed, so there is nothing to save and nothing to announce.
+            return entry;
+        }
+
+        entry.Status = status;
+        await database.SaveChangesAsync(cancellationToken);
+
+        await events.PublishAsync(
+            new ReadingStatusChanged(
+                entry.Id,
+                entry.ReaderId,
+                entry.BookId,
+                previous.ToString(),
+                status.ToString(),
+                clock.GetUtcNow()),
+            cancellationToken);
+
+        return entry;
+    }
 
     /// <summary>
     /// Adds a Book to a reader's library. The caller must have confirmed with Catalog that the
