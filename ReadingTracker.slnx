@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ReadingTracker.Catalog/ReadingTracker.Catalog.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ReadingTracker.Catalog.Tests/ReadingTracker.Catalog.Tests.csproj" />
+  </Folder>
+</Solution>

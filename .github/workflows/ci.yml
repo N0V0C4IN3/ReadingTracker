@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  # Pushes to master plus every PR. Feature-branch pushes are covered by their PR,
+  # so this doesn't run the same commit twice.
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      # Integration tests start their own Postgres via Testcontainers, using the
+      # Docker daemon that is already available on GitHub-hosted runners.
+      - name: Test
+        run: dotnet test --no-build --configuration Release

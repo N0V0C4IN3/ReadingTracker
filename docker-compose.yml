@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: readingtracker-postgres
+    environment:
+      POSTGRES_DB: readingtracker
+      POSTGRES_USER: readingtracker
+      POSTGRES_PASSWORD: readingtracker
+    # Deliberately off the default Postgres range so it never clashes with a
+    # locally-installed Postgres on the developer's machine.
+    ports:
+      - "55432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U readingtracker -d readingtracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
