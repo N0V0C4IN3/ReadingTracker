@@ -66,6 +66,47 @@ public sealed class BookCatalog(CatalogDbContext database, BookProviderChain pro
         return CatalogSearch.Completed(books);
     }
 
+    /// <summary>
+    /// Records a Book nobody could find, for the times a reader owns something no provider
+    /// has heard of. Returns null when its ISBN is already taken, since there is one Book
+    /// per ISBN and the caller should be told rather than silently given a duplicate.
+    /// </summary>
+    public async Task<Book?> AddByHandAsync(
+        string title,
+        IReadOnlyList<string> authors,
+        string? isbn,
+        string? coverUrl,
+        int? totalPages,
+        CancellationToken cancellationToken)
+    {
+        var book = new Book
+        {
+            Id = Guid.CreateVersion7(),
+            Title = title.Trim(),
+            Authors = [.. authors.Select(author => author.Trim())],
+            Isbn = isbn,
+            CoverUrl = coverUrl,
+            TotalPages = totalPages,
+            Source = BookSource.Manual,
+            ExternalId = null,
+            CreatedAt = clock.GetUtcNow(),
+        };
+
+        database.Books.Add(book);
+
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            database.Entry(book).State = EntityState.Detached;
+            return null;
+        }
+
+        return book;
+    }
+
     public Task<Book?> FindAsync(Guid bookId, CancellationToken cancellationToken) =>
         database.Books.FirstOrDefaultAsync(book => book.Id == bookId, cancellationToken);
 
