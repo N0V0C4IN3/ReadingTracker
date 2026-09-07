@@ -33,7 +33,9 @@ public sealed class GoogleBooksProvider(HttpClient httpClient, IOptions<GoogleBo
             Authors: info?.Authors ?? [],
             Isbn: PreferredIsbn(info?.IndustryIdentifiers) ?? searchedIsbn,
             CoverUrl: info?.ImageLinks?.Thumbnail ?? info?.ImageLinks?.SmallThumbnail,
-            TotalPages: info?.PageCount);
+            TotalPages: info?.PageCount,
+            Source: BookSource.GoogleBooks,
+            ExternalId: item.Id);
     }
 
     private static string? PreferredIsbn(IReadOnlyList<IndustryIdentifier>? identifiers) =>
@@ -43,7 +45,7 @@ public sealed class GoogleBooksProvider(HttpClient httpClient, IOptions<GoogleBo
     // Google Books' response shape, narrowed to the fields Catalog actually uses.
     private sealed record VolumesResponse(IReadOnlyList<VolumeItem>? Items);
 
-    private sealed record VolumeItem(VolumeInfo? VolumeInfo);
+    private sealed record VolumeItem(string? Id, VolumeInfo? VolumeInfo);
 
     private sealed record VolumeInfo(
         string? Title,
