@@ -22,6 +22,12 @@ public sealed class CatalogApiFixture : WebApplicationFactory<Program>, IAsyncLi
 
     public StubHttpMessageHandler GoogleBooks { get; } = new();
 
+    public StubHttpMessageHandler OpenLibrary { get; } = new();
+
+    public CatalogApiFixture() =>
+        // Unless a test says otherwise, Open Library simply has no match for the ISBN.
+        OpenLibrary.Respond = _ => StubHttpMessageHandler.Json("{}");
+
     public async Task InitializeAsync() => await _postgres.StartAsync();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -29,8 +35,10 @@ public sealed class CatalogApiFixture : WebApplicationFactory<Program>, IAsyncLi
         builder.UseSetting("ConnectionStrings:CatalogDb", _postgres.GetConnectionString());
 
         builder.ConfigureTestServices(services =>
-            services.AddHttpClient<IBookProvider, GoogleBooksProvider>()
-                .ConfigurePrimaryHttpMessageHandler(() => GoogleBooks));
+        {
+            services.AddHttpClient<GoogleBooksProvider>().ConfigurePrimaryHttpMessageHandler(() => GoogleBooks);
+            services.AddHttpClient<OpenLibraryProvider>().ConfigurePrimaryHttpMessageHandler(() => OpenLibrary);
+        });
     }
 
     async Task IAsyncLifetime.DisposeAsync()

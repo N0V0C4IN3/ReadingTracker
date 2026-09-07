@@ -9,9 +9,19 @@ public static class BookEndpoints
             BookCatalog catalog,
             CancellationToken cancellationToken) =>
         {
-            var books = await catalog.SearchByIsbnAsync(isbn, cancellationToken);
+            var search = await catalog.SearchByIsbnAsync(isbn, cancellationToken);
 
-            return Results.Ok(new BookSearchResponse([.. books.Select(BookResponse.From)]));
+            return search.Status switch
+            {
+                // Saying "no results" here would tell the reader the book doesn't exist,
+                // when the truth is that we could not find out.
+                SearchStatus.ProvidersUnavailable => Results.Problem(
+                    title: "Book search is temporarily unavailable",
+                    detail: "No book data provider could be reached. This does not mean the book does not exist.",
+                    statusCode: StatusCodes.Status503ServiceUnavailable),
+
+                _ => Results.Ok(new BookSearchResponse([.. search.Books.Select(BookResponse.From)])),
+            };
         })
         .WithName("SearchBooks");
 
@@ -35,9 +45,10 @@ public static class BookEndpoints
         IReadOnlyList<string> Authors,
         string? Isbn,
         string? CoverUrl,
-        int? TotalPages)
+        int? TotalPages,
+        string Source)
     {
         public static BookResponse From(Book book) =>
-            new(book.Id, book.Title, book.Authors, book.Isbn, book.CoverUrl, book.TotalPages);
+            new(book.Id, book.Title, book.Authors, book.Isbn, book.CoverUrl, book.TotalPages, book.Source.ToString());
     }
 }
