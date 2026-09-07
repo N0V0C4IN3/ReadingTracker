@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ReadingTracker.Library.Entries;
 
 namespace ReadingTracker.Library.Persistence;
 
@@ -11,6 +12,24 @@ public sealed class LibraryDbContext(DbContextOptions<LibraryDbContext> options)
 {
     public const string Schema = "library";
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+    public DbSet<LibraryEntry> LibraryEntries => Set<LibraryEntry>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
         modelBuilder.HasDefaultSchema(Schema);
+
+        modelBuilder.Entity<LibraryEntry>(entry =>
+        {
+            entry.HasKey(e => e.Id);
+
+            entry.Property(e => e.ReaderId).IsRequired();
+
+            // Stored by name so adding a status or tracking method later needs no migration.
+            entry.Property(e => e.Status).HasConversion<string>().IsRequired();
+            entry.Property(e => e.TrackingMethod).HasConversion<string>().IsRequired();
+
+            // A book appears once in a reader's library — but two readers may each have it.
+            entry.HasIndex(e => new { e.ReaderId, e.BookId }).IsUnique();
+        });
+    }
 }
