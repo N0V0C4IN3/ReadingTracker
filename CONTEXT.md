@@ -8,6 +8,10 @@ A web application for tracking personal reading progress across books — what y
 Catalog metadata for a title — author(s), ISBN, cover image, total page count when known — sourced from an external book-data provider, or entered by hand when no provider match exists. A Book is global/shared, not owned by any one user, and is cached locally the first time it's referenced rather than re-fetched live on every use.
 _Avoid_: Title (ambiguous with the `title` field itself), Edition
 
+**Catalog**:
+The shared body of Book metadata the whole system draws on — the answer to "what books exist, and what do we know about them" — independent of any particular user. Sourced from external book-data providers, or entered by hand when no provider has a match.
+_Avoid_: Library (that is one user's own collection, which is a different thing)
+
 **LibraryEntry**:
 The association between a User and a Book: "this book is in this user's library." Holds the current ReadingStatus and the user's chosen TrackingMethod for this book. Distinct from the Book itself (shared catalog data) and from a ReadingSession (a record of activity).
 _Avoid_: UserBook, Entry (too generic on its own)

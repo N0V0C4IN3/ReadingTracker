@@ -20,7 +20,8 @@ public sealed class CatalogApiFixture : WebApplicationFactory<Program>, IAsyncLi
 
     async Task IAsyncLifetime.DisposeAsync()
     {
-        await _postgres.DisposeAsync();
+        // Shut the host down first so its pooled connections close before the database goes away.
         await base.DisposeAsync();
+        await _postgres.DisposeAsync();
     }
 }

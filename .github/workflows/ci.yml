@@ -1,8 +1,10 @@
 name: CI
 
 on:
+  # Pushes to master plus every PR. Feature-branch pushes are covered by their PR,
+  # so this doesn't run the same commit twice.
   push:
-    branches: ["**"]
+    branches: [master]
   pull_request:
 
 jobs:

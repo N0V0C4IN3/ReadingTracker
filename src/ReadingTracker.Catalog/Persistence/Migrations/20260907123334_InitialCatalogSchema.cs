@@ -17,7 +17,9 @@ namespace ReadingTracker.Catalog.Persistence.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropSchema(name: "catalog");
+            // Deliberately empty: the migrations history table lives in this schema, so
+            // dropping it here would fail (non-empty schema) and destroy the record of
+            // which migrations had been applied.
         }
     }
 }

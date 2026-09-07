@@ -5,9 +5,14 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
 
+// Fail at startup with a clear message rather than deep inside Npgsql on first query.
+var catalogDbConnectionString = builder.Configuration.GetConnectionString("CatalogDb")
+    ?? throw new InvalidOperationException(
+        "Connection string 'CatalogDb' is not configured. Set ConnectionStrings__CatalogDb.");
+
 builder.Services.AddDbContext<CatalogDbContext>(options =>
     options.UseNpgsql(
-        builder.Configuration.GetConnectionString("CatalogDb"),
+        catalogDbConnectionString,
         npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", CatalogDbContext.Schema)));
 
 builder.Services.AddHealthChecks()
