@@ -72,6 +72,114 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
         return entry;
     }
 
+    public Task<LibraryEntry?> FindAsync(string readerId, Guid entryId, CancellationToken cancellationToken) =>
+        database.LibraryEntries
+            .FirstOrDefaultAsync(entry => entry.Id == entryId && entry.ReaderId == readerId, cancellationToken);
+
+    public Task<List<ReadingSession>> ListSessionsAsync(Guid entryId, CancellationToken cancellationToken) =>
+        database.ReadingSessions
+            .Where(session => session.LibraryEntryId == entryId)
+            .OrderByDescending(session => session.OccurredAt)
+            .ToListAsync(cancellationToken);
+
+    /// <summary>
+    /// Records a stretch of reading. Starting a book the reader had only meant to read moves
+    /// it to Reading: they have plainly started, and making them say so twice is busywork.
+    /// Reaching the last page deliberately does not finish it — people stop before the end
+    /// matter, and finishing is the reader's call.
+    /// </summary>
+    public async Task<(ReadingSession? Session, SessionProblem? Problem)> LogSessionAsync(
+        string readerId,
+        Guid entryId,
+        decimal startPosition,
+        decimal endPosition,
+        DateTimeOffset? occurredAt,
+        int? durationMinutes,
+        int? totalPages,
+        CancellationToken cancellationToken)
+    {
+        var entry = await FindAsync(readerId, entryId, cancellationToken);
+
+        if (entry is null)
+        {
+            return (null, SessionProblem.NoSuchEntry);
+        }
+
+        if (SessionValidation.Check(startPosition, endPosition, entry.TrackingMethod, totalPages) is { } problem)
+        {
+            return (null, problem);
+        }
+
+        var now = clock.GetUtcNow();
+
+        var session = new ReadingSession
+        {
+            Id = Guid.CreateVersion7(),
+            LibraryEntryId = entry.Id,
+            StartPosition = startPosition,
+            EndPosition = endPosition,
+            Unit = entry.TrackingMethod,
+            OccurredAt = occurredAt ?? now,
+            DurationMinutes = durationMinutes,
+            LoggedAt = now,
+        };
+
+        database.ReadingSessions.Add(session);
+
+        var previousStatus = entry.Status;
+
+        if (entry.Status is ReadingStatus.WantToRead)
+        {
+            entry.Status = ReadingStatus.Reading;
+        }
+
+        await database.SaveChangesAsync(cancellationToken);
+
+        if (previousStatus != entry.Status)
+        {
+            await events.PublishAsync(
+                new ReadingStatusChanged(
+                    entry.Id,
+                    entry.ReaderId,
+                    entry.BookId,
+                    previousStatus.ToString(),
+                    entry.Status.ToString(),
+                    now),
+                cancellationToken);
+        }
+
+        return (session, null);
+    }
+
+    /// <summary>
+    /// Works out how far through each entry its reader is, from the latest ReadingSession.
+    /// Progress is never stored: deriving it is what stops history and position disagreeing.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<Guid, ReadingSession>> LatestSessionsAsync(
+        IReadOnlyCollection<Guid> entryIds,
+        CancellationToken cancellationToken)
+    {
+        if (entryIds.Count == 0)
+        {
+            return new Dictionary<Guid, ReadingSession>();
+        }
+
+        var sessions = await database.ReadingSessions
+            .Where(session => entryIds.Contains(session.LibraryEntryId))
+            .ToListAsync(cancellationToken);
+
+        return sessions
+            .GroupBy(session => session.LibraryEntryId)
+            .ToDictionary(
+                perEntry => perEntry.Key,
+                // Latest by when the reading happened, falling back to when it was logged so
+                // two sessions on the same day still have a definite order.
+                perEntry => perEntry
+                    .OrderByDescending(session => session.OccurredAt)
+                    .ThenByDescending(session => session.LoggedAt)
+                    .First());
+    }
+
     /// <summary>
     /// Adds a Book to a reader's library. The caller must have confirmed with Catalog that the
     /// Book exists; this method only enforces the one-entry-per-book rule.
