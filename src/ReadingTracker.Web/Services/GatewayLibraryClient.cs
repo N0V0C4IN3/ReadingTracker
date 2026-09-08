@@ -30,6 +30,23 @@ public enum LibraryUnavailable
 }
 
 /// <summary>
+/// Why a Book could not be added to the reader's library. Told apart because they call for
+/// different things from the reader: signing in again, waiting, or nothing at all — the book is
+/// already there.
+/// </summary>
+public enum AddToLibraryProblem
+{
+    /// <summary>There is no session, or it has ended. The Gateway said 401.</summary>
+    NotSignedIn,
+
+    /// <summary>The Gateway itself could not be reached — a network failure, not a refusal.</summary>
+    GatewayUnreachable,
+
+    /// <summary>This reader already has this Book. One entry per book per reader.</summary>
+    AlreadyInLibrary,
+}
+
+/// <summary>
 /// The browser's window onto a reader's Library, reached through the Gateway rather than
 /// Library directly — nothing in this application is allowed to know Library's address.
 /// </summary>
@@ -60,6 +77,37 @@ public sealed class GatewayLibraryClient(HttpClient httpClient)
 
         var entries = await response.Content.ReadFromJsonAsync<IReadOnlyList<LibraryEntry>>(cancellationToken);
         return (entries ?? [], null);
+    }
+
+    public async Task<(LibraryEntry? Entry, AddToLibraryProblem? Problem)> AddAsync(
+        Guid bookId,
+        CancellationToken cancellationToken)
+    {
+        HttpResponseMessage response;
+
+        try
+        {
+            response = await httpClient.PostAsJsonAsync("api/library", new { bookId }, cancellationToken);
+        }
+        catch (HttpRequestException)
+        {
+            return (null, AddToLibraryProblem.GatewayUnreachable);
+        }
+
+        if (response.StatusCode is HttpStatusCode.Unauthorized)
+        {
+            return (null, AddToLibraryProblem.NotSignedIn);
+        }
+
+        if (response.StatusCode is HttpStatusCode.Conflict)
+        {
+            return (null, AddToLibraryProblem.AlreadyInLibrary);
+        }
+
+        response.EnsureSuccessStatusCode();
+
+        var entry = await response.Content.ReadFromJsonAsync<LibraryEntry>(cancellationToken);
+        return (entry, null);
     }
 }
 
