@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using DotNetEnv;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -54,6 +55,19 @@ if (allowedOrigins is not { Length: > 0 })
         "No AllowedOrigins are configured, so no browser could call the gateway. Set AllowedOrigins__0.");
 }
 
+// A valid reader identity for local testing, without a real Google account. Both gates are
+// required (ADR-0008): configuration alone cannot turn this on in a deployed environment, since
+// nothing there runs the Development environment, and the Development environment alone does not
+// turn it on either, since nothing defaults DevSignIn:Enabled to true.
+var devSignInEnabled = builder.Environment.IsDevelopment()
+    && builder.Configuration.GetValue<bool>("DevSignIn:Enabled");
+
+// Held only in this process's memory, freshly generated every start: there is never a secret to
+// commit, leak, or reuse across a restart.
+var devSigningKey = devSignInEnabled
+    ? new SymmetricSecurityKey(RandomNumberGenerator.GetBytes(32))
+    : null;
+
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy => policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod()));
 
@@ -79,11 +93,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             ValidateIssuer = true,
 
-            // Google issues tokens under both spellings and treats them as equivalent.
-            ValidIssuers = [GoogleIdentity.Issuer, "accounts.google.com"],
+            // Google issues tokens under both spellings and treats them as equivalent. The
+            // ASP.NET Core JwtBearer handler concatenates whatever issuers/keys Authority
+            // discovers onto these at validation time, so adding DevSignIn's issuer and key here
+            // (only when enabled — see ADR-0008) never replaces or weakens Google's own.
+            ValidIssuers = devSignInEnabled
+                ? [GoogleIdentity.Issuer, "accounts.google.com", DevSignIn.Issuer]
+                : [GoogleIdentity.Issuer, "accounts.google.com"],
+            IssuerSigningKeys = devSigningKey is null ? null : [devSigningKey],
 
-            // The signature only proves Google minted it. Without this, a token issued to any
-            // other Google application in the world would be accepted here.
+            // The signature only proves Google (or, when enabled, DevSignIn) minted it. Without
+            // this, a token issued to any other Google application in the world would be
+            // accepted here.
             ValidateAudience = true,
             ValidAudience = googleClientId,
 
@@ -128,6 +149,15 @@ var app = builder.Build();
 // Answers without a token: the platform has to be able to tell whether the Gateway is up
 // without holding a Google account.
 app.MapHealthChecks("/health").AllowAnonymous();
+
+if (devSignInEnabled)
+{
+    app.Logger.LogWarning(
+        "DevSignIn is enabled: this Gateway will mint reader identities for anyone who asks, " +
+        "with no Google account required. Development-only, never for a deployed environment.");
+
+    app.MapDevSignIn(devSigningKey!, googleClientId);
+}
 
 app.UseCors();
 app.UseAuthentication();
