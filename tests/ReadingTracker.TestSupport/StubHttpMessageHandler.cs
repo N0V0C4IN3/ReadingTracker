@@ -16,6 +16,14 @@ public sealed class StubHttpMessageHandler : HttpMessageHandler
     public Func<HttpRequestMessage, HttpResponseMessage> Respond { get; set; } =
         _ => new HttpResponseMessage(HttpStatusCode.NotFound);
 
+    /// <summary>
+    /// Set this instead of <see cref="Respond"/> when the test needs to read the request body.
+    /// A proxied body is streamed from the live request rather than buffered, so it can only be
+    /// read while the call is still in flight — by the time the caller has its response, the
+    /// stream is gone.
+    /// </summary>
+    public Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? RespondAsync { get; set; }
+
     public HttpRequestMessage? LastRequest { get; private set; }
 
     /// <summary>
@@ -41,7 +49,9 @@ public sealed class StubHttpMessageHandler : HttpMessageHandler
             Requests.Add(request);
         }
 
-        return Task.FromResult(Respond(request));
+        return RespondAsync is { } asynchronously
+            ? asynchronously(request, cancellationToken)
+            : Task.FromResult(Respond(request));
     }
 
     public static HttpResponseMessage Json(string body) =>

@@ -1,10 +1,12 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/ReadingTracker.Catalog/ReadingTracker.Catalog.csproj" />
+    <Project Path="src/ReadingTracker.Gateway/ReadingTracker.Gateway.csproj" />
     <Project Path="src/ReadingTracker.Library/ReadingTracker.Library.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ReadingTracker.Catalog.Tests/ReadingTracker.Catalog.Tests.csproj" />
+    <Project Path="tests/ReadingTracker.Gateway.Tests/ReadingTracker.Gateway.Tests.csproj" />
     <Project Path="tests/ReadingTracker.Library.Tests/ReadingTracker.Library.Tests.csproj" />
     <Project Path="tests/ReadingTracker.TestSupport/ReadingTracker.TestSupport.csproj" />
   </Folder>
