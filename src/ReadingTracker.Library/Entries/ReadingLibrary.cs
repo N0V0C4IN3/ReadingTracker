@@ -101,6 +101,30 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
         return entry;
     }
 
+    /// <summary>
+    /// Sets or clears this reader's own page count for a book. Pass null to go back to whatever
+    /// Catalog says. Nothing is written back to Catalog: the shared Book is not this reader's
+    /// to correct.
+    /// </summary>
+    public async Task<LibraryEntry?> SetPageCountOverrideAsync(
+        string readerId,
+        Guid entryId,
+        int? pageCount,
+        CancellationToken cancellationToken)
+    {
+        var entry = await FindAsync(readerId, entryId, cancellationToken);
+
+        if (entry is null)
+        {
+            return null;
+        }
+
+        entry.PageCountOverride = pageCount;
+        await database.SaveChangesAsync(cancellationToken);
+
+        return entry;
+    }
+
     public Task<LibraryEntry?> FindAsync(string readerId, Guid entryId, CancellationToken cancellationToken) =>
         database.LibraryEntries
             .FirstOrDefaultAsync(entry => entry.Id == entryId && entry.ReaderId == readerId, cancellationToken);

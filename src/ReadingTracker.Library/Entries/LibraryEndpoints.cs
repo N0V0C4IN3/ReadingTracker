@@ -47,7 +47,10 @@ public static class LibraryEndpoints
                 return LibraryEntryResponse.From(
                     entry,
                     book,
-                    Progress.Of(latest.GetValueOrDefault(entry.Id), entry.TrackingMethod, book?.TotalPages));
+                    Progress.Of(
+                        latest.GetValueOrDefault(entry.Id),
+                        entry.TrackingMethod,
+                        entry.EffectivePageCount(book?.TotalPages)));
             }));
         })
         .WithName("ListLibrary");
@@ -158,6 +161,45 @@ public static class LibraryEndpoints
         })
         .WithName("SetTrackingMethod");
 
+        endpoints.MapPut("/api/library/{entryId:guid}/page-count", async (
+            Guid entryId,
+            SetPageCountRequest body,
+            HttpRequest request,
+            ReadingLibrary library,
+            CatalogClient catalog,
+            CancellationToken cancellationToken) =>
+        {
+            if (Reader.From(request) is not { } readerId)
+            {
+                return NotSaidWhoIsAsking();
+            }
+
+            if (body.TotalPages is <= 0)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["totalPages"] = ["A book has at least one page. Leave it out to use the catalog's count."],
+                });
+            }
+
+            var entry = await library.SetPageCountOverrideAsync(
+                readerId,
+                entryId,
+                body.TotalPages,
+                cancellationToken);
+
+            if (entry is null)
+            {
+                return Results.NotFound();
+            }
+
+            var book = (await catalog.TryFindBooksAsync([entry.BookId], cancellationToken))
+                .GetValueOrDefault(entry.BookId);
+
+            return Results.Ok(LibraryEntryResponse.From(entry, book));
+        })
+        .WithName("SetPageCount");
+
         endpoints.MapPost("/api/library/{entryId:guid}/sessions", async (
             Guid entryId,
             SessionRequest body,
@@ -176,7 +218,7 @@ public static class LibraryEndpoints
                 return Results.NotFound();
             }
 
-            var totalPages = await TotalPagesAsync(catalog, entry.BookId, cancellationToken);
+            var totalPages = await EffectivePageCountAsync(catalog, entry, cancellationToken);
 
             var (session, problem) = await library.LogSessionAsync(
                 readerId,
@@ -215,7 +257,7 @@ public static class LibraryEndpoints
                 return Results.NotFound();
             }
 
-            var totalPages = await TotalPagesAsync(catalog, entry.BookId, cancellationToken);
+            var totalPages = await EffectivePageCountAsync(catalog, entry, cancellationToken);
 
             var (session, problem) = await library.CorrectSessionAsync(
                 readerId,
@@ -269,7 +311,7 @@ public static class LibraryEndpoints
                 return Results.NotFound();
             }
 
-            var totalPages = await TotalPagesAsync(catalog, entry.BookId, cancellationToken);
+            var totalPages = await EffectivePageCountAsync(catalog, entry, cancellationToken);
             var sessions = await library.ListSessionsAsync(entryId, cancellationToken);
 
             return Results.Ok(sessions.Select(session =>
@@ -279,16 +321,18 @@ public static class LibraryEndpoints
     }
 
     /// <summary>
-    /// The book's length, wanted only to check a session doesn't run past the end. Null when
-    /// Catalog can't be reached, which skips that one check rather than stopping the reader
-    /// recording what they read — losing a validation beats losing the reading.
+    /// How long this reader's book is: their own page count where they set one, otherwise
+    /// Catalog's. Null when neither knows — including when Catalog can't be reached, which
+    /// skips the past-the-end check rather than stopping the reader recording what they read.
+    /// Losing a validation beats losing the reading.
     /// </summary>
-    private static async Task<int?> TotalPagesAsync(
+    private static async Task<int?> EffectivePageCountAsync(
         CatalogClient catalog,
-        Guid bookId,
+        LibraryEntry entry,
         CancellationToken cancellationToken) =>
-        (await catalog.TryFindBooksAsync([bookId], cancellationToken))
-            .GetValueOrDefault(bookId)?.TotalPages;
+        entry.EffectivePageCount(
+            (await catalog.TryFindBooksAsync([entry.BookId], cancellationToken))
+                .GetValueOrDefault(entry.BookId)?.TotalPages);
 
     private static IResult SessionRefused(SessionProblem problem, int? totalPages) => problem switch
     {
@@ -320,12 +364,19 @@ public static class LibraryEndpoints
 
     private sealed record SetStatusRequest(string? Status);
 
+    /// <param name="PageCountOverride">This reader's own page count, null when they set none.</param>
+    /// <param name="EffectivePageCount">
+    /// The count everything is worked out from, so a client never has to decide for itself
+    /// which of the two applies. Null when neither the reader nor Catalog knows.
+    /// </param>
     private sealed record LibraryEntryResponse(
         Guid Id,
         Guid BookId,
         string Status,
         string TrackingMethod,
         DateTimeOffset AddedAt,
+        int? PageCountOverride,
+        int? EffectivePageCount,
         BookDetailsResponse? Book,
         ProgressResponse? Progress)
     {
@@ -339,6 +390,8 @@ public static class LibraryEndpoints
                 entry.Status.ToString(),
                 entry.TrackingMethod.ToString(),
                 entry.AddedAt,
+                entry.PageCountOverride,
+                entry.EffectivePageCount(book?.TotalPages),
                 book is null ? null : BookDetailsResponse.From(book),
                 progress is null ? null : ProgressResponse.From(progress));
     }
@@ -392,6 +445,9 @@ public static class LibraryEndpoints
     }
 
     private sealed record SetTrackingMethodRequest(string? TrackingMethod);
+
+    /// <summary>Null <paramref name="TotalPages"/> clears the override, going back to Catalog's count.</summary>
+    private sealed record SetPageCountRequest(int? TotalPages);
 
     /// <summary>
     /// A stretch of reading as the reader describes it, whether they are logging it for the
