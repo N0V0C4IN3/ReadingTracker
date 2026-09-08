@@ -13,16 +13,37 @@ namespace ReadingTracker.TestSupport;
 /// </summary>
 public sealed class StubHttpMessageHandler : HttpMessageHandler
 {
-    public Func<HttpRequestMessage, HttpResponseMessage> Respond { get; set; } =
-        _ => new HttpResponseMessage(HttpStatusCode.NotFound);
+    /// <summary>
+    /// What the outside world says. Setting this clears <see cref="RespondAsync"/>, so the last
+    /// answer a test sets is the one that is used — otherwise a stale asynchronous responder left
+    /// behind by an earlier test would silently win over this one.
+    /// </summary>
+    public Func<HttpRequestMessage, HttpResponseMessage> Respond
+    {
+        get => _respond;
+        set
+        {
+            _respond = value;
+            _respondAsync = null;
+        }
+    }
 
     /// <summary>
     /// Set this instead of <see cref="Respond"/> when the test needs to read the request body.
     /// A proxied body is streamed from the live request rather than buffered, so it can only be
     /// read while the call is still in flight — by the time the caller has its response, the
-    /// stream is gone.
+    /// stream is gone. Setting this clears <see cref="Respond"/> for the same reason.
     /// </summary>
-    public Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? RespondAsync { get; set; }
+    public Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? RespondAsync
+    {
+        get => _respondAsync;
+        set => _respondAsync = value;
+    }
+
+    private Func<HttpRequestMessage, HttpResponseMessage> _respond =
+        _ => new HttpResponseMessage(HttpStatusCode.NotFound);
+
+    private Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? _respondAsync;
 
     public HttpRequestMessage? LastRequest { get; private set; }
 
@@ -33,25 +54,32 @@ public sealed class StubHttpMessageHandler : HttpMessageHandler
     public List<HttpRequestMessage> Requests { get; } = [];
 
     /// <summary>How many times the outside world has actually been reached.</summary>
-    public int RequestCount => _requestCount;
-
-    private int _requestCount;
+    public int RequestCount
+    {
+        get
+        {
+            lock (Requests)
+            {
+                return Requests.Count;
+            }
+        }
+    }
 
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
-        Interlocked.Increment(ref _requestCount);
-        LastRequest = request;
-
+        // One lock over everything recorded, so a caller can never see a request counted but not
+        // yet listed.
         lock (Requests)
         {
             Requests.Add(request);
+            LastRequest = request;
         }
 
-        return RespondAsync is { } asynchronously
+        return _respondAsync is { } asynchronously
             ? asynchronously(request, cancellationToken)
-            : Task.FromResult(Respond(request));
+            : Task.FromResult(_respond(request));
     }
 
     public static HttpResponseMessage Json(string body) =>

@@ -27,14 +27,14 @@ public sealed class GatewayFixture : WebApplicationFactory<Program>
     public const string LibraryHost = "library.test";
 
     /// <summary>
-    /// Starts a test with both services answering 200 and nothing recorded yet. Returns the list
-    /// the stub records into, so a test can assert on what actually arrived downstream — which is
-    /// the only place most of the Gateway's behaviour is visible.
+    /// Resets the stub to answering 200 with nothing recorded yet, and returns the live list it
+    /// records into — so a test can assert on what actually arrived downstream, which is the only
+    /// place most of the Gateway's behaviour is visible. The fixture is shared across the
+    /// collection, so every test starts by calling this.
     /// </summary>
-    public IReadOnlyList<HttpRequestMessage> RespondWithOk()
+    public IReadOnlyList<HttpRequestMessage> ResetWithOkResponses()
     {
         Downstream.Requests.Clear();
-        Downstream.RespondAsync = null;
         Downstream.Respond = _ => new HttpResponseMessage(System.Net.HttpStatusCode.OK);
         return Downstream.Requests;
     }
