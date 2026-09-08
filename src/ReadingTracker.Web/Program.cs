@@ -42,9 +42,13 @@ builder.Services.Configure<GatewayOptions>(builder.Configuration.GetSection(Gate
 builder.Services.AddScoped<IdTokenProvider>();
 builder.Services.AddTransient<GatewayAuthorizationHandler>();
 
-// The only client this application makes: everything goes through the Gateway, which is the
-// only address this application is allowed to know.
+// Every client this application makes points at the Gateway, the only address this
+// application is allowed to know — never at Catalog or Library directly.
 builder.Services.AddHttpClient<GatewayLibraryClient>((serviceProvider, client) =>
+        client.BaseAddress = serviceProvider.GetRequiredService<IOptions<GatewayOptions>>().Value.BaseAddress)
+    .AddHttpMessageHandler<GatewayAuthorizationHandler>();
+
+builder.Services.AddHttpClient<GatewayCatalogClient>((serviceProvider, client) =>
         client.BaseAddress = serviceProvider.GetRequiredService<IOptions<GatewayOptions>>().Value.BaseAddress)
     .AddHttpMessageHandler<GatewayAuthorizationHandler>();
 
