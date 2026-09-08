@@ -47,7 +47,7 @@ public static class LibraryEndpoints
                 return LibraryEntryResponse.From(
                     entry,
                     book,
-                    Progress.Of(latest.GetValueOrDefault(entry.Id), book?.TotalPages));
+                    Progress.Of(latest.GetValueOrDefault(entry.Id), entry.TrackingMethod, book?.TotalPages));
             }));
         })
         .WithName("ListLibrary");
@@ -128,6 +128,36 @@ public static class LibraryEndpoints
         })
         .WithName("SetReadingStatus");
 
+        endpoints.MapPut("/api/library/{entryId:guid}/tracking-method", async (
+            Guid entryId,
+            SetTrackingMethodRequest body,
+            HttpRequest request,
+            ReadingLibrary library,
+            CancellationToken cancellationToken) =>
+        {
+            if (Reader.From(request) is not { } readerId)
+            {
+                return NotSaidWhoIsAsking();
+            }
+
+            if (!Enum.TryParse<TrackingMethod>(body.TrackingMethod, ignoreCase: true, out var method))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["trackingMethod"] =
+                    [
+                        $"'{body.TrackingMethod}' is not a way of tracking a book. " +
+                        $"Use one of: {string.Join(", ", Enum.GetNames<TrackingMethod>())}.",
+                    ],
+                });
+            }
+
+            var entry = await library.SetTrackingMethodAsync(readerId, entryId, method, cancellationToken);
+
+            return entry is null ? Results.NotFound() : Results.Ok(LibraryEntryResponse.From(entry));
+        })
+        .WithName("SetTrackingMethod");
+
         endpoints.MapPost("/api/library/{entryId:guid}/sessions", async (
             Guid entryId,
             SessionRequest body,
@@ -162,7 +192,7 @@ public static class LibraryEndpoints
                 ? SessionRefused(refused, totalPages)
                 : Results.Created(
                     $"/api/library/{entryId}/sessions/{session!.Id}",
-                    SessionResponse.From(session));
+                    SessionResponse.From(session, entry.TrackingMethod, totalPages));
         })
         .WithName("LogReadingSession");
 
@@ -200,7 +230,7 @@ public static class LibraryEndpoints
 
             return problem is { } refused
                 ? SessionRefused(refused, totalPages)
-                : Results.Ok(SessionResponse.From(session!));
+                : Results.Ok(SessionResponse.From(session!, entry.TrackingMethod, totalPages));
         })
         .WithName("CorrectReadingSession");
 
@@ -226,6 +256,7 @@ public static class LibraryEndpoints
             Guid entryId,
             HttpRequest request,
             ReadingLibrary library,
+            CatalogClient catalog,
             CancellationToken cancellationToken) =>
         {
             if (Reader.From(request) is not { } readerId)
@@ -233,14 +264,16 @@ public static class LibraryEndpoints
                 return NotSaidWhoIsAsking();
             }
 
-            if (await library.FindAsync(readerId, entryId, cancellationToken) is null)
+            if (await library.FindAsync(readerId, entryId, cancellationToken) is not { } entry)
             {
                 return Results.NotFound();
             }
 
+            var totalPages = await TotalPagesAsync(catalog, entry.BookId, cancellationToken);
             var sessions = await library.ListSessionsAsync(entryId, cancellationToken);
 
-            return Results.Ok(sessions.Select(SessionResponse.From));
+            return Results.Ok(sessions.Select(session =>
+                SessionResponse.From(session, entry.TrackingMethod, totalPages)));
         })
         .WithName("ListReadingSessions");
     }
@@ -320,23 +353,45 @@ public static class LibraryEndpoints
             new(progress.Position, progress.Unit.ToString(), progress.PercentComplete);
     }
 
+    /// <summary>
+    /// A session as it was recorded, plus the same stretch of reading expressed in whatever
+    /// method the reader now tracks the book by. The recorded values are never converted —
+    /// they are the record of what the reader actually entered.
+    /// </summary>
     private sealed record SessionResponse(
         Guid Id,
         decimal StartPosition,
         decimal EndPosition,
         string Unit,
         DateTimeOffset OccurredAt,
-        int? DurationMinutes)
+        int? DurationMinutes,
+        DisplayedPositionResponse? Displayed)
     {
-        public static SessionResponse From(ReadingSession session) =>
+        public static SessionResponse From(ReadingSession session, TrackingMethod method, int? totalPages) =>
             new(
                 session.Id,
                 session.StartPosition,
                 session.EndPosition,
                 session.Unit.ToString(),
                 session.OccurredAt,
-                session.DurationMinutes);
+                session.DurationMinutes,
+                DisplayedPositionResponse.Of(session, method, totalPages));
     }
+
+    /// <summary>
+    /// The session in the reader's current method. Null when that would need a page count
+    /// nobody has: better to say nothing than to invent a position.
+    /// </summary>
+    private sealed record DisplayedPositionResponse(decimal StartPosition, decimal EndPosition, string Unit)
+    {
+        public static DisplayedPositionResponse? Of(ReadingSession session, TrackingMethod method, int? totalPages) =>
+            UnitConversion.Convert(session.StartPosition, session.Unit, method, totalPages) is { } start &&
+            UnitConversion.Convert(session.EndPosition, session.Unit, method, totalPages) is { } end
+                ? new DisplayedPositionResponse(start, end, method.ToString())
+                : null;
+    }
+
+    private sealed record SetTrackingMethodRequest(string? TrackingMethod);
 
     /// <summary>
     /// A stretch of reading as the reader describes it, whether they are logging it for the

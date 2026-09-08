@@ -72,6 +72,35 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
         return entry;
     }
 
+    /// <summary>
+    /// Changes how a reader tracks one book. Nothing they have logged is touched: sessions keep
+    /// the unit they were recorded in and are converted on the way out, so a reader can change
+    /// their mind as often as they like without losing what they actually entered.
+    /// </summary>
+    public async Task<LibraryEntry?> SetTrackingMethodAsync(
+        string readerId,
+        Guid entryId,
+        TrackingMethod method,
+        CancellationToken cancellationToken)
+    {
+        var entry = await FindAsync(readerId, entryId, cancellationToken);
+
+        if (entry is null)
+        {
+            return null;
+        }
+
+        if (entry.TrackingMethod == method)
+        {
+            return entry;
+        }
+
+        entry.TrackingMethod = method;
+        await database.SaveChangesAsync(cancellationToken);
+
+        return entry;
+    }
+
     public Task<LibraryEntry?> FindAsync(string readerId, Guid entryId, CancellationToken cancellationToken) =>
         database.LibraryEntries
             .FirstOrDefaultAsync(entry => entry.Id == entryId && entry.ReaderId == readerId, cancellationToken);
