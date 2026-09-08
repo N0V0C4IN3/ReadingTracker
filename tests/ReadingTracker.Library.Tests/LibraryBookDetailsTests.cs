@@ -10,7 +10,7 @@ public sealed class LibraryBookDetailsTests(LibraryApiFixture fixture)
     public async Task Shows_the_title_authors_and_cover_for_each_book_on_my_shelf()
     {
         var bookId = Guid.NewGuid();
-        var client = ClientFor("details-reader");
+        var client = fixture.ClientFor("details-reader");
         CatalogHas([(bookId, "The Lathe of Heaven")]);
         await client.PostAsJsonAsync("/api/library", new { bookId });
 
@@ -27,7 +27,7 @@ public sealed class LibraryBookDetailsTests(LibraryApiFixture fixture)
     [Fact]
     public async Task Asks_the_catalog_once_for_a_whole_shelf_rather_than_once_per_book()
     {
-        var client = ClientFor("batch-reader");
+        var client = fixture.ClientFor("batch-reader");
         var books = new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
         foreach (var bookId in books)
         {
@@ -48,7 +48,7 @@ public sealed class LibraryBookDetailsTests(LibraryApiFixture fixture)
     public async Task Still_gives_me_my_shelf_when_the_catalog_is_down()
     {
         var bookId = Guid.NewGuid();
-        var client = ClientFor("outage-reader");
+        var client = fixture.ClientFor("outage-reader");
         CatalogHas([(bookId, "A Book I Own")]);
         await client.PostAsJsonAsync("/api/library", new { bookId });
 
@@ -61,13 +61,6 @@ public sealed class LibraryBookDetailsTests(LibraryApiFixture fixture)
         Assert.Equal(bookId, entry.BookId);
         Assert.Equal("WantToRead", entry.Status);
         Assert.Null(entry.Book);
-    }
-
-    private HttpClient ClientFor(string readerId)
-    {
-        var client = fixture.CreateClient();
-        client.DefaultRequestHeaders.Add("X-Reader-Id", readerId);
-        return client;
     }
 
     /// <summary>

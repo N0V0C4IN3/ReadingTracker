@@ -6,6 +6,9 @@ public enum SessionProblem
     /// <summary>The reader has no such entry — including because it is someone else's.</summary>
     NoSuchEntry,
 
+    /// <summary>The entry has no such session — including because it was already deleted.</summary>
+    NoSuchSession,
+
     EndsBeforeItStarts,
 
     RunsPastTheEndOfTheBook,

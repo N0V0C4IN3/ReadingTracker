@@ -152,6 +152,84 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
     }
 
     /// <summary>
+    /// Changes a session the reader already logged. The session keeps the Unit it was recorded
+    /// in: a correction restates what was read, and the reader's own unit is what those numbers
+    /// mean. Leaving <paramref name="occurredAt"/> out keeps the session where it is in time,
+    /// since a session that has already happened cannot stop having happened.
+    /// </summary>
+    public async Task<(ReadingSession? Session, SessionProblem? Problem)> CorrectSessionAsync(
+        string readerId,
+        Guid entryId,
+        Guid sessionId,
+        decimal startPosition,
+        decimal endPosition,
+        DateTimeOffset? occurredAt,
+        int? durationMinutes,
+        int? totalPages,
+        CancellationToken cancellationToken)
+    {
+        var session = await FindSessionAsync(readerId, entryId, sessionId, cancellationToken);
+
+        if (session is null)
+        {
+            return (null, SessionProblem.NoSuchSession);
+        }
+
+        if (SessionValidation.Check(startPosition, endPosition, session.Unit, totalPages) is { } problem)
+        {
+            // Rejected outright, so the session the reader already had is left alone.
+            return (null, problem);
+        }
+
+        session.StartPosition = startPosition;
+        session.EndPosition = endPosition;
+        session.DurationMinutes = durationMinutes;
+        session.OccurredAt = occurredAt ?? session.OccurredAt;
+
+        await database.SaveChangesAsync(cancellationToken);
+
+        return (session, null);
+    }
+
+    /// <summary>
+    /// Removes a session. Progress is derived, so it follows on its own: back to the session
+    /// before it, or to nothing at all when that was the only one.
+    /// </summary>
+    public async Task<bool> DeleteSessionAsync(
+        string readerId,
+        Guid entryId,
+        Guid sessionId,
+        CancellationToken cancellationToken)
+    {
+        var session = await FindSessionAsync(readerId, entryId, sessionId, cancellationToken);
+
+        if (session is null)
+        {
+            return false;
+        }
+
+        database.ReadingSessions.Remove(session);
+        await database.SaveChangesAsync(cancellationToken);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Finds one session, but only through its own entry and only for the reader who owns it.
+    /// Another reader's session is not found rather than forbidden: it is not theirs to know about.
+    /// </summary>
+    private Task<ReadingSession?> FindSessionAsync(
+        string readerId,
+        Guid entryId,
+        Guid sessionId,
+        CancellationToken cancellationToken) =>
+        database.ReadingSessions
+            .Where(session => session.Id == sessionId && session.LibraryEntryId == entryId)
+            .Where(session => database.LibraryEntries
+                .Any(entry => entry.Id == entryId && entry.ReaderId == readerId))
+            .FirstOrDefaultAsync(cancellationToken);
+
+    /// <summary>
     /// Works out how far through each entry its reader is, from the latest ReadingSession.
     /// Progress is never stored: deriving it is what stops history and position disagreeing.
     /// </summary>

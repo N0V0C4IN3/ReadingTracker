@@ -9,8 +9,8 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
     [Fact]
     public async Task Records_what_i_read_and_works_out_how_far_through_i_am()
     {
-        var client = ClientFor("session-reader");
-        var entryId = await AddBookAsync(client, totalPages: 300);
+        var client = fixture.ClientFor("session-reader");
+        var entryId = await fixture.AddBookAsync(client,300);
 
         var logged = await client.PostAsJsonAsync($"/api/library/{entryId}/sessions", new
         {
@@ -28,8 +28,8 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
     [Fact]
     public async Task Tells_me_how_far_through_i_am_in_whole_percent()
     {
-        var client = ClientFor("rounding-reader");
-        var entryId = await AddBookAsync(client, totalPages: 705);
+        var client = fixture.ClientFor("rounding-reader");
+        var entryId = await fixture.AddBookAsync(client,705);
 
         await LogAsync(client, entryId, 1, 120);
 
@@ -40,8 +40,8 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
     [Fact]
     public async Task Does_not_say_a_hundred_percent_while_i_still_have_a_page_to_read()
     {
-        var client = ClientFor("nearly-done-reader");
-        var entryId = await AddBookAsync(client, totalPages: 705);
+        var client = fixture.ClientFor("nearly-done-reader");
+        var entryId = await fixture.AddBookAsync(client,705);
 
         await LogAsync(client, entryId, 700, 704);
 
@@ -52,8 +52,8 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
     [Fact]
     public async Task Does_not_say_nothing_when_i_have_read_a_little_of_a_long_book()
     {
-        var client = ClientFor("just-started-reader");
-        var entryId = await AddBookAsync(client, totalPages: 705);
+        var client = fixture.ClientFor("just-started-reader");
+        var entryId = await fixture.AddBookAsync(client,705);
 
         await LogAsync(client, entryId, 1, 2);
 
@@ -64,8 +64,8 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
     [Fact]
     public async Task Takes_my_position_from_the_most_recent_session_whatever_order_i_logged_them_in()
     {
-        var client = ClientFor("latest-reader");
-        var entryId = await AddBookAsync(client, totalPages: 400);
+        var client = fixture.ClientFor("latest-reader");
+        var entryId = await fixture.AddBookAsync(client,400);
 
         // Logged second, but happened first.
         await LogAsync(client, entryId, 200, 260, occurredAt: DateTimeOffset.UtcNow.AddDays(-1));
@@ -79,8 +79,8 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
     [Fact]
     public async Task Starts_the_book_when_i_log_reading_against_something_i_only_wanted_to_read()
     {
-        var client = ClientFor("autostart-reader");
-        var entryId = await AddBookAsync(client, totalPages: 300);
+        var client = fixture.ClientFor("autostart-reader");
+        var entryId = await fixture.AddBookAsync(client,300);
 
         await LogAsync(client, entryId, 1, 20);
 
@@ -91,8 +91,8 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
     [Fact]
     public async Task Does_not_declare_a_book_finished_just_because_i_reached_the_last_page()
     {
-        var client = ClientFor("endmatter-reader");
-        var entryId = await AddBookAsync(client, totalPages: 300);
+        var client = fixture.ClientFor("endmatter-reader");
+        var entryId = await fixture.AddBookAsync(client,300);
 
         await LogAsync(client, entryId, 280, 300);
 
@@ -103,8 +103,8 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
     [Fact]
     public async Task Shows_me_the_history_of_how_i_read_a_book()
     {
-        var client = ClientFor("history-reader");
-        var entryId = await AddBookAsync(client, totalPages: 300);
+        var client = fixture.ClientFor("history-reader");
+        var entryId = await fixture.AddBookAsync(client,300);
         await LogAsync(client, entryId, 1, 40, occurredAt: DateTimeOffset.UtcNow.AddDays(-2));
         await LogAsync(client, entryId, 40, 96, occurredAt: DateTimeOffset.UtcNow.AddDays(-1));
 
@@ -118,8 +118,8 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
     [Fact]
     public async Task Records_how_long_i_read_for_when_i_say_so()
     {
-        var client = ClientFor("duration-reader");
-        var entryId = await AddBookAsync(client, totalPages: 300);
+        var client = fixture.ClientFor("duration-reader");
+        var entryId = await fixture.AddBookAsync(client,300);
 
         await client.PostAsJsonAsync($"/api/library/{entryId}/sessions", new
         {
@@ -135,8 +135,8 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
     [Fact]
     public async Task Refuses_a_session_that_ends_before_it_starts()
     {
-        var client = ClientFor("backwards-reader");
-        var entryId = await AddBookAsync(client, totalPages: 300);
+        var client = fixture.ClientFor("backwards-reader");
+        var entryId = await fixture.AddBookAsync(client,300);
 
         var response = await client.PostAsJsonAsync($"/api/library/{entryId}/sessions", new
         {
@@ -150,8 +150,8 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
     [Fact]
     public async Task Refuses_a_session_that_runs_past_the_end_of_the_book()
     {
-        var client = ClientFor("overrun-reader");
-        var entryId = await AddBookAsync(client, totalPages: 300);
+        var client = fixture.ClientFor("overrun-reader");
+        var entryId = await fixture.AddBookAsync(client,300);
 
         var response = await client.PostAsJsonAsync($"/api/library/{entryId}/sessions", new
         {
@@ -165,9 +165,9 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
     [Fact]
     public async Task Refuses_to_log_reading_against_someone_elses_shelf()
     {
-        var mine = await AddBookAsync(ClientFor("session-owner"), totalPages: 300);
+        var mine = await fixture.AddBookAsync(fixture.ClientFor("session-owner"), 300);
 
-        var response = await ClientFor("session-intruder")
+        var response = await fixture.ClientFor("session-intruder")
             .PostAsJsonAsync($"/api/library/{mine}/sessions", new { startPosition = 1, endPosition = 10 });
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
@@ -176,17 +176,10 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
     [Fact]
     public async Task Has_no_progress_until_i_have_read_something()
     {
-        var client = ClientFor("unread-reader");
-        var entryId = await AddBookAsync(client, totalPages: 300);
+        var client = fixture.ClientFor("unread-reader");
+        var entryId = await fixture.AddBookAsync(client,300);
 
         Assert.Null((await GetEntryAsync(client, entryId)).Progress);
-    }
-
-    private HttpClient ClientFor(string readerId)
-    {
-        var client = fixture.CreateClient();
-        client.DefaultRequestHeaders.Add("X-Reader-Id", readerId);
-        return client;
     }
 
     private static Task<HttpResponseMessage> LogAsync(
@@ -204,23 +197,6 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
 
     private static async Task<Entry> GetEntryAsync(HttpClient client, Guid entryId) =>
         (await client.GetFromJsonAsync<IReadOnlyList<Entry>>("/api/library"))!.Single(e => e.Id == entryId);
-
-    private async Task<Guid> AddBookAsync(HttpClient client, int totalPages)
-    {
-        var bookId = Guid.NewGuid();
-        fixture.Catalog.Respond = request =>
-        {
-            var body = $$"""
-                { "id": "{{bookId}}", "title": "A Book", "authors": ["A. Writer"], "totalPages": {{totalPages}} }
-                """;
-
-            return StubHttpMessageHandler.Json(
-                request.RequestUri!.Query.Contains("ids=") ? $"[{body}]" : body);
-        };
-
-        var response = await client.PostAsJsonAsync("/api/library", new { bookId });
-        return (await response.Content.ReadFromJsonAsync<Entry>())!.Id;
-    }
 
     private sealed record Entry(Guid Id, Guid BookId, string Status, Progress? Progress);
 

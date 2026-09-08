@@ -11,7 +11,7 @@ public sealed class LibraryEntryTests(LibraryApiFixture fixture)
     {
         var bookId = Guid.NewGuid();
         CatalogKnows(bookId, "The Left Hand of Darkness");
-        var client = ClientFor("reader-adds");
+        var client = fixture.ClientFor("reader-adds");
 
         var created = await client.PostAsJsonAsync("/api/library", new { bookId });
 
@@ -26,7 +26,7 @@ public sealed class LibraryEntryTests(LibraryApiFixture fixture)
     {
         var bookId = Guid.NewGuid();
         CatalogKnows(bookId, "A Wizard of Earthsea");
-        var client = ClientFor("reader-defaults");
+        var client = fixture.ClientFor("reader-defaults");
 
         var response = await client.PostAsJsonAsync("/api/library", new { bookId });
 
@@ -40,7 +40,7 @@ public sealed class LibraryEntryTests(LibraryApiFixture fixture)
     {
         var bookId = Guid.NewGuid();
         CatalogKnows(bookId, "The Dispossessed");
-        var client = ClientFor("reader-duplicates");
+        var client = fixture.ClientFor("reader-duplicates");
         Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync("/api/library", new { bookId })).StatusCode);
 
         var again = await client.PostAsJsonAsync("/api/library", new { bookId });
@@ -55,7 +55,7 @@ public sealed class LibraryEntryTests(LibraryApiFixture fixture)
         // The stub's default is "no such book".
         fixture.Catalog.Respond = _ => new HttpResponseMessage(HttpStatusCode.NotFound);
 
-        var response = await ClientFor("reader-unknown").PostAsJsonAsync("/api/library", new { bookId = Guid.NewGuid() });
+        var response = await fixture.ClientFor("reader-unknown").PostAsJsonAsync("/api/library", new { bookId = Guid.NewGuid() });
 
         // A clear client error, rather than an entry pointing at nothing.
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -67,11 +67,11 @@ public sealed class LibraryEntryTests(LibraryApiFixture fixture)
         var mine = Guid.NewGuid();
         var theirs = Guid.NewGuid();
         CatalogKnows(mine, "My Book");
-        await ClientFor("reader-alice").PostAsJsonAsync("/api/library", new { bookId = mine });
+        await fixture.ClientFor("reader-alice").PostAsJsonAsync("/api/library", new { bookId = mine });
         CatalogKnows(theirs, "Their Book");
-        await ClientFor("reader-bob").PostAsJsonAsync("/api/library", new { bookId = theirs });
+        await fixture.ClientFor("reader-bob").PostAsJsonAsync("/api/library", new { bookId = theirs });
 
-        var alices = await ClientFor("reader-alice").GetFromJsonAsync<IReadOnlyList<Entry>>("/api/library");
+        var alices = await fixture.ClientFor("reader-alice").GetFromJsonAsync<IReadOnlyList<Entry>>("/api/library");
 
         Assert.Equal(mine, Assert.Single(alices!).BookId);
     }
@@ -82,8 +82,8 @@ public sealed class LibraryEntryTests(LibraryApiFixture fixture)
         var bookId = Guid.NewGuid();
         CatalogKnows(bookId, "Shared Favourite");
 
-        var first = await ClientFor("reader-carol").PostAsJsonAsync("/api/library", new { bookId });
-        var second = await ClientFor("reader-dave").PostAsJsonAsync("/api/library", new { bookId });
+        var first = await fixture.ClientFor("reader-carol").PostAsJsonAsync("/api/library", new { bookId });
+        var second = await fixture.ClientFor("reader-dave").PostAsJsonAsync("/api/library", new { bookId });
 
         // One Book, two LibraryEntries: the Book is shared, the relationship is not.
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
@@ -96,13 +96,6 @@ public sealed class LibraryEntryTests(LibraryApiFixture fixture)
         var response = await fixture.CreateClient().GetAsync("/api/library");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-    }
-
-    private HttpClient ClientFor(string readerId)
-    {
-        var client = fixture.CreateClient();
-        client.DefaultRequestHeaders.Add("X-Reader-Id", readerId);
-        return client;
     }
 
     private void CatalogKnows(Guid bookId, string title) =>
