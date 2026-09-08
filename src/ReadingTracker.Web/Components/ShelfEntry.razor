@@ -1,0 +1,462 @@
+@using ReadingTracker.Web.Services
+@inject GatewayLibraryClient Library
+
+@*
+    One book on the reader's shelf, and everything they can do to it: change where it stands,
+    record what they read, correct that record, say how long their edition is, take it off.
+
+    Each panel is opened rather than shown at once. A shelf is read far more often than it is
+    edited, and a card carrying every control for every book at all times is a wall rather than a
+    shelf. The reader's own reading — the progress line — is the part that stays visible.
+*@
+
+<article class="entry @(_working ? "entry--working" : null)">
+    <div class="entry__cover">
+        @if (Entry.Book?.CoverUrl is { } cover)
+        {
+            <img src="@cover" alt="" loading="lazy" />
+        }
+        else
+        {
+            @* Not an error: Catalog simply has no cover for some books, and a broken image icon
+               would read as one. *@
+            <div class="entry__cover-placeholder" aria-hidden="true">@Initial</div>
+        }
+    </div>
+
+    <div class="entry__body">
+        <h3 class="entry__title">@(Entry.Book?.Title ?? "(catalog unreachable)")</h3>
+
+        @if (Entry.Book is { Authors.Count: > 0 } book)
+        {
+            <p class="entry__authors">@string.Join(", ", book.Authors)</p>
+        }
+
+        <div class="entry__status">
+            <label class="visually-hidden" for="@($"status-{Entry.Id}")">Reading status</label>
+            <select id="@($"status-{Entry.Id}")"
+                    class="status-select status-select--@Entry.Status.ToLowerInvariant()"
+                    value="@Entry.Status"
+                    @onchange="StatusChangedAsync"
+                    disabled="@_working">
+                @foreach (var status in Statuses)
+                {
+                    <option value="@status.Key" selected="@(status.Key == Entry.Status)">@status.Value</option>
+                }
+            </select>
+
+            <ProgressBar Progress="Entry.Progress"
+                         TrackingMethod="@Entry.TrackingMethod"
+                         EffectivePageCount="Entry.EffectivePageCount" />
+        </div>
+
+        <div class="entry__actions">
+            <button type="button" class="link-button" @onclick="() => Toggle(Panel.Log)" disabled="@_working">
+                @(_panel == Panel.Log ? "Cancel" : "Log reading")
+            </button>
+            <button type="button" class="link-button" @onclick="ToggleHistoryAsync" disabled="@_working">
+                History
+            </button>
+            <button type="button" class="link-button" @onclick="() => Toggle(Panel.Settings)" disabled="@_working">
+                Settings
+            </button>
+            <button type="button" class="link-button link-button--danger" @onclick="() => Toggle(Panel.Remove)" disabled="@_working">
+                Remove
+            </button>
+        </div>
+
+        @if (_reasons.Count > 0)
+        {
+            <ul class="entry__reasons" role="alert">
+                @foreach (var reason in _reasons)
+                {
+                    <li>@reason</li>
+                }
+            </ul>
+        }
+
+        @if (_panel == Panel.Log)
+        {
+            <SessionForm Unit="@Entry.TrackingMethod"
+                         EffectivePageCount="Entry.EffectivePageCount"
+                         SubmitLabel="Log it"
+                         OnSubmit="LogAsync"
+                         OnCancel="Close" />
+        }
+
+        @if (_panel == Panel.History)
+        {
+            <div class="panel">
+                @if (_sessions is null)
+                {
+                    <p class="muted">Loading history…</p>
+                }
+                else if (_sessions.Count == 0)
+                {
+                    <p class="muted">Nothing logged yet. "Log reading" records your first stretch.</p>
+                }
+                else
+                {
+                    <ul class="sessions">
+                        @foreach (var session in _sessions)
+                        {
+                            <li class="session">
+                                @if (_editing == session.Id)
+                                {
+                                    <SessionForm Unit="@Entry.TrackingMethod"
+                                                 EffectivePageCount="Entry.EffectivePageCount"
+                                                 SubmitLabel="Save"
+                                                 Existing="session"
+                                                 OnSubmit="@(edited => CorrectAsync(session.Id, edited))"
+                                                 OnCancel="@(() => { _editing = null; _reasons = []; })" />
+                                }
+                                else
+                                {
+                                    <span class="session__what">@Describe(session)</span>
+                                    <span class="session__when">@session.OccurredAt.ToLocalTime().ToString("d MMM yyyy")</span>
+                                    @if (session.DurationMinutes is { } minutes)
+                                    {
+                                        <span class="session__how-long">@minutes min</span>
+                                    }
+                                    <button type="button" class="link-button" @onclick="() => StartEditing(session.Id)">Correct</button>
+                                    <button type="button" class="link-button link-button--danger" @onclick="() => DeleteSessionAsync(session.Id)">Delete</button>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        }
+
+        @if (_panel == Panel.Settings)
+        {
+            <div class="panel">
+                <div class="field">
+                    <label for="@($"method-{Entry.Id}")">Track by</label>
+                    <select id="@($"method-{Entry.Id}")" value="@Entry.TrackingMethod" @onchange="TrackingMethodChangedAsync" disabled="@_working">
+                        <option value="Pages" selected="@(Entry.TrackingMethod == "Pages")">Pages</option>
+                        <option value="Percentage" selected="@(Entry.TrackingMethod == "Percentage")">Percentage</option>
+                    </select>
+                    @* Switching is a display-time conversion, never a rewrite of past sessions —
+                       each keeps the unit it was logged in. Saying so stops it looking lossy. *@
+                    <p class="hint">Past sessions keep the unit they were logged in.</p>
+                </div>
+
+                <div class="field">
+                    <label for="@($"pages-{Entry.Id}")">Pages in your edition</label>
+                    <input id="@($"pages-{Entry.Id}")" type="number" min="1" @bind="_pageCount" disabled="@_working" />
+                    <button type="button" @onclick="SavePageCountAsync" disabled="@_working">Save</button>
+                    @if (Entry.PageCountOverride is not null)
+                    {
+                        <button type="button" class="link-button" @onclick="ClearPageCountAsync" disabled="@_working">
+                            Use the catalog's count
+                        </button>
+                    }
+                    <p class="hint">
+                        @if (Entry.PageCountOverride is { } own)
+                        {
+                            <text>Yours: @own pages.</text>
+                        }
+                        else if (Entry.Book?.TotalPages is { } catalogued)
+                        {
+                            <text>The catalog says @catalogued pages.</text>
+                        }
+                        else
+                        {
+                            <text>Nobody has a page count for this book, so percentages are unavailable until you set one.</text>
+                        }
+                    </p>
+                </div>
+            </div>
+        }
+
+        @if (_panel == Panel.Remove)
+        {
+            <div class="panel panel--danger">
+                <p>Take <strong>@(Entry.Book?.Title ?? "this book")</strong> off your shelf? Its reading history goes with it.</p>
+                <button type="button" class="danger" @onclick="RemoveAsync" disabled="@_working">Remove it</button>
+                <button type="button" class="link-button" @onclick="Close" disabled="@_working">Keep it</button>
+            </div>
+        }
+    </div>
+</article>
+
+@code {
+    private enum Panel { None, Log, History, Settings, Remove }
+
+    /// <summary>The wording readers see, against the values Library actually accepts.</summary>
+    private static readonly Dictionary<string, string> Statuses = new()
+    {
+        ["WantToRead"] = "Want to read",
+        ["Reading"] = "Reading",
+        ["Finished"] = "Finished",
+        ["OnHold"] = "On hold",
+        ["Dropped"] = "Dropped",
+    };
+
+    [Parameter, EditorRequired]
+    public required LibraryEntry Entry { get; set; }
+
+    /// <summary>Raised when this entry changed in a way the shelf around it needs to know about.</summary>
+    [Parameter]
+    public EventCallback<LibraryEntry> OnChanged { get; set; }
+
+    [Parameter]
+    public EventCallback OnRemoved { get; set; }
+
+    /// <summary>Raised when the reader's session has ended, which is the whole page's problem.</summary>
+    [Parameter]
+    public EventCallback OnSignedOut { get; set; }
+
+    private Panel _panel = Panel.None;
+    private bool _working;
+    private IReadOnlyList<string> _reasons = [];
+    private IReadOnlyList<ReadingSessionView>? _sessions;
+    private Guid? _editing;
+    private int? _pageCount;
+
+    protected override void OnParametersSet() =>
+        _pageCount = Entry.PageCountOverride ?? Entry.Book?.TotalPages;
+
+    private string Initial => (Entry.Book?.Title ?? "?").Trim() is { Length: > 0 } title
+        ? title[..1].ToUpperInvariant()
+        : "?";
+
+    private void Toggle(Panel panel)
+    {
+        _panel = _panel == panel ? Panel.None : panel;
+        _reasons = [];
+        _editing = null;
+    }
+
+    private void Close()
+    {
+        _panel = Panel.None;
+        _reasons = [];
+        _editing = null;
+    }
+
+    private void StartEditing(Guid sessionId)
+    {
+        _editing = sessionId;
+        _reasons = [];
+    }
+
+    private async Task ToggleHistoryAsync()
+    {
+        if (_panel == Panel.History)
+        {
+            Close();
+            return;
+        }
+
+        Toggle(Panel.History);
+        _sessions = null;
+
+        await RunAsync(token => Library.GetSessionsAsync(Entry.Id, token), sessions => _sessions = sessions);
+    }
+
+    private async Task StatusChangedAsync(ChangeEventArgs e)
+    {
+        if (e.Value?.ToString() is not { } status || status == Entry.Status)
+        {
+            return;
+        }
+
+        await RunAsync(token => Library.SetStatusAsync(Entry.Id, status, token), _ => Refresh());
+    }
+
+    private async Task TrackingMethodChangedAsync(ChangeEventArgs e)
+    {
+        if (e.Value?.ToString() is not { } method || method == Entry.TrackingMethod)
+        {
+            return;
+        }
+
+        await RunAsync(token => Library.SetTrackingMethodAsync(Entry.Id, method, token), async _ =>
+        {
+            // The history is expressed in the reader's current method, so it is now describing
+            // the same sessions in different units.
+            await ReloadSessions();
+            await Refresh();
+        });
+    }
+
+    private async Task SavePageCountAsync() =>
+        await RunAsync(token => Library.SetPageCountAsync(Entry.Id, _pageCount, token), async _ =>
+        {
+            await ReloadSessions();
+            await Refresh();
+        });
+
+    private async Task ClearPageCountAsync() =>
+        await RunAsync(token => Library.SetPageCountAsync(Entry.Id, null, token), async _ =>
+        {
+            await ReloadSessions();
+            await Refresh();
+        });
+
+    private async Task LogAsync(NewSession session) =>
+        await RunAsync(token => Library.LogSessionAsync(Entry.Id, session, token), async _ =>
+        {
+            Close();
+            await Refresh();
+        });
+
+    private async Task CorrectAsync(Guid sessionId, NewSession session) =>
+        await RunAsync(token => Library.CorrectSessionAsync(Entry.Id, sessionId, session, token), async _ =>
+        {
+            _editing = null;
+            await ReloadSessions();
+            await Refresh();
+        });
+
+    private async Task DeleteSessionAsync(Guid sessionId) =>
+        await RunAsync(token => Library.DeleteSessionAsync(Entry.Id, sessionId, token), async () =>
+        {
+            await ReloadSessions();
+            await Refresh();
+        });
+
+    private async Task RemoveAsync() =>
+        await RunAsync(token => Library.RemoveAsync(Entry.Id, token), () => OnRemoved.InvokeAsync());
+
+    /// <summary>
+    /// Re-reads this entry from the shelf, which is the only representation that carries all of
+    /// it, and hands it up.
+    ///
+    /// The answer to a change is deliberately not used for this. Library replies to a status,
+    /// tracking-method or page-count change with the entry alone: no book details, because it
+    /// does not re-ask Catalog for a change that cannot affect what Catalog says, and no
+    /// progress, because progress is derived from sessions when read rather than stored. Both
+    /// are reasonable, and rendering that reply directly blanks the title, the cover and the
+    /// reader's position on every change.
+    ///
+    /// Merging the previous values back in is not the fix either. Changing the tracking method
+    /// or the page count genuinely does change what progress says — that is the point of making
+    /// the change — so keeping the old value would show a number that is quietly wrong, which is
+    /// worse than showing none. Only Library can say what progress is now, so ask it.
+    /// </summary>
+    private async Task Refresh()
+    {
+        var (entries, problem) = await Library.GetEntriesAsync(null, CancellationToken.None);
+
+        if (problem is LibraryUnavailable.NotSignedIn)
+        {
+            await OnSignedOut.InvokeAsync();
+            return;
+        }
+
+        if (entries?.FirstOrDefault(entry => entry.Id == Entry.Id) is { } fresh)
+        {
+            await OnChanged.InvokeAsync(fresh);
+        }
+    }
+
+    private async Task ReloadSessions()
+    {
+        // Nothing is showing the history, so nothing needs it fetched. Changing the tracking
+        // method with the panel closed should not cost a request for a list nobody will read.
+        if (_panel != Panel.History)
+        {
+            _sessions = null;
+            return;
+        }
+
+        var sessions = await Library.GetSessionsAsync(Entry.Id, CancellationToken.None);
+
+        if (sessions.Ok)
+        {
+            _sessions = sessions.Value;
+        }
+    }
+
+    private Task RunAsync<T>(
+        Func<CancellationToken, Task<LibraryChange<T>>> change,
+        Action<T> onSuccess)
+        where T : class =>
+        RunAsync(change, value => { onSuccess(value); return Task.CompletedTask; });
+
+    private async Task RunAsync<T>(
+        Func<CancellationToken, Task<LibraryChange<T>>> change,
+        Func<T, Task> onSuccess)
+        where T : class
+    {
+        _working = true;
+        _reasons = [];
+
+        try
+        {
+            var outcome = await change(CancellationToken.None);
+
+            if (outcome is { Ok: true, Value: { } value })
+            {
+                await onSuccess(value);
+                return;
+            }
+
+            await Explain(outcome.Problem, outcome.Reasons);
+        }
+        finally
+        {
+            _working = false;
+        }
+    }
+
+    private async Task RunAsync(Func<CancellationToken, Task<LibraryChange>> change, Func<Task> onSuccess)
+    {
+        _working = true;
+        _reasons = [];
+
+        try
+        {
+            var outcome = await change(CancellationToken.None);
+
+            if (outcome.Ok)
+            {
+                await onSuccess();
+                return;
+            }
+
+            await Explain(outcome.Problem, outcome.Reasons);
+        }
+        finally
+        {
+            _working = false;
+        }
+    }
+
+    private async Task Explain(LibraryChangeProblem? problem, IReadOnlyList<string> reasons)
+    {
+        if (problem is LibraryChangeProblem.NotSignedIn)
+        {
+            await OnSignedOut.InvokeAsync();
+            return;
+        }
+
+        _reasons = problem switch
+        {
+            // Library's own wording, which already explains the mistake to a person.
+            LibraryChangeProblem.Refused when reasons.Count > 0 => reasons,
+            LibraryChangeProblem.Refused => ["That change was refused."],
+            LibraryChangeProblem.NoLongerThere => ["That is no longer on your shelf. Reload to see where things stand."],
+            _ => ["ReadingTracker could not be reached just now. Try again shortly."],
+        };
+    }
+
+    private string Describe(ReadingSessionView session)
+    {
+        // Prefer the reader's current method, which Library has already converted for us; fall
+        // back to the unit it was actually logged in when no page count makes that possible.
+        var (start, end, unit) = session.Displayed is { } displayed
+            ? (displayed.StartPosition, displayed.EndPosition, displayed.Unit)
+            : (session.StartPosition, session.EndPosition, session.Unit);
+
+        return unit == "Percentage"
+            ? $"{Trim(start)}% → {Trim(end)}%"
+            : $"p.{Trim(start)} → p.{Trim(end)}";
+    }
+
+    private static string Trim(decimal value) =>
+        value == decimal.Truncate(value) ? decimal.Truncate(value).ToString() : value.ToString("0.#");
+}

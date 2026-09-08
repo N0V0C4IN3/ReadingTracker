@@ -1,0 +1,71 @@
+@using ReadingTracker.Web.Services
+
+@*
+    Where the reader has got to. Progress is derived by Library from the reader's latest session
+    every time it is asked for, never stored, so this is always in step with the history behind it.
+
+    A book with no sessions yet has no progress at all — not zero. Saying "0%" would claim
+    something about the reader's reading that nothing has established.
+*@
+
+@if (Progress is { } progress)
+{
+    <div class="progress">
+        @if (progress.PercentComplete is { } percent)
+        {
+            <div class="progress__track" role="progressbar"
+                 aria-valuenow="@percent" aria-valuemin="0" aria-valuemax="100"
+                 aria-label="Progress through this book">
+                <div class="progress__fill" style="width: @(percent)%"></div>
+            </div>
+            @* Tracking by percentage makes the bar's percentage and the reader's position the
+               same quantity, and "14% · 13.5%" reads as two facts that disagree. Say it once. *@
+            <span class="progress__label">
+                @if (progress.Unit == "Percentage")
+                {
+                    <text>@Position(progress)</text>
+                }
+                else
+                {
+                    <text>@percent% · @Position(progress)</text>
+                }
+            </span>
+        }
+        else
+        {
+            @* No page count anywhere, so a percentage cannot be worked out. The position is
+               still worth showing: it is what the reader actually told us. *@
+            <span class="progress__label">@Position(progress)</span>
+        }
+    </div>
+}
+else
+{
+    <span class="progress__label muted">Not started</span>
+}
+
+@code {
+    [Parameter]
+    public Progress? Progress { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string TrackingMethod { get; set; }
+
+    [Parameter]
+    public int? EffectivePageCount { get; set; }
+
+    private string Position(Progress progress)
+    {
+        var at = Trim(progress.Position);
+
+        if (progress.Unit == "Percentage")
+        {
+            return $"{at}%";
+        }
+
+        return EffectivePageCount is { } total ? $"page {at} of {total}" : $"page {at}";
+    }
+
+    private static string Trim(decimal value) =>
+        value == decimal.Truncate(value) ? decimal.Truncate(value).ToString() : value.ToString("0.#");
+}

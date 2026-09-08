@@ -1,5 +1,6 @@
 @page "/"
 @using Microsoft.Extensions.Options
+@using ReadingTracker.Web.Components
 @using ReadingTracker.Web.Services
 @inject GatewayLibraryClient Gateway
 @inject GatewayCatalogClient Catalog
@@ -7,124 +8,181 @@
 
 <PageTitle>ReadingTracker</PageTitle>
 
-<h1>ReadingTracker</h1>
-
 <AuthorizeView>
     <Authorized>
-        <p>Hello, @context.User.Identity?.Name.</p>
+        <section class="shelf">
+            <div class="shelf__heading">
+                <h1>Your shelf</h1>
 
-        @if (_entries is { } entries)
-        {
-            @if (entries.Count == 0)
+                @if (_entries is { Count: > 0 } || _filter is not null)
+                {
+                    <div class="filters" role="group" aria-label="Filter by reading status">
+                        @foreach (var (value, label) in Filters)
+                        {
+                            <button type="button"
+                                    class="chip @(value == _filter ? "chip--on" : null)"
+                                    aria-pressed="@(value == _filter)"
+                                    @onclick="() => FilterAsync(value)">
+                                @label
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+
+            @if (_entries is { } entries)
             {
-                <p>Your shelf is empty. Search for a book below to add your first one.</p>
+                @if (entries.Count == 0)
+                {
+                    <p class="empty">
+                        @if (_filter is null)
+                        {
+                            <text>Your shelf is empty. Search for a book below to add your first one.</text>
+                        }
+                        else
+                        {
+                            <text>Nothing here with that status.</text>
+                        }
+                    </p>
+                }
+                else
+                {
+                    <div class="entries">
+                        @foreach (var entry in entries)
+                        {
+                            <ShelfEntry @key="entry.Id"
+                                        Entry="entry"
+                                        OnChanged="Replace"
+                                        OnRemoved="@(() => RemoveAsync(entry.Id))"
+                                        OnSignedOut="SignedOut" />
+                        }
+                    </div>
+                }
+            }
+            else if (_problem == LibraryUnavailable.NotSignedIn)
+            {
+                <p class="notice">Your session has ended. <a href="authentication/login">Sign in again</a> to see your shelf.</p>
+            }
+            else if (_problem == LibraryUnavailable.GatewayUnreachable)
+            {
+                <p class="notice">ReadingTracker could not be reached just now. Try again shortly.</p>
             }
             else
             {
-                <ul>
-                    @foreach (var entry in entries)
-                    {
-                        <li>
-                            <strong>@(entry.Book?.Title ?? "(catalog unreachable)")</strong>
-                            — @entry.Status
-                            @if (entry.Progress is { } progress)
-                            {
-                                <text> — @progress.PercentComplete% (@progress.Position @progress.Unit)</text>
-                            }
-                        </li>
-                    }
-                </ul>
+                <p class="muted">Loading your shelf…</p>
             }
-        }
-        else if (_problem == LibraryUnavailable.NotSignedIn)
-        {
-            <p>Your session has ended. <a href="authentication/login">Sign in again</a> to see your shelf.</p>
-        }
-        else if (_problem == LibraryUnavailable.GatewayUnreachable)
-        {
-            <p>ReadingTracker could not be reached just now. Try again shortly.</p>
-        }
-        else
-        {
-            <p>Loading your shelf…</p>
-        }
+        </section>
 
-        <h2>Find a book</h2>
-        <div>
-            <input @bind="_titleQuery" @bind:event="oninput" placeholder="Title" />
-            <input @bind="_authorQuery" @bind:event="oninput" placeholder="Author (optional)" />
-            <input @bind="_isbnQuery" @bind:event="oninput" placeholder="ISBN" />
-            <button type="button" @onclick="SearchAsync">Search</button>
-        </div>
+        <section class="search">
+            <h2>Find a book</h2>
 
-        @if (_searchResults is { } results)
-        {
-            @if (results.Count == 0)
+            <div class="search__inputs">
+                <input @bind="_titleQuery" @bind:event="oninput" placeholder="Title" aria-label="Title" @onkeydown="SearchOnEnterAsync" />
+                <input @bind="_authorQuery" @bind:event="oninput" placeholder="Author (optional)" aria-label="Author" @onkeydown="SearchOnEnterAsync" />
+                <input @bind="_isbnQuery" @bind:event="oninput" placeholder="ISBN" aria-label="ISBN" @onkeydown="SearchOnEnterAsync" />
+                <button type="button" @onclick="SearchAsync" disabled="@_searching">
+                    @(_searching ? "Searching…" : "Search")
+                </button>
+            </div>
+
+            @if (_searchResults is { } results)
             {
-                <p>No books matched your search.</p>
-            }
-            else
-            {
-                <ul>
-                    @foreach (var book in results)
-                    {
-                        <li>
-                            @if (book.CoverUrl is { } cover)
-                            {
-                                <img src="@cover" alt="" width="40" />
-                            }
-                            <strong>@book.Title</strong> — @string.Join(", ", book.Authors)
-                            <button type="button" @onclick="() => AddToLibraryAsync(book.Id)">Add to my library</button>
-                        </li>
-                    }
-                </ul>
-            }
-        }
-        else if (_searchProblem == SearchUnavailable.ProvidersUnavailable)
-        {
-            <p>Book search is temporarily unavailable. Try again shortly.</p>
-        }
-        else if (_searchProblem == SearchUnavailable.NotSignedIn)
-        {
-            <p>Your session has ended. <a href="authentication/login">Sign in again</a> to search.</p>
-        }
-        else if (_searchProblem == SearchUnavailable.GatewayUnreachable)
-        {
-            <p>ReadingTracker could not be reached just now. Try again shortly.</p>
-        }
+                @if (results.Count == 0)
+                {
+                    <p class="muted">No books matched your search.</p>
+                }
+                else
+                {
+                    <ul class="results">
+                        @foreach (var book in results)
+                        {
+                            <li class="result">
+                                @if (book.CoverUrl is { } cover)
+                                {
+                                    <img src="@cover" alt="" loading="lazy" />
+                                }
+                                else
+                                {
+                                    <div class="result__cover-placeholder" aria-hidden="true"></div>
+                                }
 
-        @if (_addProblem == AddToLibraryProblem.AlreadyInLibrary)
-        {
-            <p>You already have that book in your library.</p>
-        }
-        else if (_addProblem == AddToLibraryProblem.NotSignedIn)
-        {
-            <p>Your session has ended. <a href="authentication/login">Sign in again</a> to add books.</p>
-        }
-        else if (_addProblem == AddToLibraryProblem.GatewayUnreachable)
-        {
-            <p>ReadingTracker could not be reached just now. Try again shortly.</p>
-        }
+                                <div class="result__body">
+                                    <strong>@book.Title</strong>
+                                    @if (book.Authors.Count > 0)
+                                    {
+                                        <span class="muted">@string.Join(", ", book.Authors)</span>
+                                    }
+                                </div>
+
+                                <button type="button" @onclick="() => AddToLibraryAsync(book.Id)" disabled="@(_adding == book.Id)">
+                                    @(_adding == book.Id ? "Adding…" : "Add to my library")
+                                </button>
+                            </li>
+                        }
+                    </ul>
+                }
+            }
+            else if (_searchProblem == SearchUnavailable.ProvidersUnavailable)
+            {
+                <p class="notice">Book search is temporarily unavailable. Try again shortly.</p>
+            }
+            else if (_searchProblem == SearchUnavailable.NotSignedIn)
+            {
+                <p class="notice">Your session has ended. <a href="authentication/login">Sign in again</a> to search.</p>
+            }
+            else if (_searchProblem == SearchUnavailable.GatewayUnreachable)
+            {
+                <p class="notice">ReadingTracker could not be reached just now. Try again shortly.</p>
+            }
+
+            @if (_addProblem == AddToLibraryProblem.AlreadyInLibrary)
+            {
+                <p class="notice">You already have that book in your library.</p>
+            }
+            else if (_addProblem == AddToLibraryProblem.NotSignedIn)
+            {
+                <p class="notice">Your session has ended. <a href="authentication/login">Sign in again</a> to add books.</p>
+            }
+            else if (_addProblem == AddToLibraryProblem.GatewayUnreachable)
+            {
+                <p class="notice">ReadingTracker could not be reached just now. Try again shortly.</p>
+            }
+        </section>
     </Authorized>
     <NotAuthorized>
-        <p>Track what you are reading, and how far through it you are.</p>
-        @if (DevSignIn.Value.Enabled)
-        {
-            <p>Sign in as any reader id to begin.</p>
-        }
-        else
-        {
-            <p>Sign in with Google to begin.</p>
-        }
+        <section class="welcome">
+            <h1>ReadingTracker</h1>
+            <p>Track what you are reading, and how far through it you are.</p>
+            @if (DevSignIn.Value.Enabled)
+            {
+                <p class="muted">Sign in as any reader id to begin.</p>
+            }
+            else
+            {
+                <p class="muted">Sign in with Google to begin.</p>
+            }
+        </section>
     </NotAuthorized>
 </AuthorizeView>
 
 @code {
+    /// <summary>Null is "everything"; the rest are the ReadingStatus values Library accepts.</summary>
+    private static readonly (string? Value, string Label)[] Filters =
+    [
+        (null, "All"),
+        ("Reading", "Reading"),
+        ("WantToRead", "Want to read"),
+        ("Finished", "Finished"),
+        ("OnHold", "On hold"),
+        ("Dropped", "Dropped"),
+    ];
+
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationState { get; set; }
 
     private IReadOnlyList<LibraryEntry>? _entries;
     private LibraryUnavailable? _problem;
+    private string? _filter;
 
     private string _titleQuery = "";
     private string _authorQuery = "";
@@ -132,6 +190,8 @@
     private IReadOnlyList<BookSearchResult>? _searchResults;
     private SearchUnavailable? _searchProblem;
     private AddToLibraryProblem? _addProblem;
+    private bool _searching;
+    private Guid? _adding;
 
     /// <summary>Whose shelf is on screen, so a re-render is not mistaken for a change of reader.</summary>
     private string? _shelfBelongsTo;
@@ -161,13 +221,68 @@
         _searchResults = null;
         _searchProblem = null;
         _addProblem = null;
+        _filter = null;
 
         // Fetching before we know there is a reader would send the Gateway a request with no
         // token on every anonymous page load — harmless, since it just gets a 401 back, but
         // pointless network traffic for a page that has already decided not to show it.
         if (reader is not null)
         {
-            (_entries, _problem) = await Gateway.GetEntriesAsync(CancellationToken.None);
+            await LoadShelfAsync();
+        }
+    }
+
+    private async Task LoadShelfAsync() =>
+        (_entries, _problem) = await Gateway.GetEntriesAsync(_filter, CancellationToken.None);
+
+    private async Task FilterAsync(string? status)
+    {
+        if (_filter == status)
+        {
+            return;
+        }
+
+        _filter = status;
+        _entries = null;
+
+        await LoadShelfAsync();
+    }
+
+    /// <summary>
+    /// Swap in the entry as Library now describes it, rather than reloading the whole shelf for
+    /// one card's change. A status change under an active filter can move a book off the shelf
+    /// entirely, though, and leaving it sitting there would misreport what the filter says.
+    /// </summary>
+    private async Task Replace(LibraryEntry updated)
+    {
+        if (_filter is { } filter && updated.Status != filter)
+        {
+            await LoadShelfAsync();
+            return;
+        }
+
+        _entries = _entries?.Select(entry => entry.Id == updated.Id ? updated : entry).ToArray();
+    }
+
+    private async Task RemoveAsync(Guid entryId)
+    {
+        _entries = _entries?.Where(entry => entry.Id != entryId).ToArray();
+
+        // The card has already gone; this keeps anything derived from the shelf honest.
+        await LoadShelfAsync();
+    }
+
+    private void SignedOut()
+    {
+        _entries = null;
+        _problem = LibraryUnavailable.NotSignedIn;
+    }
+
+    private async Task SearchOnEnterAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchAsync();
         }
     }
 
@@ -182,24 +297,42 @@
             return;
         }
 
-        (_searchResults, _searchProblem) =
-            await Catalog.SearchAsync(_isbnQuery, _titleQuery, _authorQuery, CancellationToken.None);
+        _searching = true;
+        _addProblem = null;
+
+        try
+        {
+            (_searchResults, _searchProblem) =
+                await Catalog.SearchAsync(_isbnQuery, _titleQuery, _authorQuery, CancellationToken.None);
+        }
+        finally
+        {
+            _searching = false;
+        }
     }
 
     private async Task AddToLibraryAsync(Guid bookId)
     {
         _addProblem = null;
+        _adding = bookId;
 
-        var (_, problem) = await Gateway.AddAsync(bookId, CancellationToken.None);
-
-        if (problem is { } trouble)
+        try
         {
-            _addProblem = trouble;
-            return;
-        }
+            var (_, problem) = await Gateway.AddAsync(bookId, CancellationToken.None);
 
-        // Rerun the same fetch the page loads with, rather than splicing the new entry in by
-        // hand, so the shelf always shows exactly what the Gateway says it holds.
-        (_entries, _problem) = await Gateway.GetEntriesAsync(CancellationToken.None);
+            if (problem is { } trouble)
+            {
+                _addProblem = trouble;
+                return;
+            }
+
+            // Rerun the same fetch the page loads with, rather than splicing the new entry in by
+            // hand, so the shelf always shows exactly what the Gateway says it holds.
+            await LoadShelfAsync();
+        }
+        finally
+        {
+            _adding = null;
+        }
     }
 }

@@ -1,45 +1,539 @@
 /*
-    Deliberately almost nothing. This interface exists to prove that signing in works, and it
-    will be replaced wholesale when the real one is designed. Anything more here would be work
-    thrown away.
+    One stylesheet, no framework. The interface is a shelf, a search box and the controls that act
+    on them — small enough that a framework would be more bytes and more concepts than the thing
+    it is styling.
+
+    Colours are declared once as custom properties, including a dark set behind
+    prefers-color-scheme, so the palette is changed in one place rather than hunted for.
 */
+
+:root {
+    --ink: #1a1a1a;
+    --ink-soft: #5c5c5c;
+    --ink-faint: #8a8a8a;
+    --page: #fdfdfc;
+    --card: #ffffff;
+    --line: #e4e2dd;
+    --line-strong: #cfccc5;
+    --accent: #3b5f4a;
+    --accent-soft: #edf3ef;
+    --danger: #a33a2c;
+    --danger-soft: #fbeeec;
+    --radius: 8px;
+    --shadow: 0 1px 2px rgb(0 0 0 / 6%), 0 4px 12px rgb(0 0 0 / 4%);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --ink: #ececea;
+        --ink-soft: #a8a6a1;
+        --ink-faint: #7d7b76;
+        --page: #16181a;
+        --card: #1e2124;
+        --line: #2e3236;
+        --line-strong: #414549;
+        --accent: #8fc0a4;
+        --accent-soft: #23302a;
+        --danger: #e08375;
+        --danger-soft: #33211f;
+        --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 12px rgb(0 0 0 / 20%);
+    }
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
 
 body {
     margin: 0;
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    line-height: 1.5;
-    color: #1a1a1a;
+    line-height: 1.55;
+    color: var(--ink);
+    background: var(--page);
 }
+
+h1 {
+    font-size: 1.5rem;
+    margin: 0;
+}
+
+h2 {
+    font-size: 1.1rem;
+    margin: 0 0 0.75rem;
+}
+
+h3 {
+    font-size: 1rem;
+    margin: 0;
+}
+
+a {
+    color: var(--accent);
+}
+
+.muted {
+    color: var(--ink-soft);
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+/* Header ------------------------------------------------------------------ */
 
 header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
+    flex-wrap: wrap;
     padding: 0.75rem 1.5rem;
-    border-bottom: 1px solid #e0e0e0;
+    border-bottom: 1px solid var(--line);
+    background: var(--card);
 }
 
-header a {
+header > a {
     font-weight: 600;
     text-decoration: none;
     color: inherit;
+    letter-spacing: -0.01em;
+}
+
+header input {
+    max-width: 9rem;
 }
 
 main {
     padding: 1.5rem;
-    max-width: 40rem;
+    max-width: 46rem;
+    margin: 0 auto;
+}
+
+/* Controls ---------------------------------------------------------------- */
+
+button,
+input,
+select {
+    font: inherit;
+    color: inherit;
+}
+
+input,
+select {
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    background: var(--card);
+    min-width: 0;
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
 }
 
 button {
-    font: inherit;
-    padding: 0.4rem 0.9rem;
+    padding: 0.4rem 0.85rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    background: var(--card);
     cursor: pointer;
 }
 
-code {
-    background: #f2f2f2;
-    padding: 0.1rem 0.3rem;
+button:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+button:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+button.danger {
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+.link-button {
+    border: none;
+    background: none;
+    padding: 0.15rem 0;
+    color: var(--ink-soft);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.link-button:hover:not(:disabled) {
+    color: var(--accent);
+}
+
+.link-button--danger:hover:not(:disabled) {
+    color: var(--danger);
+}
+
+.chip {
+    padding: 0.2rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+}
+
+.chip--on {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+/* Shelf ------------------------------------------------------------------- */
+
+.shelf__heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.entries {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.entry {
+    display: flex;
+    gap: 1rem;
+    padding: 0.9rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--card);
+    box-shadow: var(--shadow);
+}
+
+.entry--working {
+    opacity: 0.6;
+}
+
+.entry__cover,
+.result img,
+.result__cover-placeholder {
+    flex: 0 0 auto;
+    width: 3rem;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.entry__cover img {
+    display: block;
+    width: 100%;
+    border-radius: 4px;
+}
+
+.entry__cover-placeholder,
+.result__cover-placeholder {
+    display: grid;
+    place-items: center;
+    height: 4.5rem;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 1.2rem;
+    border-radius: 4px;
+}
+
+.entry__body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.entry__title {
+    line-height: 1.35;
+}
+
+.entry__authors {
+    margin: 0.1rem 0 0.5rem;
+    color: var(--ink-soft);
+    font-size: 0.9rem;
+}
+
+.entry__status {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.6rem;
+}
+
+.status-select {
+    font-size: 0.85rem;
+    padding: 0.2rem 0.4rem;
+}
+
+.status-select--reading {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.status-select--finished {
+    background: var(--accent-soft);
+}
+
+.entry__actions {
+    display: flex;
+    gap: 0.9rem;
+    flex-wrap: wrap;
+    font-size: 0.85rem;
+}
+
+.entry__reasons {
+    margin: 0.6rem 0 0;
+    padding: 0.5rem 0.75rem;
+    list-style: none;
+    border-left: 3px solid var(--danger);
+    background: var(--danger-soft);
+    color: var(--danger);
+    border-radius: 0 4px 4px 0;
+    font-size: 0.9rem;
+}
+
+.entry__reasons li + li {
+    margin-top: 0.25rem;
+}
+
+/* Progress ---------------------------------------------------------------- */
+
+.progress {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1 1 12rem;
+    min-width: 0;
+}
+
+.progress__track {
+    flex: 1 1 auto;
+    height: 6px;
+    min-width: 4rem;
+    background: var(--line);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.progress__fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 999px;
+}
+
+.progress__label {
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    white-space: nowrap;
+}
+
+/* Panels ------------------------------------------------------------------ */
+
+.panel {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--page);
+}
+
+.panel--danger {
+    border-color: var(--danger);
+    background: var(--danger-soft);
+}
+
+.field {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+}
+
+.field:last-child {
+    margin-bottom: 0;
+}
+
+.field label {
+    min-width: 6.5rem;
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+}
+
+.field input[type="number"] {
+    width: 7rem;
+}
+
+.unit {
+    font-size: 0.85rem;
+    color: var(--ink-faint);
+}
+
+.hint {
+    flex-basis: 100%;
+    margin: 0.15rem 0 0;
+    font-size: 0.8rem;
+    color: var(--ink-faint);
+}
+
+.session-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+}
+
+.session-form .field {
+    margin-bottom: 0;
+}
+
+.session-form .field label {
+    min-width: auto;
+}
+
+.session-form__actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    margin-top: 0.75rem;
+}
+
+/* Sessions ---------------------------------------------------------------- */
+
+.sessions {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.session {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 0.4rem 0;
+    font-size: 0.9rem;
+    border-bottom: 1px solid var(--line);
+}
+
+.session:last-child {
+    border-bottom: none;
+}
+
+.session__what {
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+}
+
+.session__when,
+.session__how-long {
+    color: var(--ink-soft);
+    font-size: 0.85rem;
+}
+
+.session__how-long::before {
+    content: "· ";
+}
+
+/* Search ------------------------------------------------------------------ */
+
+.search {
+    margin-top: 2.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--line);
+}
+
+.search__inputs {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.search__inputs input {
+    flex: 1 1 8rem;
+}
+
+.results {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.result {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--card);
+}
+
+.result img {
+    width: 2.5rem;
+    display: block;
+}
+
+.result__cover-placeholder {
+    width: 2.5rem;
+    height: 3.5rem;
+}
+
+.result__body {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.result__body span {
+    font-size: 0.85rem;
+}
+
+/* Page-level messages ----------------------------------------------------- */
+
+.notice {
+    padding: 0.6rem 0.85rem;
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    border-radius: 0 4px 4px 0;
+}
+
+.empty {
+    padding: 1.5rem;
+    text-align: center;
+    color: var(--ink-soft);
+    border: 1px dashed var(--line-strong);
+    border-radius: var(--radius);
+}
+
+.welcome {
+    max-width: 30rem;
 }
 
 #blazor-error-ui {
@@ -48,6 +542,17 @@ code {
     bottom: 0;
     width: 100%;
     padding: 0.6rem 1.25rem;
-    background: #ffe8e8;
-    border-top: 1px solid #f5c2c2;
+    background: var(--danger-soft);
+    color: var(--danger);
+    border-top: 1px solid var(--danger);
+}
+
+@media (max-width: 30rem) {
+    main {
+        padding: 1rem;
+    }
+
+    .entry {
+        gap: 0.75rem;
+    }
 }

@@ -6,15 +6,17 @@ Built as a portfolio project, with the weight on the back end: several small ser
 
 ## Status
 
-**Catalog**, **Library**, the **Gateway** and a first cut of **Web** are built: a reader signs in with Google and sees their own shelf, end to end.
+**Catalog**, **Library**, the **Gateway** and **Web** are built. A reader signs in, finds a book, puts it on their shelf, records what they read, and watches their progress move — end to end, through the real services.
 
 | Service | What it does | Status |
 | --- | --- | --- |
 | Catalog | Finds books via Google Books and Open Library, caches them, gives them stable ids | Built |
 | Library | A reader's own books: reading status, progress, and reading history | Built |
-| Gateway | Single entry point; verifies the caller's Google token and names the reader | Built |
-| Web | Blazor WebAssembly front end: sign in, see your shelf | Reads only |
+| Gateway | Single entry point; verifies the caller's token and names the reader | Built |
+| Web | Blazor WebAssembly front end: the shelf, and everything a reader does to it | Built |
 | Identity | Maps a Google account to an internal reader | Designed |
+
+On the shelf, each book carries its reading status, a progress bar derived from what the reader has actually logged, and — behind one click each — reading history, the reader's own page count and tracking method, and removal. Progress is never stored: Library works it out from the latest ReadingSession every time it is asked, so the number and the history behind it cannot disagree.
 
 > **Everything through the Gateway now needs a verified token.** It verifies the token against Google's published keys, discards whatever `X-Reader-Id` the caller sent, and sets that header itself from the token's subject. `/health` is the only route that answers without one. Locally you sign in without a Google account at all — see [Signing in locally](#signing-in-locally-without-a-google-account).
 
