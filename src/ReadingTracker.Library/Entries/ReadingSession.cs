@@ -35,5 +35,7 @@ public sealed class ReadingSession
 /// </summary>
 /// <param name="Position">The position reached, in <paramref name="Unit"/>.</param>
 /// <param name="Unit">The unit the position is expressed in.</param>
-/// <param name="PercentComplete">Null when the book's length is unknown, rather than zero.</param>
-public sealed record ReadingProgress(decimal Position, TrackingMethod Unit, decimal? PercentComplete);
+/// <param name="PercentComplete">
+/// A whole percent, for display. Null when the book's length is unknown, rather than zero.
+/// </param>
+public sealed record ReadingProgress(decimal Position, TrackingMethod Unit, int? PercentComplete);

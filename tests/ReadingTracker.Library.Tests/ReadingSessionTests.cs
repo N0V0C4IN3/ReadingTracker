@@ -22,7 +22,43 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
         var entry = await GetEntryAsync(client, entryId);
         Assert.Equal(120, entry.Progress!.Position);
         Assert.Equal("Pages", entry.Progress.Unit);
-        Assert.Equal(40m, entry.Progress.PercentComplete);
+        Assert.Equal(40, entry.Progress.PercentComplete);
+    }
+
+    [Fact]
+    public async Task Tells_me_how_far_through_i_am_in_whole_percent()
+    {
+        var client = ClientFor("rounding-reader");
+        var entryId = await AddBookAsync(client, totalPages: 705);
+
+        await LogAsync(client, entryId, 1, 120);
+
+        // 17.02% is noise: nobody reads a book to two decimal places.
+        Assert.Equal(17, (await GetEntryAsync(client, entryId)).Progress!.PercentComplete);
+    }
+
+    [Fact]
+    public async Task Does_not_say_a_hundred_percent_while_i_still_have_a_page_to_read()
+    {
+        var client = ClientFor("nearly-done-reader");
+        var entryId = await AddBookAsync(client, totalPages: 705);
+
+        await LogAsync(client, entryId, 700, 704);
+
+        // 99.86% rounds to 100, which would show a full bar on an unfinished book.
+        Assert.Equal(99, (await GetEntryAsync(client, entryId)).Progress!.PercentComplete);
+    }
+
+    [Fact]
+    public async Task Does_not_say_nothing_when_i_have_read_a_little_of_a_long_book()
+    {
+        var client = ClientFor("just-started-reader");
+        var entryId = await AddBookAsync(client, totalPages: 705);
+
+        await LogAsync(client, entryId, 1, 2);
+
+        // 0.28% rounds to nothing, which would show an empty bar to a reader who has read.
+        Assert.Equal(1, (await GetEntryAsync(client, entryId)).Progress!.PercentComplete);
     }
 
     [Fact]
@@ -188,7 +224,7 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
 
     private sealed record Entry(Guid Id, Guid BookId, string Status, Progress? Progress);
 
-    private sealed record Progress(decimal Position, string Unit, decimal? PercentComplete);
+    private sealed record Progress(decimal Position, string Unit, int? PercentComplete);
 
     private sealed record Session(
         Guid Id,

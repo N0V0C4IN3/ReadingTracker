@@ -22,11 +22,23 @@ public static class Progress
     /// you are" and "you are at the beginning" are different answers, and a progress bar
     /// should be able to tell them apart.
     /// </summary>
-    private static decimal? PercentComplete(ReadingSession latest, int? totalPages) =>
+    private static int? PercentComplete(ReadingSession latest, int? totalPages) =>
         latest.Unit switch
         {
-            TrackingMethod.Percentage => latest.EndPosition,
-            _ when totalPages is > 0 => Math.Round(latest.EndPosition * 100m / totalPages.Value, 2),
+            TrackingMethod.Percentage => WholePercent(latest.EndPosition),
+            _ when totalPages is > 0 => WholePercent(latest.EndPosition * 100m / totalPages.Value),
             _ => null,
         };
+
+    /// <summary>
+    /// A whole percent, because nobody reads a book to two decimal places. Rounding is held
+    /// off the two ends it would misreport: a reader with a page still to go is never shown
+    /// 100%, and one who has read a little of a long book is never shown 0%.
+    /// </summary>
+    private static int WholePercent(decimal exact) => exact switch
+    {
+        <= 0m => 0,
+        >= 100m => 100,
+        _ => Math.Clamp((int)Math.Round(exact, MidpointRounding.AwayFromZero), 1, 99),
+    };
 }

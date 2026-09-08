@@ -245,7 +245,7 @@ public static class LibraryEndpoints
     /// Where the reader has got to. Derived from their latest session every time it is asked
     /// for, never stored, so it cannot disagree with the history it comes from.
     /// </summary>
-    private sealed record ProgressResponse(decimal Position, string Unit, decimal? PercentComplete)
+    private sealed record ProgressResponse(decimal Position, string Unit, int? PercentComplete)
     {
         public static ProgressResponse From(ReadingProgress progress) =>
             new(progress.Position, progress.Unit.ToString(), progress.PercentComplete);
