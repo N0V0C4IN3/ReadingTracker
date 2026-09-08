@@ -1,5 +1,9 @@
 using DotNetEnv;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using ReadingTracker.Gateway;
 using Yarp.ReverseProxy.Forwarder;
+using Yarp.ReverseProxy.Transforms;
 
 // Load .env before the builder reads environment variables, matching the other services so
 // local development keeps its configuration in one gitignored place.
@@ -31,8 +35,76 @@ foreach (var destination in clusters.SelectMany(cluster => cluster.GetSection("D
     }
 }
 
+// Without this the Gateway would accept tokens issued to any Google application at all, so a
+// missing value is a security hole rather than an inconvenience. Refuse to start.
+var googleClientId = builder.Configuration["Google:ClientId"]
+    ?? throw new InvalidOperationException(
+        "No Google client id is configured, so tokens could not be checked against this " +
+        "application. Set Google__ClientId.");
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        // Google publishes its signing keys; the handler fetches them through this authority and
+        // caches them rather than asking per request, so a slow or rate-limiting Google does not
+        // become a slow or failing application.
+        options.Authority = GoogleIdentity.Issuer;
+
+        // When a token arrives signed by a key that isn't cached, go and look again — this is
+        // what carries the Gateway through Google's key rotations. The refetch is throttled
+        // internally, which is what stops a stream of junk tokens becoming a stream of requests
+        // to Google.
+        options.RefreshOnIssuerKeyNotFound = true;
+
+        // Keep Google's own claim names rather than translating them into the older SOAP-era
+        // URIs, so "sub" in the token is "sub" in the code.
+        options.MapInboundClaims = false;
+
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+
+            // Google issues tokens under both spellings and treats them as equivalent.
+            ValidIssuers = [GoogleIdentity.Issuer, "accounts.google.com"],
+
+            // The signature only proves Google minted it. Without this, a token issued to any
+            // other Google application in the world would be accepted here.
+            ValidateAudience = true,
+            ValidAudience = googleClientId,
+
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ClockSkew = TimeSpan.FromSeconds(30),
+        };
+    });
+
+builder.Services.AddAuthorization(options =>
+    options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        // A token with no subject names no reader, and the Gateway must not be the thing that
+        // invents one.
+        .RequireClaim(GoogleIdentity.SubjectClaim)
+        .Build());
+
 builder.Services.AddReverseProxy()
-    .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
+    .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
+    .AddTransforms(context => context.AddRequestTransform(transform =>
+    {
+        // Unconditionally, before anything else: whatever the caller claimed about who they are
+        // is discarded. ADR-0007 makes this the Gateway's job, and it is the whole difference
+        // between a trusted-gateway topology and an open one.
+        transform.ProxyRequest.Headers.Remove(GoogleIdentity.ReaderHeader);
+
+        // The token was for us to check, not for the services behind us to hold.
+        transform.ProxyRequest.Headers.Authorization = null;
+
+        if (transform.HttpContext.User.FindFirst(GoogleIdentity.SubjectClaim)?.Value is { } reader)
+        {
+            transform.ProxyRequest.Headers.Add(GoogleIdentity.ReaderHeader, reader);
+        }
+
+        return ValueTask.CompletedTask;
+    }));
 
 builder.Services.AddHealthChecks();
 
@@ -40,7 +112,10 @@ var app = builder.Build();
 
 // Answers without a token: the platform has to be able to tell whether the Gateway is up
 // without holding a Google account.
-app.MapHealthChecks("/health");
+app.MapHealthChecks("/health").AllowAnonymous();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapReverseProxy(proxy =>
     proxy.Use(async (context, next) =>
