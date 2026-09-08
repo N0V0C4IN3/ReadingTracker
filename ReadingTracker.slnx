@@ -10,5 +10,6 @@
     <Project Path="tests/ReadingTracker.Gateway.Tests/ReadingTracker.Gateway.Tests.csproj" />
     <Project Path="tests/ReadingTracker.Library.Tests/ReadingTracker.Library.Tests.csproj" />
     <Project Path="tests/ReadingTracker.TestSupport/ReadingTracker.TestSupport.csproj" />
+    <Project Path="tests/ReadingTracker.Web.Tests/ReadingTracker.Web.Tests.csproj" />
   </Folder>
 </Solution>

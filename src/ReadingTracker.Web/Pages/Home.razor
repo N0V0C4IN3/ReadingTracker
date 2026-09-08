@@ -1,6 +1,7 @@
 @page "/"
 @using ReadingTracker.Web.Services
 @inject GatewayLibraryClient Gateway
+@inject GatewayCatalogClient Catalog
 
 <PageTitle>ReadingTracker</PageTitle>
 
@@ -45,6 +46,49 @@
         {
             <p>Loading your shelf…</p>
         }
+
+        <h2>Find a book</h2>
+        <div>
+            <input @bind="_titleQuery" @bind:event="oninput" placeholder="Title" />
+            <input @bind="_authorQuery" @bind:event="oninput" placeholder="Author (optional)" />
+            <input @bind="_isbnQuery" @bind:event="oninput" placeholder="ISBN" />
+            <button type="button" @onclick="SearchAsync">Search</button>
+        </div>
+
+        @if (_searchResults is { } results)
+        {
+            @if (results.Count == 0)
+            {
+                <p>No books matched your search.</p>
+            }
+            else
+            {
+                <ul>
+                    @foreach (var book in results)
+                    {
+                        <li>
+                            @if (book.CoverUrl is { } cover)
+                            {
+                                <img src="@cover" alt="" width="40" />
+                            }
+                            <strong>@book.Title</strong> — @string.Join(", ", book.Authors)
+                        </li>
+                    }
+                </ul>
+            }
+        }
+        else if (_searchProblem == SearchUnavailable.ProvidersUnavailable)
+        {
+            <p>Book search is temporarily unavailable. Try again shortly.</p>
+        }
+        else if (_searchProblem == SearchUnavailable.NotSignedIn)
+        {
+            <p>Your session has ended. <a href="authentication/login">Sign in again</a> to search.</p>
+        }
+        else if (_searchProblem == SearchUnavailable.GatewayUnreachable)
+        {
+            <p>ReadingTracker could not be reached just now. Try again shortly.</p>
+        }
     </Authorized>
     <NotAuthorized>
         <p>Track what you are reading, and how far through it you are.</p>
@@ -59,6 +103,12 @@
     private IReadOnlyList<LibraryEntry>? _entries;
     private LibraryUnavailable? _problem;
 
+    private string _titleQuery = "";
+    private string _authorQuery = "";
+    private string _isbnQuery = "";
+    private IReadOnlyList<BookSearchResult>? _searchResults;
+    private SearchUnavailable? _searchProblem;
+
     protected override async Task OnInitializedAsync()
     {
         // Fetching before we know there is a reader would send the Gateway a request with no
@@ -70,5 +120,20 @@
         {
             (_entries, _problem) = await Gateway.GetEntriesAsync(CancellationToken.None);
         }
+    }
+
+    private async Task SearchAsync()
+    {
+        // Nothing typed in means nothing to ask Catalog: sending the request anyway would just
+        // come back as a 400, which is not a state this page needs to show.
+        if (string.IsNullOrWhiteSpace(_isbnQuery) &&
+            string.IsNullOrWhiteSpace(_titleQuery) &&
+            string.IsNullOrWhiteSpace(_authorQuery))
+        {
+            return;
+        }
+
+        (_searchResults, _searchProblem) =
+            await Catalog.SearchAsync(_isbnQuery, _titleQuery, _authorQuery, CancellationToken.None);
     }
 }
