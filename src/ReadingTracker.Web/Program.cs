@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using Microsoft.Extensions.Options;
 using ReadingTracker.Web;
+using ReadingTracker.Web.Services;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -35,5 +37,15 @@ builder.Services.AddOidcAuthentication(options =>
     // subject id, which is a number nobody recognises.
     options.UserOptions.NameClaim = "name";
 });
+
+builder.Services.Configure<GatewayOptions>(builder.Configuration.GetSection(GatewayOptions.SectionName));
+builder.Services.AddScoped<IdTokenProvider>();
+builder.Services.AddTransient<GatewayAuthorizationHandler>();
+
+// The only client this application makes: everything goes through the Gateway, which is the
+// only address this application is allowed to know.
+builder.Services.AddHttpClient<GatewayLibraryClient>((serviceProvider, client) =>
+        client.BaseAddress = serviceProvider.GetRequiredService<IOptions<GatewayOptions>>().Value.BaseAddress)
+    .AddHttpMessageHandler<GatewayAuthorizationHandler>();
 
 await builder.Build().RunAsync();

@@ -42,6 +42,21 @@ var googleClientId = builder.Configuration["Google:ClientId"]
         "No Google client id is configured, so tokens could not be checked against this " +
         "application. Set Google__ClientId.");
 
+// The browser calls the Gateway across origins, so this is required for the frontend to work at
+// all — but a wildcard would let any site on the internet ride a signed-in reader's browser to
+// make requests here. Named origins only, and a missing setting fails startup rather than
+// silently accepting everything or nothing.
+var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>();
+
+if (allowedOrigins is not { Length: > 0 })
+{
+    throw new InvalidOperationException(
+        "No AllowedOrigins are configured, so no browser could call the gateway. Set AllowedOrigins__0.");
+}
+
+builder.Services.AddCors(options =>
+    options.AddDefaultPolicy(policy => policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod()));
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -114,6 +129,7 @@ var app = builder.Build();
 // without holding a Google account.
 app.MapHealthChecks("/health").AllowAnonymous();
 
+app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
