@@ -36,6 +36,96 @@ services:
       timeout: 5s
       retries: 5
 
+  # The four .NET services below aren't started by default (see the `services` profile):
+  # `docker compose up` alone still gives just Postgres and RabbitMQ, matching how this repo
+  # has always been run — services on the host, `dotnet run` per service, for the tight
+  # edit/rebuild loop that matters most while building them. Add `--profile services` to bring
+  # everything up in containers instead: `docker compose --profile services up`.
+  #
+  # None of the four have a Docker HEALTHCHECK: the runtime image these are built on on has
+  # neither curl nor wget, and installing one just to poll /health isn't worth the image size
+  # for what is local-only tooling. `depends_on` here is start-order only — each service starts
+  # fast enough in practice that this hasn't needed to be stricter.
+
+  catalog:
+    build:
+      context: .
+      dockerfile: src/ReadingTracker.Catalog/Dockerfile
+    profiles: [services]
+    ports:
+      - "5103:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      # Gss Encryption Mode=Disable: nothing here uses Kerberos, but Npgsql 10 tries GSSAPI
+      # first by default, and the .NET runtime images have shipped without Kerberos libraries
+      # since .NET 8. Left at the default, every startup logs a scary but harmless
+      # "libgssapi_krb5.so.2: cannot open shared object file" before falling back — this skips
+      # the attempt outright instead of leaving that in the logs of a supposedly clean setup.
+      ConnectionStrings__CatalogDb: "Host=postgres;Port=5432;Database=readingtracker;Username=readingtracker;Password=readingtracker;Gss Encryption Mode=Disable"
+      RabbitMq__ConnectionString: "amqp://readingtracker:readingtracker@rabbitmq:5672/"
+      # Read as a flat key rather than nested config — see Catalog's Program.cs.
+      GOOGLE_BOOKS_API_KEY: ${GOOGLE_BOOKS_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  library:
+    build:
+      context: .
+      dockerfile: src/ReadingTracker.Library/Dockerfile
+    profiles: [services]
+    ports:
+      - "5110:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      # See the same setting on catalog above for why Gss Encryption Mode=Disable is here.
+      ConnectionStrings__LibraryDb: "Host=postgres;Port=5432;Database=readingtracker;Username=readingtracker;Password=readingtracker;Gss Encryption Mode=Disable"
+      RabbitMq__ConnectionString: "amqp://readingtracker:readingtracker@rabbitmq:5672/"
+      # The container-network name, not localhost: this is a server-to-server call inside
+      # compose's own network, unlike anything the browser reaches directly.
+      Catalog__BaseAddress: "http://catalog:8080/"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      catalog:
+        condition: service_started
+
+  gateway:
+    build:
+      context: .
+      dockerfile: src/ReadingTracker.Gateway/Dockerfile
+    profiles: [services]
+    ports:
+      - "5100:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      # Google:ClientId and AllowedOrigins come from the committed appsettings.Development.json
+      # unchanged: both are what the browser sees, which is the same host ports whether the
+      # services behind them are containers or processes on the host. Only the addresses below
+      # are a compose-network concern, since these two calls never leave the Docker network.
+      ReverseProxy__Clusters__catalog__Destinations__primary__Address: "http://catalog:8080/"
+      ReverseProxy__Clusters__library__Destinations__primary__Address: "http://library:8080/"
+    depends_on:
+      catalog:
+        condition: service_started
+      library:
+        condition: service_started
+
+  web:
+    build:
+      context: .
+      dockerfile: src/ReadingTracker.Web/Dockerfile
+    profiles: [services]
+    ports:
+      - "5200:8080"
+    depends_on:
+      gateway:
+        condition: service_started
+
 volumes:
   postgres-data:
   rabbitmq-data:
