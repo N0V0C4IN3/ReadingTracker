@@ -14,6 +14,8 @@ public sealed class LibraryDbContext(DbContextOptions<LibraryDbContext> options)
 
     public DbSet<LibraryEntry> LibraryEntries => Set<LibraryEntry>();
 
+    public DbSet<ReadingSession> ReadingSessions => Set<ReadingSession>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema(Schema);
@@ -30,6 +32,23 @@ public sealed class LibraryDbContext(DbContextOptions<LibraryDbContext> options)
 
             // A book appears once in a reader's library — but two readers may each have it.
             entry.HasIndex(e => new { e.ReaderId, e.BookId }).IsUnique();
+        });
+
+        modelBuilder.Entity<ReadingSession>(session =>
+        {
+            session.HasKey(s => s.Id);
+
+            // Sessions belong to an entry and go when it goes.
+            session.HasOne<LibraryEntry>()
+                .WithMany()
+                .HasForeignKey(s => s.LibraryEntryId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            session.Property(s => s.Unit).HasConversion<string>().IsRequired();
+
+            // Reading a book's history, and finding its latest session, are the two things
+            // ever asked of this table.
+            session.HasIndex(s => new { s.LibraryEntryId, s.OccurredAt });
         });
     }
 }

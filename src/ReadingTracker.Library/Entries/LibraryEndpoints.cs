@@ -38,8 +38,17 @@ public static class LibraryEndpoints
                 [.. entries.Select(entry => entry.BookId).Distinct()],
                 cancellationToken);
 
+            var latest = await library.LatestSessionsAsync([.. entries.Select(entry => entry.Id)], cancellationToken);
+
             return Results.Ok(entries.Select(entry =>
-                LibraryEntryResponse.From(entry, books.GetValueOrDefault(entry.BookId))));
+            {
+                var book = books.GetValueOrDefault(entry.BookId);
+
+                return LibraryEntryResponse.From(
+                    entry,
+                    book,
+                    Progress.Of(latest.GetValueOrDefault(entry.Id), book?.TotalPages));
+            }));
         })
         .WithName("ListLibrary");
 
@@ -118,7 +127,80 @@ public static class LibraryEndpoints
             return entry is null ? Results.NotFound() : Results.Ok(LibraryEntryResponse.From(entry));
         })
         .WithName("SetReadingStatus");
+
+        endpoints.MapPost("/api/library/{entryId:guid}/sessions", async (
+            Guid entryId,
+            LogSessionRequest body,
+            HttpRequest request,
+            ReadingLibrary library,
+            CatalogClient catalog,
+            CancellationToken cancellationToken) =>
+        {
+            if (Reader.From(request) is not { } readerId)
+            {
+                return NotSaidWhoIsAsking();
+            }
+
+            if (await library.FindAsync(readerId, entryId, cancellationToken) is not { } entry)
+            {
+                return Results.NotFound();
+            }
+
+            // Needed only to check the session doesn't run past the end. If Catalog can't be
+            // reached we skip that check rather than block the reader from recording what
+            // they read — losing one validation beats losing the reading.
+            var books = await catalog.TryFindBooksAsync([entry.BookId], cancellationToken);
+            var totalPages = books.GetValueOrDefault(entry.BookId)?.TotalPages;
+
+            var (session, problem) = await library.LogSessionAsync(
+                readerId,
+                entryId,
+                body.StartPosition,
+                body.EndPosition,
+                body.OccurredAt,
+                body.DurationMinutes,
+                totalPages,
+                cancellationToken);
+
+            return problem switch
+            {
+                SessionProblem.NoSuchEntry => Results.NotFound(),
+                SessionProblem.EndsBeforeItStarts => SessionRejected("A session cannot end before it starts."),
+                SessionProblem.RunsPastTheEndOfTheBook => SessionRejected(
+                    $"This book has {totalPages} pages, so the session cannot end past that."),
+                SessionProblem.PositionOutOfRange => SessionRejected("That position is outside the book."),
+                _ => Results.Created(
+                    $"/api/library/{entryId}/sessions/{session!.Id}",
+                    SessionResponse.From(session)),
+            };
+        })
+        .WithName("LogReadingSession");
+
+        endpoints.MapGet("/api/library/{entryId:guid}/sessions", async (
+            Guid entryId,
+            HttpRequest request,
+            ReadingLibrary library,
+            CancellationToken cancellationToken) =>
+        {
+            if (Reader.From(request) is not { } readerId)
+            {
+                return NotSaidWhoIsAsking();
+            }
+
+            if (await library.FindAsync(readerId, entryId, cancellationToken) is null)
+            {
+                return Results.NotFound();
+            }
+
+            var sessions = await library.ListSessionsAsync(entryId, cancellationToken);
+
+            return Results.Ok(sessions.Select(SessionResponse.From));
+        })
+        .WithName("ListReadingSessions");
     }
+
+    private static IResult SessionRejected(string detail) =>
+        Results.ValidationProblem(new Dictionary<string, string[]> { ["session"] = [detail] });
 
     private static IResult UnknownReadingStatus(string? given) =>
         Results.ValidationProblem(new Dictionary<string, string[]>
@@ -142,17 +224,56 @@ public static class LibraryEndpoints
         string Status,
         string TrackingMethod,
         DateTimeOffset AddedAt,
-        BookDetailsResponse? Book)
+        BookDetailsResponse? Book,
+        ProgressResponse? Progress)
     {
-        public static LibraryEntryResponse From(LibraryEntry entry, CatalogBook? book = null) =>
+        public static LibraryEntryResponse From(
+            LibraryEntry entry,
+            CatalogBook? book = null,
+            ReadingProgress? progress = null) =>
             new(
                 entry.Id,
                 entry.BookId,
                 entry.Status.ToString(),
                 entry.TrackingMethod.ToString(),
                 entry.AddedAt,
-                book is null ? null : BookDetailsResponse.From(book));
+                book is null ? null : BookDetailsResponse.From(book),
+                progress is null ? null : ProgressResponse.From(progress));
     }
+
+    /// <summary>
+    /// Where the reader has got to. Derived from their latest session every time it is asked
+    /// for, never stored, so it cannot disagree with the history it comes from.
+    /// </summary>
+    private sealed record ProgressResponse(decimal Position, string Unit, int? PercentComplete)
+    {
+        public static ProgressResponse From(ReadingProgress progress) =>
+            new(progress.Position, progress.Unit.ToString(), progress.PercentComplete);
+    }
+
+    private sealed record SessionResponse(
+        Guid Id,
+        decimal StartPosition,
+        decimal EndPosition,
+        string Unit,
+        DateTimeOffset OccurredAt,
+        int? DurationMinutes)
+    {
+        public static SessionResponse From(ReadingSession session) =>
+            new(
+                session.Id,
+                session.StartPosition,
+                session.EndPosition,
+                session.Unit.ToString(),
+                session.OccurredAt,
+                session.DurationMinutes);
+    }
+
+    private sealed record LogSessionRequest(
+        decimal StartPosition,
+        decimal EndPosition,
+        DateTimeOffset? OccurredAt,
+        int? DurationMinutes);
 
     /// <summary>
     /// Catalog's description of the book, passed through rather than stored, so it can never
