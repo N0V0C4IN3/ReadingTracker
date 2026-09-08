@@ -1,0 +1,21 @@
+@page "/"
+
+<PageTitle>ReadingTracker</PageTitle>
+
+<h1>ReadingTracker</h1>
+
+<AuthorizeView>
+    <Authorized>
+        <p>Hello, @context.User.Identity?.Name.</p>
+        <p>
+            Google knows you as <code>@context.User.FindFirst("sub")?.Value</code>, which is the
+            identifier your library will be kept under — not your email address, which you can
+            change without becoming a different reader.
+        </p>
+        <p>Your books are not here yet. That is the next piece of work.</p>
+    </Authorized>
+    <NotAuthorized>
+        <p>Track what you are reading, and how far through it you are.</p>
+        <p>Sign in with Google to begin.</p>
+    </NotAuthorized>
+</AuthorizeView>

@@ -1,0 +1,28 @@
+@inject NavigationManager Navigation
+
+@*
+    Who is signed in, and the way in or out.
+
+    Signing out is local only: it forgets the token this application is holding. Google has no
+    end-session endpoint — its discovery document does not publish one — so there is no way for
+    a site to end a Google session on the reader's behalf, and pretending otherwise would leave
+    them believing they had signed out of more than they had.
+*@
+
+<AuthorizeView>
+    <Authorized>
+        <span>Signed in as <strong>@context.User.Identity?.Name</strong></span>
+        <button @onclick="SignOut">Sign out</button>
+    </Authorized>
+    <NotAuthorized>
+        <button @onclick="SignIn">Sign in with Google</button>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private void SignIn() =>
+        Navigation.NavigateToLogin("authentication/login");
+
+    private void SignOut() =>
+        Navigation.NavigateToLogout("authentication/logout");
+}

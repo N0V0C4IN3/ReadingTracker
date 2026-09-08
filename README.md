@@ -14,7 +14,7 @@ Built as a portfolio project, with the weight on the back end: several small ser
 | Library | A reader's own books: reading status, progress, and reading history | Built |
 | Gateway | Single entry point; verifies the caller's Google token and names the reader | Built |
 | Identity | Maps a Google account to an internal reader | Designed |
-| Web | Blazor WebAssembly front end | Designed |
+| Web | Blazor WebAssembly front end | Signs in only |
 
 > **Everything through the Gateway now needs a Google token.** It verifies the token against Google's published keys, discards whatever `X-Reader-Id` the caller sent, and sets that header itself from the token's subject. `/health` is the only route that answers without one.
 
@@ -33,7 +33,12 @@ cp .env.example .env   # then fill in GOOGLE_BOOKS_API_KEY
 dotnet run --project src/ReadingTracker.Catalog   # http://localhost:5103
 dotnet run --project src/ReadingTracker.Library   # http://localhost:5110
 dotnet run --project src/ReadingTracker.Gateway   # http://localhost:5100
+dotnet run --project src/ReadingTracker.Web       # http://localhost:5200
 ```
+
+> **Port 5200 is not arbitrary.** It is the JavaScript origin registered with this project's Google OAuth client, and sign-in fails from anywhere else. The same goes for the redirect path `/authentication/login-callback`.
+
+The OAuth client is in Google's *Testing* status, so only accounts added as test users can sign in, and Google shows an "unverified app" warning first. Both are expected. Publishing needs a public home page, privacy policy and terms of service on a verified domain, which is deployment-time work.
 
 With the Gateway up, one address reaches everything: `/api/books/…` goes to Catalog and `/api/library/…` to Library — but only with a valid Google token, so `curl` alone will get you a `401` until the front end exists to sign in with.
 
