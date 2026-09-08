@@ -108,6 +108,23 @@ public static class LibraryEndpoints
         })
         .WithName("AddToLibrary");
 
+        endpoints.MapDelete("/api/library/{entryId:guid}", async (
+            Guid entryId,
+            HttpRequest request,
+            ReadingLibrary library,
+            CancellationToken cancellationToken) =>
+        {
+            if (Reader.From(request) is not { } readerId)
+            {
+                return NotSaidWhoIsAsking();
+            }
+
+            return await library.RemoveAsync(readerId, entryId, cancellationToken)
+                ? Results.NoContent()
+                : Results.NotFound();
+        })
+        .WithName("RemoveFromLibrary");
+
         endpoints.MapPut("/api/library/{entryId:guid}/status", async (
             Guid entryId,
             SetStatusRequest body,
