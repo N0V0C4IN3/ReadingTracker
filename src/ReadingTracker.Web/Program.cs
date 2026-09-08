@@ -13,9 +13,16 @@ builder.Services.AddOidcAuthentication(options =>
     // client secret: a browser cannot keep one.
     builder.Configuration.Bind("Google", options.ProviderOptions);
 
-    // The authorisation code flow with PKCE. The older implicit flow would put tokens in the
-    // URL, where they end up in history and server logs.
-    options.ProviderOptions.ResponseType = "code";
+    // The implicit id_token flow, not authorisation code + PKCE. Google's "Web application"
+    // client type requires a client secret to exchange a code for tokens even when PKCE is
+    // used — there is no public-client exception, unlike most other OIDC providers — and a
+    // browser cannot hold one. The code flow fails at the token exchange with a bad request;
+    // this is not a configuration mistake to fix, it is a Google-specific constraint.
+    //
+    // This also happens to be the right shape for what comes next: the Gateway validates the
+    // ID token (ADR-0001), and "id_token" hands the app exactly that, rather than the access
+    // token Blazor's default flow would otherwise surface.
+    options.ProviderOptions.ResponseType = "id_token";
 
     // Exactly the three scopes the OAuth client is registered for, and no more. These are
     // non-sensitive, which is what keeps the app out of Google's verification review.
