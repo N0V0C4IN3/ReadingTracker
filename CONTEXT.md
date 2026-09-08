@@ -20,6 +20,10 @@ _Avoid_: UserBook, Entry (too generic on its own)
 How a LibraryEntry's progress is expressed: `Pages` or `Percentage`, chosen per-LibraryEntry and changeable at any time. Switching method is a display-time conversion (using the Book's `totalPages`, which the user may override), not a rewrite of past ReadingSessions — each ReadingSession keeps the unit it was actually logged in.
 _Avoid_: ProgressUnit
 
+**Effective page count**:
+How long a book is *for one reader*: their own page count for the edition in their hands where they have set one, and otherwise the Book's `totalPages` from the Catalog. It is what every percentage and every TrackingMethod conversion is worked out from, and it may still be unknown — a book nobody has a page count for can be tracked, just not as a percentage. A reader's own count belongs to their LibraryEntry and never changes the shared Book.
+_Avoid_: Page count (ambiguous — say whose), Total pages (that is the Book's field specifically)
+
 **ReadingSession**:
 A discrete, timestamped stretch of reading activity against one LibraryEntry — e.g. "read from page 40 to 62 on Tuesday evening." The record of *when and how much* someone read, in whichever TrackingMethod was active when it was logged. A LibraryEntry's full reading history is its sequence of ReadingSessions. Re-reading a book produces new ReadingSessions rather than a new ReadingStatus or a new Book record.
 _Avoid_: Log, reading log, entry (these are ambiguous with application/infrastructure logging, which is a separate, non-domain concern)

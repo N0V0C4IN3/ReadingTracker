@@ -36,5 +36,18 @@ public sealed class LibraryEntry
 
     public TrackingMethod TrackingMethod { get; set; }
 
+    /// <summary>
+    /// This reader's own page count, where Catalog's is wrong for their edition or missing
+    /// altogether. It lives here rather than on the Book because it is one reader's correction
+    /// and must never change what every other reader sees.
+    /// </summary>
+    public int? PageCountOverride { get; set; }
+
     public DateTimeOffset AddedAt { get; init; }
+
+    /// <summary>
+    /// The page count everything else is worked out from: this reader's own where they set one,
+    /// otherwise whatever Catalog knows — which may still be nothing at all.
+    /// </summary>
+    public int? EffectivePageCount(int? catalogPageCount) => PageCountOverride ?? catalogPageCount;
 }

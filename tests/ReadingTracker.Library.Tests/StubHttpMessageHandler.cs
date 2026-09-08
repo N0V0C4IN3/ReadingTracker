@@ -17,6 +17,12 @@ public sealed class StubHttpMessageHandler : HttpMessageHandler
 
     public HttpRequestMessage? LastRequest { get; private set; }
 
+    /// <summary>
+    /// Every call made through this handler, so a test can assert not just what the service
+    /// asked for but what it never asked for.
+    /// </summary>
+    public List<HttpRequestMessage> Requests { get; } = [];
+
     public int RequestCount => _requestCount;
 
     private int _requestCount;
@@ -27,6 +33,12 @@ public sealed class StubHttpMessageHandler : HttpMessageHandler
     {
         Interlocked.Increment(ref _requestCount);
         LastRequest = request;
+
+        lock (Requests)
+        {
+            Requests.Add(request);
+        }
+
         return Task.FromResult(Respond(request));
     }
 
