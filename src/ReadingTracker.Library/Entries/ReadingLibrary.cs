@@ -192,7 +192,13 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
             StartPosition = startPosition,
             EndPosition = endPosition,
             Unit = entry.TrackingMethod,
-            OccurredAt = occurredAt ?? now,
+
+            // Normalised to UTC rather than stored as it arrived. Postgres `timestamp with time
+            // zone` accepts only a zero offset through Npgsql, so a reader in any zone east or
+            // west of UTC — sending the perfectly valid "2026-09-08T00:00:00+03:00" their browser
+            // produced — would otherwise get a 500 rather than a logged session. Converting keeps
+            // the instant identical; only the offset it is written with changes.
+            OccurredAt = (occurredAt ?? now).ToUniversalTime(),
             DurationMinutes = durationMinutes,
             LoggedAt = now,
         };
@@ -257,7 +263,8 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
         session.StartPosition = startPosition;
         session.EndPosition = endPosition;
         session.DurationMinutes = durationMinutes;
-        session.OccurredAt = occurredAt ?? session.OccurredAt;
+        // UTC for the same reason as logging one: see LogSessionAsync.
+        session.OccurredAt = (occurredAt ?? session.OccurredAt).ToUniversalTime();
 
         await database.SaveChangesAsync(cancellationToken);
 

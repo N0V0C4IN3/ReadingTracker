@@ -182,6 +182,53 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
         Assert.Null((await GetEntryAsync(client, entryId)).Progress);
     }
 
+    [Fact]
+    public async Task Records_when_i_read_from_a_timezone_that_is_not_utc()
+    {
+        var client = fixture.ClientFor("moscow-reader");
+        var entryId = await fixture.AddBookAsync(client, 300);
+
+        // What a browser east of UTC actually sends for "I read this on the 8th": local midnight
+        // carrying its own offset. Postgres accepts only a zero offset through Npgsql, so storing
+        // this as it arrives fails the whole request — every test until now happened to use
+        // UtcNow, which is exactly why nothing caught it.
+        var whenIRead = new DateTimeOffset(2026, 9, 8, 0, 0, 0, TimeSpan.FromHours(3));
+
+        var logged = await LogAsync(client, entryId, 1, 60, whenIRead);
+
+        Assert.Equal(HttpStatusCode.Created, logged.StatusCode);
+
+        var sessions = await client.GetFromJsonAsync<IReadOnlyList<Session>>($"/api/library/{entryId}/sessions");
+
+        // The same instant, whatever offset it is written with.
+        Assert.Equal(whenIRead, Assert.Single(sessions!).OccurredAt);
+    }
+
+    [Fact]
+    public async Task Corrects_a_session_to_a_time_in_a_timezone_that_is_not_utc()
+    {
+        var client = fixture.ClientFor("corrections-abroad-reader");
+        var entryId = await fixture.AddBookAsync(client, 300);
+        await LogAsync(client, entryId, 1, 40);
+
+        var sessionId = (await client.GetFromJsonAsync<IReadOnlyList<Session>>($"/api/library/{entryId}/sessions"))!
+            .Single().Id;
+
+        var actually = new DateTimeOffset(2026, 9, 7, 21, 30, 0, TimeSpan.FromHours(-5));
+
+        var corrected = await client.PutAsJsonAsync($"/api/library/{entryId}/sessions/{sessionId}", new
+        {
+            startPosition = 1,
+            endPosition = 40,
+            occurredAt = actually,
+        });
+
+        Assert.Equal(HttpStatusCode.OK, corrected.StatusCode);
+
+        var sessions = await client.GetFromJsonAsync<IReadOnlyList<Session>>($"/api/library/{entryId}/sessions");
+        Assert.Equal(actually, Assert.Single(sessions!).OccurredAt);
+    }
+
     private static Task<HttpResponseMessage> LogAsync(
         HttpClient client,
         Guid entryId,
