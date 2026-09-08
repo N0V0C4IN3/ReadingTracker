@@ -1,14 +1,15 @@
 using System.Net;
+using System.Text;
 
-namespace ReadingTracker.Library.Tests;
+namespace ReadingTracker.TestSupport;
 
 /// <summary>
-/// Stands in for the network so client code runs for real against canned payloads.
+/// Stands in for the network so the code under test runs for real against canned payloads.
 /// Tests set <see cref="Respond"/> to decide what the outside world says.
 ///
-/// Deliberately a copy of Catalog's equivalent rather than a shared helper: two copies of
-/// twenty-five lines is cheaper than a shared test package. Extract it when a third service
-/// needs one.
+/// Stubbing here rather than by replacing a client class is deliberate: everything between the
+/// service and the socket — request building, serialisation, status handling, response parsing —
+/// still executes, so the tests exercise the code that actually ships.
 /// </summary>
 public sealed class StubHttpMessageHandler : HttpMessageHandler
 {
@@ -18,11 +19,12 @@ public sealed class StubHttpMessageHandler : HttpMessageHandler
     public HttpRequestMessage? LastRequest { get; private set; }
 
     /// <summary>
-    /// Every call made through this handler, so a test can assert not just what the service
-    /// asked for but what it never asked for.
+    /// Every call made through this handler, so a test can assert not just what the code under
+    /// test asked for but what it never asked for.
     /// </summary>
     public List<HttpRequestMessage> Requests { get; } = [];
 
+    /// <summary>How many times the outside world has actually been reached.</summary>
     public int RequestCount => _requestCount;
 
     private int _requestCount;
@@ -43,5 +45,5 @@ public sealed class StubHttpMessageHandler : HttpMessageHandler
     }
 
     public static HttpResponseMessage Json(string body) =>
-        new(HttpStatusCode.OK) { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") };
+        new(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
 }

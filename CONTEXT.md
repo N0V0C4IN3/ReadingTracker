@@ -5,19 +5,23 @@ A web application for tracking personal reading progress across books — what y
 ## Language
 
 **Book**:
-Catalog metadata for a title — author(s), ISBN, cover image, total page count when known — sourced from an external book-data provider, or entered by hand when no provider match exists. A Book is global/shared, not owned by any one user, and is cached locally the first time it's referenced rather than re-fetched live on every use.
+Catalog metadata for a title — author(s), ISBN, cover image, total page count when known — sourced from an external book-data provider, or entered by hand when no provider match exists. A Book is global/shared, not owned by any one Reader, and is cached locally the first time it's referenced rather than re-fetched live on every use.
 _Avoid_: Title (ambiguous with the `title` field itself), Edition
 
 **Catalog**:
-The shared body of Book metadata the whole system draws on — the answer to "what books exist, and what do we know about them" — independent of any particular user. Sourced from external book-data providers, or entered by hand when no provider has a match.
-_Avoid_: Library (that is one user's own collection, which is a different thing)
+The shared body of Book metadata the whole system draws on — the answer to "what books exist, and what do we know about them" — independent of any particular Reader. Sourced from external book-data providers, or entered by hand when no provider has a match.
+_Avoid_: Library (that is one Reader's own collection, which is a different thing)
+
+**Reader**:
+A person who uses ReadingTracker: the owner of a Library, of LibraryEntries and of ReadingSessions. Identified by whoever signed in, never by anything the client claims about itself. One Reader's shelf is invisible to every other Reader, and the Books they read are shared while their relationship to those Books is not.
+_Avoid_: User (this was the earlier name for exactly this concept; the two were never different things, and everything now says Reader), Account, Profile
 
 **LibraryEntry**:
-The association between a User and a Book: "this book is in this user's library." Holds the current ReadingStatus and the user's chosen TrackingMethod for this book. Distinct from the Book itself (shared catalog data) and from a ReadingSession (a record of activity).
+The association between a Reader and a Book: "this book is in this Reader's library." Holds the current ReadingStatus and the Reader's chosen TrackingMethod for this book. Distinct from the Book itself (shared catalog data) and from a ReadingSession (a record of activity).
 _Avoid_: UserBook, Entry (too generic on its own)
 
 **TrackingMethod**:
-How a LibraryEntry's progress is expressed: `Pages` or `Percentage`, chosen per-LibraryEntry and changeable at any time. Switching method is a display-time conversion (using the Book's `totalPages`, which the user may override), not a rewrite of past ReadingSessions — each ReadingSession keeps the unit it was actually logged in.
+How a LibraryEntry's progress is expressed: `Pages` or `Percentage`, chosen per-LibraryEntry and changeable at any time. Switching method is a display-time conversion (using the effective page count, which the Reader may override), not a rewrite of past ReadingSessions — each ReadingSession keeps the unit it was actually logged in.
 _Avoid_: ProgressUnit
 
 **Effective page count**:
