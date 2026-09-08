@@ -30,6 +30,9 @@ builder.Services.AddDbContext<LibraryDbContext>(options =>
         libraryDbConnectionString,
         npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", LibraryDbContext.Schema)));
 
+builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection(RabbitMqOptions.SectionName));
+builder.Services.AddSingleton<ILibraryEvents, RabbitMqLibraryEvents>();
+
 builder.Services.AddScoped<ReadingLibrary>();
 builder.Services.TryAddSingleton(TimeProvider.System);
 
