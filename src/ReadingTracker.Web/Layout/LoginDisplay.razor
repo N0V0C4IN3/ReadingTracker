@@ -1,4 +1,8 @@
+@using Microsoft.Extensions.Options
+@using ReadingTracker.Web.Services
 @inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IOptions<DevSignInOptions> DevSignIn
 
 @*
     Who is signed in, and the way in or out.
@@ -7,6 +11,9 @@
     end-session endpoint — its discovery document does not publish one — so there is no way for
     a site to end a Google session on the reader's behalf, and pretending otherwise would leave
     them believing they had signed out of more than they had.
+
+    With dev sign-in enabled there is no Google session to forget in the first place (ADR-0009),
+    and signing out is just dropping the minted token.
 *@
 
 <AuthorizeView>
@@ -15,7 +22,14 @@
         <button @onclick="SignOut">Sign out</button>
     </Authorized>
     <NotAuthorized>
-        <button @onclick="SignIn">Sign in with Google</button>
+        @if (DevSignIn.Value.Enabled)
+        {
+            <DevSignInForm />
+        }
+        else
+        {
+            <button @onclick="SignIn">Sign in with Google</button>
+        }
     </NotAuthorized>
 </AuthorizeView>
 
@@ -23,6 +37,15 @@
     private void SignIn() =>
         Navigation.NavigateToLogin("authentication/login");
 
-    private void SignOut() =>
+    private void SignOut()
+    {
+        // Registered only when dev sign-in is enabled, so this is what tells the two apart.
+        if (AuthenticationStateProvider is DevAuthenticationStateProvider dev)
+        {
+            _ = dev.SignOutAsync();
+            return;
+        }
+
         Navigation.NavigateToLogout("authentication/logout");
+    }
 }

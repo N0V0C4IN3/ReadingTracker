@@ -1,13 +1,19 @@
 {
   "$schema": "https://json.schemastore.org/launchsettings.json",
   "profiles": {
+    // DevSignIn__Enabled matches what docker-compose sets, so `dotnet run` and
+    // `docker compose --profile services up` behave the same way. It is an opt-in either way, and
+    // never reaches a deployed environment: a launch profile is a local-run file, and ADR-0008's
+    // other gate means Development is required as well. It does not weaken Google-token
+    // validation — it only adds a second accepted issuer alongside it.
     "http": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": false,
       "applicationUrl": "http://localhost:5100",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DevSignIn__Enabled": "true"
       }
     },
     "https": {
@@ -16,7 +22,8 @@
       "launchBrowser": false,
       "applicationUrl": "https://localhost:7100;http://localhost:5100",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DevSignIn__Enabled": "true"
       }
     }
   }
