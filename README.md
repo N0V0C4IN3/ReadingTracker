@@ -99,6 +99,23 @@ Integration tests boot the real application in-process against a throwaway Postg
 
 Docker must be running.
 
+### Building and testing before each commit
+
+There is a pre-commit hook that runs the same build and tests, so a broken build is caught locally
+rather than in CI several minutes later. It is opt-in per clone — git will not run a hook out of a
+tracked directory unless you point it there:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+It skips documentation-only commits, and `git commit --no-verify` bypasses it for a work-in-progress
+commit. It builds into `artifacts/` rather than `bin/`, so it neither fights a locally running
+service for its own assemblies nor disturbs your incremental build state.
+
+CI still runs build and test on every PR regardless — the hook is the fast local echo of it, not a
+replacement.
+
 ## Design documentation
 
 - [`CONTEXT.md`](./CONTEXT.md) — the domain glossary. Worth reading first: it defines `Book`, `LibraryEntry`, `ReadingSession`, `ReadingStatus` and `TrackingMethod`, and is deliberately free of implementation detail.

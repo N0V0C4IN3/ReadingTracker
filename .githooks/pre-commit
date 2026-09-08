@@ -1,0 +1,55 @@
+#!/bin/sh
+# Build and test before letting a commit through, so a broken build is caught here rather than
+# in CI several minutes later. CI (.github/workflows/ci.yml) still runs the same thing on every
+# PR — this is the fast local echo of it, not a replacement.
+#
+# Install once per clone:
+#
+#     git config core.hooksPath .githooks
+#
+# Bypass for a single commit with `git commit --no-verify` — worth having for a work-in-progress
+# commit on a branch nobody else is reading.
+#
+# Known limitation, stated rather than hidden: this checks the working tree, not the staged
+# content. If you stage only some of your changes, what is tested is not exactly what is
+# committed. Testing the index properly means checking it out to a scratch tree, which costs more
+# than it saves for a repo this size — CI is the backstop that sees the real commit.
+
+set -e
+
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+
+if [ -z "$staged" ]; then
+    exit 0
+fi
+
+# Documentation cannot break a build, and a 90-second wait to commit an ADR teaches people to
+# reach for --no-verify by reflex — which is how a hook stops being trusted at all.
+code=$(printf '%s\n' "$staged" | grep -vE '(^docs/|\.md$)' || true)
+
+if [ -z "$code" ]; then
+    echo "pre-commit: documentation only, skipping build and test."
+    exit 0
+fi
+
+if ! command -v dotnet >/dev/null 2>&1; then
+    echo "pre-commit: dotnet is not on PATH, so nothing could be built or tested." >&2
+    exit 1
+fi
+
+# --artifacts-path keeps this build's output away from bin/ and obj/. That is not tidiness: the
+# services are usually running locally while you work, `dotnet run` holds their assemblies open,
+# and a build that writes to bin/ then fails to copy over a locked file — blocking the commit for
+# a reason that has nothing to do with the code. This also leaves your own incremental build
+# state alone. artifacts/ is already gitignored.
+echo "pre-commit: building and testing (bypass with --no-verify)…"
+
+if ! dotnet test --nologo -v q --artifacts-path artifacts/pre-commit; then
+    echo "" >&2
+    echo "pre-commit: build or tests failed — commit refused." >&2
+    exit 1
+fi
+
+echo "pre-commit: green."
