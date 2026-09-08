@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ReadingTracker</title>
+    <base href="/" />
+    <link rel="preload" id="webassembly" />
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link href="ReadingTracker.Web.styles.css" rel="stylesheet" />
+    <script type="importmap"></script>
+</head>
+
+<body>
+    <div id="app">
+        <p style="padding: 1.5rem; font-family: system-ui, sans-serif;">Loading ReadingTracker…</p>
+    </div>
+
+    <div id="blazor-error-ui">
+        Something went wrong.
+        <a href="." class="reload">Reload</a>
+    </div>
+
+    <!-- Drives the redirect out to Google and the return journey. Without this the sign-in
+         round trip has nothing to complete it. -->
+    <script src="_content/Microsoft.AspNetCore.Components.WebAssembly.Authentication/AuthenticationService.js"></script>
+    <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
+</body>
+
+</html>

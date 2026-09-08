@@ -3,6 +3,7 @@
     <Project Path="src/ReadingTracker.Catalog/ReadingTracker.Catalog.csproj" />
     <Project Path="src/ReadingTracker.Gateway/ReadingTracker.Gateway.csproj" />
     <Project Path="src/ReadingTracker.Library/ReadingTracker.Library.csproj" />
+    <Project Path="src/ReadingTracker.Web/ReadingTracker.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ReadingTracker.Catalog.Tests/ReadingTracker.Catalog.Tests.csproj" />

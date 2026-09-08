@@ -1,0 +1,20 @@
+@page "/authentication/{action}"
+
+@*
+    Handles every step of the sign-in round trip: the redirect out to Google, the return to
+    /authentication/login-callback, and signing out again. The path is not arbitrary — it is
+    registered with Google as this application's redirect URI, so renaming it here means
+    changing it there too.
+*@
+
+<RemoteAuthenticatorView Action="@Action">
+    <LogOutSucceeded>
+        <p>You are signed out.</p>
+        <a href="/">Back to ReadingTracker</a>
+    </LogOutSucceeded>
+</RemoteAuthenticatorView>
+
+@code {
+    [Parameter]
+    public string? Action { get; set; }
+}

@@ -1,0 +1,53 @@
+/*
+    Deliberately almost nothing. This interface exists to prove that signing in works, and it
+    will be replaced wholesale when the real one is designed. Anything more here would be work
+    thrown away.
+*/
+
+body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.5;
+    color: #1a1a1a;
+}
+
+header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 1.5rem;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+header a {
+    font-weight: 600;
+    text-decoration: none;
+    color: inherit;
+}
+
+main {
+    padding: 1.5rem;
+    max-width: 40rem;
+}
+
+button {
+    font: inherit;
+    padding: 0.4rem 0.9rem;
+    cursor: pointer;
+}
+
+code {
+    background: #f2f2f2;
+    padding: 0.1rem 0.3rem;
+}
+
+#blazor-error-ui {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    padding: 0.6rem 1.25rem;
+    background: #ffe8e8;
+    border-top: 1px solid #f5c2c2;
+}
