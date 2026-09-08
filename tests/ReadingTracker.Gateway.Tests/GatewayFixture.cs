@@ -27,6 +27,8 @@ public sealed class GatewayFixture : WebApplicationFactory<Program>
 
     public const string LibraryHost = "library.test";
 
+    public const string AllowedOrigin = "http://frontend.test";
+
     /// <summary>Stands in for Google: publishes the signing keys and mints the tokens.</summary>
     public FakeGoogle Google { get; } = new();
 
@@ -66,6 +68,7 @@ public sealed class GatewayFixture : WebApplicationFactory<Program>
         builder.UseSetting("ReverseProxy:Clusters:catalog:Destinations:primary:Address", $"http://{CatalogHost}/");
         builder.UseSetting("ReverseProxy:Clusters:library:Destinations:primary:Address", $"http://{LibraryHost}/");
         builder.UseSetting("Google:ClientId", FakeGoogle.ClientId);
+        builder.UseSetting("AllowedOrigins:0", AllowedOrigin);
 
         _googleTransport.Respond = Google.Answer;
 

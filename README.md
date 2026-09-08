@@ -6,15 +6,15 @@ Built as a portfolio project, with the weight on the back end: several small ser
 
 ## Status
 
-**Catalog**, **Library** and the **Gateway** are built. What is missing is the front end to sign in with.
+**Catalog**, **Library**, the **Gateway** and a first cut of **Web** are built: a reader signs in with Google and sees their own shelf, end to end.
 
 | Service | What it does | Status |
 | --- | --- | --- |
 | Catalog | Finds books via Google Books and Open Library, caches them, gives them stable ids | Built |
 | Library | A reader's own books: reading status, progress, and reading history | Built |
 | Gateway | Single entry point; verifies the caller's Google token and names the reader | Built |
+| Web | Blazor WebAssembly front end: sign in, see your shelf | Reads only |
 | Identity | Maps a Google account to an internal reader | Designed |
-| Web | Blazor WebAssembly front end | Signs in only |
 
 > **Everything through the Gateway now needs a Google token.** It verifies the token against Google's published keys, discards whatever `X-Reader-Id` the caller sent, and sets that header itself from the token's subject. `/health` is the only route that answers without one.
 
@@ -40,7 +40,11 @@ dotnet run --project src/ReadingTracker.Web       # http://localhost:5200
 
 The OAuth client is in Google's *Testing* status, so only accounts added as test users can sign in, and Google shows an "unverified app" warning first. Both are expected. Publishing needs a public home page, privacy policy and terms of service on a verified domain, which is deployment-time work.
 
-With the Gateway up, one address reaches everything: `/api/books/…` goes to Catalog and `/api/library/…` to Library — but only with a valid Google token, so `curl` alone will get you a `401` until the front end exists to sign in with.
+With the Gateway up, one address reaches everything: `/api/books/…` goes to Catalog and `/api/library/…` to Library — but only with a valid Google token, so `curl` alone gets you a `401`. Sign in through Web to see it work.
+
+Web talks to the Gateway across origins, so the Gateway only answers requests from Web's own origin — `AllowedOrigins` in its configuration — rather than from anywhere. Web itself never talks to Catalog or Library directly; it only knows the Gateway's address.
+
+Web sends the **ID token** Google issued at sign-in, not an access token: Google's *Web application* OAuth client type cannot complete the authorisation-code exchange from a public client such as a browser (there is no client secret to send, and Google — unlike most OIDC providers — has no PKCE-only exception for this client type), so sign-in uses the implicit `id_token` flow instead. That token is also exactly what the Gateway needs, since ADR-0001 has it validating ID tokens.
 
 The two services can still be called directly on their own ports, which is how you drive them by hand locally. That is exactly what must be impossible once deployed: anything that can reach them directly can claim to be any reader by setting a header. See ADR-0007.
 

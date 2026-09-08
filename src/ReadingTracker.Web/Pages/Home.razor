@@ -1,4 +1,6 @@
 @page "/"
+@using ReadingTracker.Web.Services
+@inject GatewayLibraryClient Gateway
 
 <PageTitle>ReadingTracker</PageTitle>
 
@@ -7,15 +9,66 @@
 <AuthorizeView>
     <Authorized>
         <p>Hello, @context.User.Identity?.Name.</p>
-        <p>
-            Google knows you as <code>@context.User.FindFirst("sub")?.Value</code>, which is the
-            identifier your library will be kept under — not your email address, which you can
-            change without becoming a different reader.
-        </p>
-        <p>Your books are not here yet. That is the next piece of work.</p>
+
+        @if (_entries is { } entries)
+        {
+            @if (entries.Count == 0)
+            {
+                <p>Your shelf is empty. Adding a book is not built yet.</p>
+            }
+            else
+            {
+                <ul>
+                    @foreach (var entry in entries)
+                    {
+                        <li>
+                            <strong>@(entry.Book?.Title ?? "(catalog unreachable)")</strong>
+                            — @entry.Status
+                            @if (entry.Progress is { } progress)
+                            {
+                                <text> — @progress.PercentComplete% (@progress.Position @progress.Unit)</text>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+        }
+        else if (_problem == LibraryUnavailable.NotSignedIn)
+        {
+            <p>Your session has ended. <a href="authentication/login">Sign in again</a> to see your shelf.</p>
+        }
+        else if (_problem == LibraryUnavailable.GatewayUnreachable)
+        {
+            <p>ReadingTracker could not be reached just now. Try again shortly.</p>
+        }
+        else
+        {
+            <p>Loading your shelf…</p>
+        }
     </Authorized>
     <NotAuthorized>
         <p>Track what you are reading, and how far through it you are.</p>
         <p>Sign in with Google to begin.</p>
     </NotAuthorized>
 </AuthorizeView>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    private IReadOnlyList<LibraryEntry>? _entries;
+    private LibraryUnavailable? _problem;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Fetching before we know there is a reader would send the Gateway a request with no
+        // token on every anonymous page load — harmless, since it just gets a 401 back, but
+        // pointless network traffic for a page that has already decided not to show it.
+        var state = AuthenticationState is null ? null : await AuthenticationState;
+
+        if (state?.User.Identity?.IsAuthenticated is true)
+        {
+            (_entries, _problem) = await Gateway.GetEntriesAsync(CancellationToken.None);
+        }
+    }
+}
