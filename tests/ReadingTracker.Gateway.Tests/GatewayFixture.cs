@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -26,6 +27,27 @@ public sealed class GatewayFixture : WebApplicationFactory<Program>
 
     public const string LibraryHost = "library.test";
 
+    /// <summary>Stands in for Google: publishes the signing keys and mints the tokens.</summary>
+    public FakeGoogle Google { get; } = new();
+
+    private readonly StubHttpMessageHandler _googleTransport = new();
+
+    /// <summary>A client carrying a valid token for one reader, the way the browser will.</summary>
+    public HttpClient ClientFor(string subject)
+    {
+        var client = CreateClient();
+        client.DefaultRequestHeaders.Authorization = new("Bearer", Google.Token(subject));
+        return client;
+    }
+
+    /// <summary>A client carrying a token this test built for itself.</summary>
+    public HttpClient ClientWithToken(string token)
+    {
+        var client = CreateClient();
+        client.DefaultRequestHeaders.Authorization = new("Bearer", token);
+        return client;
+    }
+
     /// <summary>
     /// Resets the stub to answering 200 with nothing recorded yet, and returns the live list it
     /// records into — so a test can assert on what actually arrived downstream, which is the only
@@ -43,9 +65,21 @@ public sealed class GatewayFixture : WebApplicationFactory<Program>
     {
         builder.UseSetting("ReverseProxy:Clusters:catalog:Destinations:primary:Address", $"http://{CatalogHost}/");
         builder.UseSetting("ReverseProxy:Clusters:library:Destinations:primary:Address", $"http://{LibraryHost}/");
+        builder.UseSetting("Google:ClientId", FakeGoogle.ClientId);
+
+        _googleTransport.Respond = Google.Answer;
 
         builder.ConfigureTestServices(services =>
-            services.AddSingleton<IForwarderHttpClientFactory>(new StubForwarder(Downstream)));
+        {
+            services.AddSingleton<IForwarderHttpClientFactory>(new StubForwarder(Downstream));
+
+            // Google is stubbed at the network boundary too: the Gateway still fetches the
+            // discovery document and the signing keys for itself, and still checks signatures
+            // against them. Only the socket is replaced.
+            services.Configure<JwtBearerOptions>(
+                JwtBearerDefaults.AuthenticationScheme,
+                options => options.Backchannel = new HttpClient(_googleTransport));
+        });
     }
 
     /// <summary>Hands YARP a client that talks to the stub instead of to a socket.</summary>

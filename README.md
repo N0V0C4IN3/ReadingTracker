@@ -6,17 +6,17 @@ Built as a portfolio project, with the weight on the back end: several small ser
 
 ## Status
 
-**Catalog** and **Library** are complete. The **Gateway** forwards to both; it does not yet verify anything.
+**Catalog**, **Library** and the **Gateway** are built. What is missing is the front end to sign in with.
 
 | Service | What it does | Status |
 | --- | --- | --- |
 | Catalog | Finds books via Google Books and Open Library, caches them, gives them stable ids | Built |
 | Library | A reader's own books: reading status, progress, and reading history | Built |
-| Gateway | Single entry point; will validate the caller's Google token | Forwarding only |
+| Gateway | Single entry point; verifies the caller's Google token and names the reader | Built |
 | Identity | Maps a Google account to an internal reader | Designed |
 | Web | Blazor WebAssembly front end | Designed |
 
-> **The Gateway does not authenticate yet.** It forwards whatever reader header it is handed, which is a deliberate stepping stone rather than a finished component. Nothing here should be deployed until token verification lands.
+> **Everything through the Gateway now needs a Google token.** It verifies the token against Google's published keys, discards whatever `X-Reader-Id` the caller sent, and sets that header itself from the token's subject. `/health` is the only route that answers without one.
 
 ## Running it locally
 
@@ -35,7 +35,9 @@ dotnet run --project src/ReadingTracker.Library   # http://localhost:5110
 dotnet run --project src/ReadingTracker.Gateway   # http://localhost:5100
 ```
 
-With the Gateway up, one address reaches everything: `/api/books/…` goes to Catalog and `/api/library/…` to Library. The two services can still be called directly, which is convenient locally and must not be possible once deployed — see ADR-0007.
+With the Gateway up, one address reaches everything: `/api/books/…` goes to Catalog and `/api/library/…` to Library — but only with a valid Google token, so `curl` alone will get you a `401` until the front end exists to sign in with.
+
+The two services can still be called directly on their own ports, which is how you drive them by hand locally. That is exactly what must be impossible once deployed: anything that can reach them directly can claim to be any reader by setting a header. See ADR-0007.
 
 Each service exposes `/health`. For Catalog and Library it returns `Healthy` only when they can actually reach their own database; the Gateway owns no database, so its health check says only that the Gateway itself is up. Catalog and Library share one Postgres instance but own separate schemas and never read each other's tables.
 
