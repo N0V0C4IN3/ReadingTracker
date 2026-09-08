@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -30,6 +31,50 @@ public sealed class LibraryApiFixture : WebApplicationFactory<Program>, IAsyncLi
     public async Task InitializeAsync() =>
         await Task.WhenAll(_postgres.StartAsync(), _rabbitMq.StartAsync());
 
+    /// <summary>
+    /// A client that speaks for one reader, the way the Gateway does. Tests give each reader a
+    /// distinct id so their shelves cannot see each other.
+    /// </summary>
+    public HttpClient ClientFor(string readerId)
+    {
+        var client = CreateClient();
+        client.DefaultRequestHeaders.Add("X-Reader-Id", readerId);
+        return client;
+    }
+
+    /// <summary>
+    /// Puts a book on a reader's shelf and returns the new entry's id. Pass a null
+    /// <paramref name="totalPages"/> for a book whose length nobody knows.
+    /// </summary>
+    public async Task<Guid> AddBookAsync(HttpClient client, int? totalPages = 200)
+    {
+        var bookId = Guid.NewGuid();
+        CatalogHasBook(bookId, totalPages);
+
+        var response = await client.PostAsJsonAsync("/api/library", new { bookId });
+        return (await response.Content.ReadFromJsonAsync<AddedEntry>())!.Id;
+    }
+
+    /// <summary>
+    /// Stubs Catalog to answer both the single-book lookup used when adding and the batch
+    /// lookup used when listing.
+    /// </summary>
+    public void CatalogHasBook(Guid bookId, int? totalPages = 200) =>
+        Catalog.Respond = request =>
+        {
+            var book = $$"""
+                {
+                  "id": "{{bookId}}",
+                  "title": "A Book",
+                  "authors": ["A. Writer"],
+                  "totalPages": {{totalPages?.ToString() ?? "null"}}
+                }
+                """;
+
+            return StubHttpMessageHandler.Json(
+                request.RequestUri!.Query.Contains("ids=") ? $"[{book}]" : book);
+        };
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("ConnectionStrings:LibraryDb", _postgres.GetConnectionString());
@@ -46,4 +91,6 @@ public sealed class LibraryApiFixture : WebApplicationFactory<Program>, IAsyncLi
         await _postgres.DisposeAsync();
         await _rabbitMq.DisposeAsync();
     }
+
+    private sealed record AddedEntry(Guid Id);
 }
