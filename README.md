@@ -38,6 +38,14 @@ dotnet run --project src/ReadingTracker.Web       # http://localhost:5200
 
 > **Port 5200 is not arbitrary.** It is the JavaScript origin registered with this project's Google OAuth client, and sign-in fails from anywhere else. The same goes for the redirect path `/authentication/login-callback`.
 
+**Or, all four services in one command:**
+
+```bash
+docker compose --profile services up --build
+```
+
+This still starts Postgres and RabbitMQ — `--profile services` adds the four .NET services on top, each in its own container, each still on the ports above. `--build` picks up code changes; drop it once the images already reflect what you're running. Plain `docker compose up` (no profile) stays exactly what it has always been — Postgres and RabbitMQ only — because container rebuilds are slower than `dotnet run`'s edit/rebuild loop, and the four containers would just be in the way while actively changing one service's code.
+
 The OAuth client is in Google's *Testing* status, so only accounts added as test users can sign in, and Google shows an "unverified app" warning first. Both are expected. Publishing needs a public home page, privacy policy and terms of service on a verified domain, which is deployment-time work.
 
 With the Gateway up, one address reaches everything: `/api/books/…` goes to Catalog and `/api/library/…` to Library — but only with a valid Google token, so `curl` alone will get you a `401` until the front end exists to sign in with.
