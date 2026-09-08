@@ -130,7 +130,7 @@ public static class LibraryEndpoints
 
         endpoints.MapPost("/api/library/{entryId:guid}/sessions", async (
             Guid entryId,
-            LogSessionRequest body,
+            SessionRequest body,
             HttpRequest request,
             ReadingLibrary library,
             CatalogClient catalog,
@@ -146,11 +146,7 @@ public static class LibraryEndpoints
                 return Results.NotFound();
             }
 
-            // Needed only to check the session doesn't run past the end. If Catalog can't be
-            // reached we skip that check rather than block the reader from recording what
-            // they read — losing one validation beats losing the reading.
-            var books = await catalog.TryFindBooksAsync([entry.BookId], cancellationToken);
-            var totalPages = books.GetValueOrDefault(entry.BookId)?.TotalPages;
+            var totalPages = await TotalPagesAsync(catalog, entry.BookId, cancellationToken);
 
             var (session, problem) = await library.LogSessionAsync(
                 readerId,
@@ -162,19 +158,69 @@ public static class LibraryEndpoints
                 totalPages,
                 cancellationToken);
 
-            return problem switch
-            {
-                SessionProblem.NoSuchEntry => Results.NotFound(),
-                SessionProblem.EndsBeforeItStarts => SessionRejected("A session cannot end before it starts."),
-                SessionProblem.RunsPastTheEndOfTheBook => SessionRejected(
-                    $"This book has {totalPages} pages, so the session cannot end past that."),
-                SessionProblem.PositionOutOfRange => SessionRejected("That position is outside the book."),
-                _ => Results.Created(
+            return problem is { } refused
+                ? SessionRefused(refused, totalPages)
+                : Results.Created(
                     $"/api/library/{entryId}/sessions/{session!.Id}",
-                    SessionResponse.From(session)),
-            };
+                    SessionResponse.From(session));
         })
         .WithName("LogReadingSession");
+
+        endpoints.MapPut("/api/library/{entryId:guid}/sessions/{sessionId:guid}", async (
+            Guid entryId,
+            Guid sessionId,
+            SessionRequest body,
+            HttpRequest request,
+            ReadingLibrary library,
+            CatalogClient catalog,
+            CancellationToken cancellationToken) =>
+        {
+            if (Reader.From(request) is not { } readerId)
+            {
+                return NotSaidWhoIsAsking();
+            }
+
+            if (await library.FindAsync(readerId, entryId, cancellationToken) is not { } entry)
+            {
+                return Results.NotFound();
+            }
+
+            var totalPages = await TotalPagesAsync(catalog, entry.BookId, cancellationToken);
+
+            var (session, problem) = await library.CorrectSessionAsync(
+                readerId,
+                entryId,
+                sessionId,
+                body.StartPosition,
+                body.EndPosition,
+                body.OccurredAt,
+                body.DurationMinutes,
+                totalPages,
+                cancellationToken);
+
+            return problem is { } refused
+                ? SessionRefused(refused, totalPages)
+                : Results.Ok(SessionResponse.From(session!));
+        })
+        .WithName("CorrectReadingSession");
+
+        endpoints.MapDelete("/api/library/{entryId:guid}/sessions/{sessionId:guid}", async (
+            Guid entryId,
+            Guid sessionId,
+            HttpRequest request,
+            ReadingLibrary library,
+            CancellationToken cancellationToken) =>
+        {
+            if (Reader.From(request) is not { } readerId)
+            {
+                return NotSaidWhoIsAsking();
+            }
+
+            return await library.DeleteSessionAsync(readerId, entryId, sessionId, cancellationToken)
+                ? Results.NoContent()
+                : Results.NotFound();
+        })
+        .WithName("DeleteReadingSession");
 
         endpoints.MapGet("/api/library/{entryId:guid}/sessions", async (
             Guid entryId,
@@ -198,6 +244,29 @@ public static class LibraryEndpoints
         })
         .WithName("ListReadingSessions");
     }
+
+    /// <summary>
+    /// The book's length, wanted only to check a session doesn't run past the end. Null when
+    /// Catalog can't be reached, which skips that one check rather than stopping the reader
+    /// recording what they read — losing a validation beats losing the reading.
+    /// </summary>
+    private static async Task<int?> TotalPagesAsync(
+        CatalogClient catalog,
+        Guid bookId,
+        CancellationToken cancellationToken) =>
+        (await catalog.TryFindBooksAsync([bookId], cancellationToken))
+            .GetValueOrDefault(bookId)?.TotalPages;
+
+    private static IResult SessionRefused(SessionProblem problem, int? totalPages) => problem switch
+    {
+        SessionProblem.EndsBeforeItStarts => SessionRejected("A session cannot end before it starts."),
+        SessionProblem.RunsPastTheEndOfTheBook => SessionRejected(
+            $"This book has {totalPages} pages, so the session cannot end past that."),
+        SessionProblem.PositionOutOfRange => SessionRejected("That position is outside the book."),
+
+        // NoSuchEntry and NoSuchSession: not there, or not this reader's to know about.
+        _ => Results.NotFound(),
+    };
 
     private static IResult SessionRejected(string detail) =>
         Results.ValidationProblem(new Dictionary<string, string[]> { ["session"] = [detail] });
@@ -269,7 +338,11 @@ public static class LibraryEndpoints
                 session.DurationMinutes);
     }
 
-    private sealed record LogSessionRequest(
+    /// <summary>
+    /// A stretch of reading as the reader describes it, whether they are logging it for the
+    /// first time or correcting it afterwards.
+    /// </summary>
+    private sealed record SessionRequest(
         decimal StartPosition,
         decimal EndPosition,
         DateTimeOffset? OccurredAt,
