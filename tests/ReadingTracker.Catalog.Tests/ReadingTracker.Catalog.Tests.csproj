@@ -19,10 +19,12 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="ReadingTracker.TestSupport" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ReadingTracker.Catalog\ReadingTracker.Catalog.csproj" />
+    <ProjectReference Include="..\ReadingTracker.TestSupport\ReadingTracker.TestSupport.csproj" />
   </ItemGroup>
 
 </Project>

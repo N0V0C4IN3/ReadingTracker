@@ -6,15 +6,17 @@ Built as a portfolio project, with the weight on the back end: several small ser
 
 ## Status
 
-The **Catalog** service is complete. The rest is designed but not yet built.
+**Catalog** and **Library** are complete. The **Gateway** forwards to both; it does not yet verify anything.
 
 | Service | What it does | Status |
 | --- | --- | --- |
 | Catalog | Finds books via Google Books and Open Library, caches them, gives them stable ids | Built |
-| Library | A reader's own books: reading status, progress, and reading history | In progress |
-| Identity | Maps a Google account to an internal user | Designed |
-| Gateway | Single entry point; validates the caller's Google token | Designed |
+| Library | A reader's own books: reading status, progress, and reading history | Built |
+| Gateway | Single entry point; will validate the caller's Google token | Forwarding only |
+| Identity | Maps a Google account to an internal reader | Designed |
 | Web | Blazor WebAssembly front end | Designed |
+
+> **The Gateway does not authenticate yet.** It forwards whatever reader header it is handed, which is a deliberate stepping stone rather than a finished component. Nothing here should be deployed until token verification lands.
 
 ## Running it locally
 
@@ -27,12 +29,15 @@ docker compose up -d
 # 2. Configure the Google Books API key (see below)
 cp .env.example .env   # then fill in GOOGLE_BOOKS_API_KEY
 
-# 3. Run a service
+# 3. Run the services, each in its own terminal
 dotnet run --project src/ReadingTracker.Catalog   # http://localhost:5103
 dotnet run --project src/ReadingTracker.Library   # http://localhost:5110
+dotnet run --project src/ReadingTracker.Gateway   # http://localhost:5100
 ```
 
-Each service exposes `/health`, which returns `Healthy` only when it can actually reach its own database. Catalog and Library share one Postgres instance but own separate schemas and never read each other's tables.
+With the Gateway up, one address reaches everything: `/api/books/…` goes to Catalog and `/api/library/…` to Library. The two services can still be called directly, which is convenient locally and must not be possible once deployed — see ADR-0007.
+
+Each service exposes `/health`. For Catalog and Library it returns `Healthy` only when they can actually reach their own database; the Gateway owns no database, so its health check says only that the Gateway itself is up. Catalog and Library share one Postgres instance but own separate schemas and never read each other's tables.
 
 > **Ports.** Postgres is on **55432** and RabbitMQ on **55672** (management UI on **55673**), deliberately off the default ports so they don't collide with anything already installed locally.
 
