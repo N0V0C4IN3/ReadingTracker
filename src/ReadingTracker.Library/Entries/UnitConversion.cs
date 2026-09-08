@@ -24,11 +24,14 @@ public static class UnitConversion
             return null;
         }
 
+        // Both directions round: a conversion is an approximation of where the reader is, and
+        // handing back 49.645390070921985% is noise rather than precision. A percentage the
+        // reader typed themselves is never converted, so their own precision survives.
         return to switch
         {
-            TrackingMethod.Percentage => position * 100m / totalPages.Value,
+            TrackingMethod.Percentage => Math.Round(position * 100m / totalPages.Value, 1, MidpointRounding.AwayFromZero),
 
-            // Rounded, because a reader is on a page rather than four fifths of the way into one.
+            // A reader is on a page, rather than four fifths of the way into one.
             _ => Math.Round(position * totalPages.Value / 100m, MidpointRounding.AwayFromZero),
         };
     }

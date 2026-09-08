@@ -72,6 +72,34 @@ public sealed class PercentageTrackingTests(LibraryApiFixture fixture)
     }
 
     [Fact]
+    public async Task Does_not_hand_me_a_percentage_with_fifteen_decimal_places()
+    {
+        var client = fixture.ClientFor("tidy-percentage-reader");
+        var entryId = await fixture.AddBookAsync(client, 705);
+        await LogAsync(client, entryId, 1, 350);
+
+        await TrackByAsync(client, entryId, "Percentage");
+
+        // 350 of 705 is 49.645390070921985...%, which is noise, not precision.
+        var progress = (await EntryAsync(client, entryId)).Progress;
+        Assert.Equal(49.6m, progress!.Position);
+        Assert.Equal(49.6m, Assert.Single(await SessionsAsync(client, entryId)).Displayed!.EndPosition);
+    }
+
+    [Fact]
+    public async Task Keeps_the_precision_of_a_percentage_i_typed_myself()
+    {
+        var client = fixture.ClientFor("precise-percentage-reader");
+        var entryId = await fixture.AddBookAsync(client, 300);
+        await TrackByAsync(client, entryId, "Percentage");
+
+        await LogAsync(client, entryId, 0, 17.5m);
+
+        // Nothing is converted here, so what the reader entered is what comes back.
+        Assert.Equal(17.5m, (await EntryAsync(client, entryId)).Progress!.Position);
+    }
+
+    [Fact]
     public async Task Says_so_plainly_when_it_cannot_convert_without_knowing_the_length()
     {
         var client = fixture.ClientFor("unknown-length-reader");
