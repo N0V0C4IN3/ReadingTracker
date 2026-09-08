@@ -102,6 +102,26 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
     }
 
     /// <summary>
+    /// Takes a book off a reader's shelf. Its ReadingSessions go with it — the database cascades
+    /// them — so nothing is left pointing at an entry that no longer exists. The Book itself is
+    /// Catalog's and is untouched, so the reader can add it again and start fresh.
+    /// </summary>
+    public async Task<bool> RemoveAsync(string readerId, Guid entryId, CancellationToken cancellationToken)
+    {
+        var entry = await FindAsync(readerId, entryId, cancellationToken);
+
+        if (entry is null)
+        {
+            return false;
+        }
+
+        database.LibraryEntries.Remove(entry);
+        await database.SaveChangesAsync(cancellationToken);
+
+        return true;
+    }
+
+    /// <summary>
     /// Sets or clears this reader's own page count for a book. Pass null to go back to whatever
     /// Catalog says. Nothing is written back to Catalog: the shared Book is not this reader's
     /// to correct.
