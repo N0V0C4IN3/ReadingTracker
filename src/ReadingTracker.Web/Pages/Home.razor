@@ -15,7 +15,7 @@
         {
             @if (entries.Count == 0)
             {
-                <p>Your shelf is empty. Adding a book is not built yet.</p>
+                <p>Your shelf is empty. Search for a book below to add your first one.</p>
             }
             else
             {
@@ -72,6 +72,7 @@
                                 <img src="@cover" alt="" width="40" />
                             }
                             <strong>@book.Title</strong> — @string.Join(", ", book.Authors)
+                            <button type="button" @onclick="() => AddToLibraryAsync(book.Id)">Add to my library</button>
                         </li>
                     }
                 </ul>
@@ -86,6 +87,19 @@
             <p>Your session has ended. <a href="authentication/login">Sign in again</a> to search.</p>
         }
         else if (_searchProblem == SearchUnavailable.GatewayUnreachable)
+        {
+            <p>ReadingTracker could not be reached just now. Try again shortly.</p>
+        }
+
+        @if (_addProblem == AddToLibraryProblem.AlreadyInLibrary)
+        {
+            <p>You already have that book in your library.</p>
+        }
+        else if (_addProblem == AddToLibraryProblem.NotSignedIn)
+        {
+            <p>Your session has ended. <a href="authentication/login">Sign in again</a> to add books.</p>
+        }
+        else if (_addProblem == AddToLibraryProblem.GatewayUnreachable)
         {
             <p>ReadingTracker could not be reached just now. Try again shortly.</p>
         }
@@ -108,6 +122,7 @@
     private string _isbnQuery = "";
     private IReadOnlyList<BookSearchResult>? _searchResults;
     private SearchUnavailable? _searchProblem;
+    private AddToLibraryProblem? _addProblem;
 
     protected override async Task OnInitializedAsync()
     {
@@ -135,5 +150,22 @@
 
         (_searchResults, _searchProblem) =
             await Catalog.SearchAsync(_isbnQuery, _titleQuery, _authorQuery, CancellationToken.None);
+    }
+
+    private async Task AddToLibraryAsync(Guid bookId)
+    {
+        _addProblem = null;
+
+        var (_, problem) = await Gateway.AddAsync(bookId, CancellationToken.None);
+
+        if (problem is { } trouble)
+        {
+            _addProblem = trouble;
+            return;
+        }
+
+        // Rerun the same fetch the page loads with, rather than splicing the new entry in by
+        // hand, so the shelf always shows exactly what the Gateway says it holds.
+        (_entries, _problem) = await Gateway.GetEntriesAsync(CancellationToken.None);
     }
 }
