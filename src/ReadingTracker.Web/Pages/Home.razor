@@ -3,7 +3,6 @@
 @using ReadingTracker.Web.Components
 @using ReadingTracker.Web.Services
 @using ReadingTracker.Web.Layout
-@using ReadingTracker.Web.Components.WelcomePrototype
 @inject GatewayLibraryClient Gateway
 @inject GatewayCatalogClient Catalog
 @inject IOptions<DevSignInOptions> DevSignIn
@@ -282,36 +281,6 @@
     </Authorized>
     <NotAuthorized>
         @*
-            PROTOTYPE, throwaway — remove with Components/WelcomePrototype and its stylesheet once
-            a variant has won. Four structurally different welcome screens on this same route,
-            chosen with ?variant=A..D, plus ?covers=real to lay Open Library's art over the drawn
-            jackets. No parameter at all leaves what is in main below, so the prototype is
-            something you opt into rather than something that has replaced the app.
-        *@
-        @if (Prototyping)
-        {
-            <PrototypeSwitcher Variant="@Which" RealCovers="RealCovers" />
-
-            @switch (Which)
-            {
-                case "B":
-                    <WelcomeSplit Greeting="@Greeting" RealCovers="RealCovers" CallToAction="SignInControl" />
-                    break;
-                case "C":
-                    <WelcomeStage Greeting="@Greeting" RealCovers="RealCovers" CallToAction="SignInControl" />
-                    break;
-                case "D":
-                    <WelcomeShelf Greeting="@Greeting" RealCovers="RealCovers" CallToAction="SignInControl" />
-                    break;
-                default:
-                    <WelcomeMarquee Greeting="@Greeting" RealCovers="RealCovers" CallToAction="SignInControl" />
-                    break;
-            }
-        }
-        else
-        {
-
-        @*
             The one screen with no reader behind it, so there is nothing of theirs to show. It
             shows books instead: a deck of jackets under the greeting, over drawn ones, because a
             welcome screen that waits on a cover service is a welcome screen that sometimes greets
@@ -364,43 +333,10 @@
             </p>
         </section>
         </div>
-
-        }
     </NotAuthorized>
 </AuthorizeView>
 
 @code {
-    // PROTOTYPE, throwaway — the ?variant= / ?covers= plumbing goes with Components/WelcomePrototype.
-
-    [SupplyParameterFromQuery(Name = "variant")]
-    private string? Variant { get; set; }
-
-    [SupplyParameterFromQuery(Name = "covers")]
-    private string? Covers { get; set; }
-
-    private bool Prototyping => !string.IsNullOrWhiteSpace(Variant);
-
-    private string Which => Variant?.Trim().ToUpperInvariant() ?? "A";
-
-    private bool RealCovers => string.Equals(Covers, "real", StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// The way in, handed to whichever variant is on screen. Every variant needs one and none of
-    /// them should be reimplementing dev sign-in to get it.
-    /// </summary>
-    private RenderFragment SignInControl => @<text>
-        @if (DevSignIn.Value.Enabled)
-        {
-            <DevSignInForm />
-        }
-        else
-        {
-            <button type="button" class="button--primary button--large" @onclick="SignIn">
-                Sign in with Google
-            </button>
-        }
-    </text>;
-
     /// <summary>
     /// Whether the welcome screen's jackets are in place. Until they are, the screen is behind the
     /// loading curtain — built, painted and waiting, rather than held back from rendering. The
