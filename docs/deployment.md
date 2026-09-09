@@ -34,11 +34,31 @@ authenticate it.
 
 ### 1. Neon
 
-One project, one database. Take the pooled connection string; both Catalog and Library use the
-same instance and keep to their own schema ([ADR-0004](adr/0004-schema-per-service-shared-postgres.md)),
-so one connection string serves both. Each service migrates itself on boot under an advisory lock
+One project, one database. Both Catalog and Library use the same instance and keep to their own
+schema ([ADR-0004](adr/0004-schema-per-service-shared-postgres.md)), so one connection string
+serves both. Each service migrates itself on boot under an advisory lock
 ([ADR-0006](adr/0006-serialize-migrations-with-an-advisory-lock.md)) — there is no migration step
 in the pipeline and there should not be one.
+
+> **Use the direct endpoint, not the pooled one.** Neon offers both; the pooled host has
+> `-pooler` in its name and is PgBouncer in transaction pooling mode. `pg_advisory_lock` is a
+> *session* lock, and the migration code deliberately pins the lock and the migration to one
+> connection because of that. Under transaction pooling a client connection is only tied to a
+> backend for the length of a transaction, so the lock would be taken on one backend, the
+> migration would run on another without holding it, and the unlock would quietly fail on a
+> third — leaving the lock stranded until that backend's session ends.
+>
+> Nothing would error. Two replicas cold-starting together would simply both migrate, which is
+> the exact race ADR-0006 exists to prevent, and the failure would surface later as a corrupted
+> migration history rather than as a connection problem.
+
+Two further things on the connection string:
+
+- `SSL Mode=Require` — Neon will not accept a plaintext connection. Its certificate chains to a
+  public CA, so there is no need to disable verification with `Trust Server Certificate`.
+- `Maximum Pool Size=10` or thereabouts. Npgsql defaults to **100 connections per pool**, and
+  that is per service, per replica. Two services cold-starting a few replicas each will exhaust
+  a free-tier Neon compute long before they need that many.
 
 ### 2. A broker
 
