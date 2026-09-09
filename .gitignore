@@ -480,3 +480,8 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Written by .github/workflows/deploy-web.yml at deploy time, from repository variables, and
+# never committed: it is the one file that says which gateway a build talks to, so a copy left
+# in the tree would quietly override a local run with whatever a deployment last needed.
+src/ReadingTracker.Web/wwwroot/appsettings.Production.json
