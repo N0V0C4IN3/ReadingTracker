@@ -43,7 +43,8 @@ Every query crosses from Azure to whichever cloud Neon sits in, and a region is 
 here that is expensive to revisit — moving a project later means a dump and restore, while
 everything else is a connection string. Neon ran in Azure regions until April 2026 and no longer
 does, so this really is cross-cloud; Frankfurt to Frankfurt (Azure Germany West Central against
-Neon's AWS `eu-central-1`) is about as close as the two get in Europe. Each service migrates itself on boot under an advisory lock
+Neon's AWS `eu-central-1`) is about as close as the two get in Europe, and Germany West Central
+is confirmed available for Container Apps. Each service migrates itself on boot under an advisory lock
 ([ADR-0006](adr/0006-serialize-migrations-with-an-advisory-lock.md)) — there is no migration step
 in the pipeline and there should not be one.
 
@@ -86,6 +87,23 @@ shelf; that is the path the events carry.
 
 ### 3. Azure
 
+A fresh subscription has none of the resource providers registered, and the failure is not
+obvious — `az containerapp list` reports the subscription "is not registered for the
+Microsoft.App resource provider" rather than saying anything about the resource you were trying
+to create. Registration is free, creates nothing and is permanent, but it propagates in the
+background, so start it before anything else:
+
+```
+az provider register -n Microsoft.App --wait
+az provider register -n Microsoft.Web --wait
+az provider register -n Microsoft.ContainerRegistry --wait
+az provider register -n Microsoft.OperationalInsights --wait
+```
+
+`Microsoft.OperationalInsights` is the one nobody expects: a Container Apps environment creates a
+Log Analytics workspace for itself, and without the provider the environment fails to create at
+all.
+
 A resource group, a Container Apps environment, and three container apps named
 `<prefix>-catalog`, `<prefix>-library`, `<prefix>-gateway` — the workflow builds those names from
 `CONTAINER_APP_PREFIX`, so they have to follow that shape. Ingress: external on the gateway,
@@ -93,7 +111,13 @@ internal on the other two, which is what makes
 [ADR-0007](adr/0007-services-trust-a-reader-identity-header-from-the-gateway.md) safe — Catalog
 and Library trust a reader-identity header, so nothing but the gateway may be able to set it.
 
-Then a Static Web App for the frontend.
+Then a Static Web App for the frontend. It cannot go in the same region as everything else: Static
+Web Apps exists in five regions only — Central US, East US 2, West US 2, West Europe, East Asia —
+and no amount of matching will put it next to the services. This does not matter. The region is
+where the resource record lives; the files are served from a CDN edge near the visitor, and a
+WebAssembly app calls the gateway from the reader's browser, so nothing a reader waits for passes
+through the Static Web App's region at all. West Europe against services in Germany West Central
+is fine.
 
 Set each service's own configuration **on the container app in Azure**, not in the workflow. The
 pipeline only ever changes the image, deliberately, so that a deployment cannot revert a setting
@@ -175,7 +199,8 @@ repository on the `master` branch.
 
 The frontend needs the gateway's address, so the services go first.
 
-1. Create the Neon database and the CloudAMQP instance.
+1. Register the Azure resource providers, and — while they propagate — create the Neon database
+   and the CloudAMQP instance.
 2. Create the Azure resources and set each container app's configuration.
 3. Set the variables and the secret here.
 4. Run **Deploy services**. It ends by checking `/health` from outside.
