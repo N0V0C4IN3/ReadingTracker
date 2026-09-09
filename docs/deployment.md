@@ -94,8 +94,8 @@ someone changed in the portal to put out a fire.
 
 | Service | Needs |
 | --- | --- |
-| Catalog | `ConnectionStrings__CatalogDb`, `RabbitMq__ConnectionString`, `GoogleBooks__ApiKey` |
-| Library | `ConnectionStrings__LibraryDb`, `RabbitMq__ConnectionString` |
+| Catalog | `ConnectionStrings__CatalogDb`, `RabbitMq__ConnectionString`, `GOOGLE_BOOKS_API_KEY` |
+| Library | `ConnectionStrings__LibraryDb`, `RabbitMq__ConnectionString`, `Catalog__BaseAddress` |
 | Gateway | `Google__ClientId`, `AllowedOrigins__0`, `ReverseProxy__Clusters__catalog__Destinations__primary__Address`, `ReverseProxy__Clusters__library__Destinations__primary__Address` |
 
 Two of the Gateway's are easy to miss and both stop it starting rather than letting it come up
@@ -111,6 +111,21 @@ half-configured:
 The two `ReverseProxy` addresses are the internal FQDNs of the Catalog and Library container apps,
 with a trailing slash. Routing itself is committed in `appsettings.json`; only the addresses are
 environmental.
+
+`Catalog__BaseAddress` on Library is the one to be careful about, because it is the opposite: it
+has a default, and the default is `http://localhost:5103/`. Library calls Catalog directly for
+book details rather than going back out through the Gateway, so left unset it starts cleanly,
+passes its health check, and fails only when a reader opens a shelf. Its own internal FQDN, with
+a trailing slash.
+
+`GOOGLE_BOOKS_API_KEY` is the flat spelling container platforms and `.env` files conventionally
+use; Catalog accepts it as an alias for `GoogleBooks__ApiKey`, and either works.
+
+One thing every connection string to Postgres needs on these images: `Gss Encryption Mode=Disable`.
+Npgsql 10 attempts GSSAPI first, and the .NET runtime images have shipped without Kerberos
+libraries since .NET 8, so without it every start logs a `libgssapi_krb5.so.2: cannot open shared
+object file` before falling back. Harmless, and exactly the sort of noise a real error goes
+unnoticed in.
 
 ### 4. Google
 
