@@ -2,13 +2,29 @@
 @using Microsoft.Extensions.Options
 @using ReadingTracker.Web.Components
 @using ReadingTracker.Web.Services
+@using ReadingTracker.Web.Layout
+@using ReadingTracker.Web.Components.WelcomePrototype
 @inject GatewayLibraryClient Gateway
 @inject GatewayCatalogClient Catalog
 @inject IOptions<DevSignInOptions> DevSignIn
+@inject NavigationManager Navigation
 
 <PageTitle>ReadingTracker</PageTitle>
 
 <AuthorizeView>
+    @*
+        Until the answer to "is anyone signed in" is actually in, neither the shelf nor the welcome
+        screen is the right thing to show. Without this the welcome screen renders first and is
+        swapped out a moment later, so every signed-in reader is greeted by a flash of the page
+        that asks them to sign in.
+    *@
+    <Authorizing>
+        <div class="settling">
+            <div class="splash__books" aria-hidden="true">
+                <span></span><span></span><span></span><span></span>
+            </div>
+        </div>
+    </Authorizing>
     <Authorized>
         <section class="shelf">
             <div class="shelf__heading">
@@ -85,16 +101,27 @@
                 </button>
             </div>
 
-            @if (_searchResults is { } results)
+            @if (_results is { } found)
             {
-                @if (results.Count == 0)
+                @if (found.Results.Count == 0)
                 {
-                    <p class="muted">No books matched your search.</p>
+                    <p class="muted">
+                        @(found.Page > 1 ? "Nothing more on this page." : "No books matched your search.")
+                    </p>
+
+                    @if (!_addingByHand)
+                    {
+                        <p>
+                            <button type="button" class="button--primary" @onclick="StartAddingByHand">
+                                Add it by hand
+                            </button>
+                        </p>
+                    }
                 }
                 else
                 {
                     <ul class="results">
-                        @foreach (var book in results)
+                        @foreach (var book in found.Results)
                         {
                             <li class="result">
                                 @if (book.CoverUrl is { } cover)
@@ -114,12 +141,36 @@
                                     }
                                 </div>
 
-                                <button type="button" @onclick="() => AddToLibraryAsync(book.Id)" disabled="@(_adding == book.Id)">
+                                <button type="button"
+                                        class="button--primary"
+                                        @onclick="() => AddToLibraryAsync(book.Id)"
+                                        disabled="@(_adding == book.Id)">
                                     @(_adding == book.Id ? "Adding…" : "Add to my library")
                                 </button>
                             </li>
                         }
                     </ul>
+                }
+
+                @* Only worth showing once there is somewhere to go: a single page of results
+                   needs no way to leave it. *@
+                @if (found.Page > 1 || found.HasMore)
+                {
+                    <nav class="pager" aria-label="Search result pages">
+                        <button type="button"
+                                disabled="@(found.Page <= 1 || _searching)"
+                                @onclick="() => ShowPageAsync(found.Page - 1)">
+                            Previous
+                        </button>
+
+                        <span class="muted">Page @(found.Page)</span>
+
+                        <button type="button"
+                                disabled="@(!found.HasMore || _searching)"
+                                @onclick="() => ShowPageAsync(found.Page + 1)">
+                            Next
+                        </button>
+                    </nav>
                 }
             }
             else if (_searchProblem == SearchUnavailable.ProvidersUnavailable)
@@ -133,6 +184,86 @@
             else if (_searchProblem == SearchUnavailable.GatewayUnreachable)
             {
                 <p class="notice">ReadingTracker could not be reached just now. Try again shortly.</p>
+            }
+
+            @if (_addingByHand)
+            {
+                <div class="panel by-hand">
+                    <h3>Add a book by hand</h3>
+                    <p class="hint">Only the title and author are needed. The rest is whatever you know.</p>
+
+                    <div class="field">
+                        <label for="by-hand-title">Title</label>
+                        <input id="by-hand-title" @bind="_newTitle" @bind:event="oninput" />
+                        @foreach (var message in Rejected("Title"))
+                        {
+                            <p class="hint hint--bad">@message</p>
+                        }
+                    </div>
+
+                    <div class="field">
+                        <label for="by-hand-authors">Author(s)</label>
+                        <input id="by-hand-authors" @bind="_newAuthors" @bind:event="oninput" />
+                        <p class="hint">Separate more than one with a comma.</p>
+                        @foreach (var message in Rejected("Authors"))
+                        {
+                            <p class="hint hint--bad">@message</p>
+                        }
+                    </div>
+
+                    <div class="field">
+                        <label for="by-hand-isbn">ISBN</label>
+                        <input id="by-hand-isbn" @bind="_newIsbn" @bind:event="oninput" />
+                        @foreach (var message in Rejected("Isbn"))
+                        {
+                            <p class="hint hint--bad">@message</p>
+                        }
+                    </div>
+
+                    <div class="field">
+                        <label for="by-hand-cover">Cover URL</label>
+                        <input id="by-hand-cover" @bind="_newCoverUrl" @bind:event="oninput" />
+                        @foreach (var message in Rejected("CoverUrl"))
+                        {
+                            <p class="hint hint--bad">@message</p>
+                        }
+                    </div>
+
+                    <div class="field">
+                        <label for="by-hand-pages">Pages</label>
+                        <input id="by-hand-pages" type="number" min="1" @bind="_newTotalPages" />
+                        @foreach (var message in Rejected("TotalPages"))
+                        {
+                            <p class="hint hint--bad">@message</p>
+                        }
+                    </div>
+
+                    @if (_creation?.Problem == BookCreationProblem.IsbnAlreadyInCatalog)
+                    {
+                        <p class="notice notice--bad">
+                            That ISBN is already in the catalog. Search for it by ISBN and add it from the results.
+                        </p>
+                    }
+                    else if (_creation?.Problem == BookCreationProblem.NotSignedIn)
+                    {
+                        <p class="notice notice--bad">
+                            Your session has ended. <a href="authentication/login">Sign in again</a> to add books.
+                        </p>
+                    }
+                    else if (_creation?.Problem == BookCreationProblem.GatewayUnreachable)
+                    {
+                        <p class="notice notice--bad">ReadingTracker could not be reached just now. Try again shortly.</p>
+                    }
+
+                    <div class="session-form__actions">
+                        <button type="button" class="button--primary" @onclick="AddByHandAsync" disabled="@_creating">
+                            @(_creating ? "Adding…" : "Add to my library")
+                        </button>
+                        <button type="button" class="link-button" @onclick="StopAddingByHand" disabled="@_creating">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
             }
 
             @if (_addProblem == AddToLibraryProblem.AlreadyInLibrary)
@@ -150,22 +281,144 @@
         </section>
     </Authorized>
     <NotAuthorized>
-        <section class="welcome">
-            <h1>ReadingTracker</h1>
-            <p>Track what you are reading, and how far through it you are.</p>
-            @if (DevSignIn.Value.Enabled)
+        @*
+            PROTOTYPE, throwaway — remove with Components/WelcomePrototype and its stylesheet once
+            a variant has won. Four structurally different welcome screens on this same route,
+            chosen with ?variant=A..D, plus ?covers=real to lay Open Library's art over the drawn
+            jackets. No parameter at all leaves what is in main below, so the prototype is
+            something you opt into rather than something that has replaced the app.
+        *@
+        @if (Prototyping)
+        {
+            <PrototypeSwitcher Variant="@Which" RealCovers="RealCovers" />
+
+            @switch (Which)
             {
-                <p class="muted">Sign in as any reader id to begin.</p>
+                case "B":
+                    <WelcomeSplit Greeting="@Greeting" RealCovers="RealCovers" CallToAction="SignInControl" />
+                    break;
+                case "C":
+                    <WelcomeStage Greeting="@Greeting" RealCovers="RealCovers" CallToAction="SignInControl" />
+                    break;
+                case "D":
+                    <WelcomeShelf Greeting="@Greeting" RealCovers="RealCovers" CallToAction="SignInControl" />
+                    break;
+                default:
+                    <WelcomeMarquee Greeting="@Greeting" RealCovers="RealCovers" CallToAction="SignInControl" />
+                    break;
             }
-            else
-            {
-                <p class="muted">Sign in with Google to begin.</p>
-            }
+        }
+        else
+        {
+
+        @*
+            The one screen with no reader behind it, so there is nothing of theirs to show. It
+            shows books instead: a deck of jackets under the greeting, over drawn ones, because a
+            welcome screen that waits on a cover service is a welcome screen that sometimes greets
+            people with nothing.
+
+            The jackets are fetched while the runtime is still starting, but on a cold visit they
+            can still be a moment behind it. Rather than show the screen and let it finish dressing
+            in front of the reader, the loading animation stays up for that moment too: the last
+            half second of the wait belongs to the wait, not to the page.
+
+            The screen underneath is built and painted the whole time — it is a curtain over a
+            finished set, not a screen being assembled. That is what lets the two cross-fade
+            instead of one replacing the other: there is nothing to swap in at the end, only
+            something to take away.
+        *@
+        <div class="welcome">
+            <div class="welcome__curtain @(_welcomeDressed ? "welcome__curtain--lifted" : null)"
+                 aria-hidden="@_welcomeDressed">
+                <Settling />
+            </div>
+
+        <section class="hero">
+            <div class="hero__content">
+                <p class="hero__greeting">@Greeting</p>
+                <h1 class="hero__title">ReadingTracker</h1>
+                <p class="hero__pitch">Track what you are reading, and how far through it you are.</p>
+
+                <div class="hero__actions">
+                    @if (DevSignIn.Value.Enabled)
+                    {
+                        <DevSignInForm />
+                    }
+                    else
+                    {
+                        <button type="button" class="button--primary button--large" @onclick="SignIn">
+                            Sign in with Google
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <CoverFlow Dressed="ShowWelcome" />
         </section>
+
+        <section class="pitch">
+            <p>
+                Your shelf holds <strong>what you are reading</strong>, what you have finished and what
+                you have put down. Log a stretch of reading and it works out <strong>how far through
+                you are</strong> — in pages or in percent, whichever you think in.
+            </p>
+        </section>
+        </div>
+
+        }
     </NotAuthorized>
 </AuthorizeView>
 
 @code {
+    // PROTOTYPE, throwaway — the ?variant= / ?covers= plumbing goes with Components/WelcomePrototype.
+
+    [SupplyParameterFromQuery(Name = "variant")]
+    private string? Variant { get; set; }
+
+    [SupplyParameterFromQuery(Name = "covers")]
+    private string? Covers { get; set; }
+
+    private bool Prototyping => !string.IsNullOrWhiteSpace(Variant);
+
+    private string Which => Variant?.Trim().ToUpperInvariant() ?? "A";
+
+    private bool RealCovers => string.Equals(Covers, "real", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The way in, handed to whichever variant is on screen. Every variant needs one and none of
+    /// them should be reimplementing dev sign-in to get it.
+    /// </summary>
+    private RenderFragment SignInControl => @<text>
+        @if (DevSignIn.Value.Enabled)
+        {
+            <DevSignInForm />
+        }
+        else
+        {
+            <button type="button" class="button--primary button--large" @onclick="SignIn">
+                Sign in with Google
+            </button>
+        }
+    </text>;
+
+    /// <summary>
+    /// Whether the welcome screen's jackets are in place. Until they are, the screen is behind the
+    /// loading curtain — built, painted and waiting, rather than held back from rendering. The
+    /// deck has to be in the page for its covers to be fetched at all.
+    /// </summary>
+    private bool _welcomeDressed;
+
+    private void ShowWelcome() => _welcomeDressed = true;
+
+    /// <summary>The reader's own clock: this runs in their browser, so it is their time of day.</summary>
+    private static string Greeting => DateTime.Now.Hour switch
+    {
+        < 5 => "Still awake",
+        < 12 => "Good morning",
+        < 18 => "Good afternoon",
+        _ => "Good evening",
+    };
+
     /// <summary>Null is "everything"; the rest are the ReadingStatus values Library accepts.</summary>
     private static readonly (string? Value, string Label)[] Filters =
     [
@@ -187,11 +440,30 @@
     private string _titleQuery = "";
     private string _authorQuery = "";
     private string _isbnQuery = "";
-    private IReadOnlyList<BookSearchResult>? _searchResults;
+
+    /// <summary>
+    /// What was actually searched for, which is not the same thing as what is in the boxes now.
+    /// Paging re-runs this rather than whatever the reader has since typed, so pressing Next
+    /// never quietly changes the query underneath them.
+    /// </summary>
+    private (string Isbn, string Title, string Author)? _searched;
+
+    private BookSearchPage? _results;
     private SearchUnavailable? _searchProblem;
     private AddToLibraryProblem? _addProblem;
     private bool _searching;
     private Guid? _adding;
+
+    private bool _addingByHand;
+    private string _newTitle = "";
+    private string _newAuthors = "";
+    private string _newIsbn = "";
+    private string _newCoverUrl = "";
+    private int? _newTotalPages;
+    private bool _creating;
+
+    /// <summary>What Catalog said the last time this form was submitted, field by field.</summary>
+    private BookCreation? _creation;
 
     /// <summary>Whose shelf is on screen, so a re-render is not mistaken for a change of reader.</summary>
     private string? _shelfBelongsTo;
@@ -218,10 +490,12 @@
         // One reader's results must never be left on screen for the next one.
         _entries = null;
         _problem = null;
-        _searchResults = null;
+        _results = null;
+        _searched = null;
         _searchProblem = null;
         _addProblem = null;
         _filter = null;
+        StopAddingByHand();
 
         // Fetching before we know there is a reader would send the Gateway a request with no
         // token on every anonymous page load — harmless, since it just gets a 401 back, but
@@ -278,6 +552,12 @@
         _problem = LibraryUnavailable.NotSignedIn;
     }
 
+    /// <summary>
+    /// The same journey out to Google the header's control makes. A landing page whose only way in
+    /// is a control in the corner is a landing page with no call to action.
+    /// </summary>
+    private void SignIn() => Navigation.NavigateToLogin("authentication/login");
+
     private async Task SearchOnEnterAsync(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
@@ -297,19 +577,121 @@
             return;
         }
 
+        _searched = (_isbnQuery, _titleQuery, _authorQuery);
+
+        // A new search is a new question, so it is asked from the first page — and any form
+        // opened for the last one's dead end no longer belongs to it.
+        StopAddingByHand();
+
+        await ShowPageAsync(1);
+    }
+
+    private async Task ShowPageAsync(int page)
+    {
+        if (_searched is not { } query || page < 1)
+        {
+            return;
+        }
+
         _searching = true;
         _addProblem = null;
 
         try
         {
-            (_searchResults, _searchProblem) =
-                await Catalog.SearchAsync(_isbnQuery, _titleQuery, _authorQuery, CancellationToken.None);
+            (_results, _searchProblem) =
+                await Catalog.SearchAsync(query.Isbn, query.Title, query.Author, page, CancellationToken.None);
         }
         finally
         {
             _searching = false;
         }
     }
+
+    /// <summary>
+    /// Offered only once search has come back empty, so a reader reaches for it having already
+    /// established that the Catalog cannot help — which is what keeps it from filling up with
+    /// hand-typed duplicates of books it already holds. What they searched for is what they
+    /// were looking for, so the form opens with it rather than asking them to type it twice.
+    /// </summary>
+    private void StartAddingByHand()
+    {
+        _addingByHand = true;
+        _creation = null;
+        _addProblem = null;
+
+        _newTitle = _searched?.Title ?? "";
+        _newAuthors = _searched?.Author ?? "";
+        _newIsbn = _searched?.Isbn ?? "";
+        _newCoverUrl = "";
+        _newTotalPages = null;
+    }
+
+    private void StopAddingByHand()
+    {
+        _addingByHand = false;
+        _creation = null;
+    }
+
+    /// <summary>What Catalog said about one of the form's fields when it last refused.</summary>
+    private IReadOnlyList<string> Rejected(string field) => _creation?.For(field) ?? [];
+
+    /// <summary>
+    /// Two calls, deliberately: the Book belongs to the shared Catalog and the entry belongs to
+    /// this reader, and they are different services' business. If the second fails the Book still
+    /// exists, which is correct — a Book is nobody's — so the failure is reported and nothing is
+    /// unwound.
+    /// </summary>
+    private async Task AddByHandAsync()
+    {
+        _creating = true;
+        _creation = null;
+        _addProblem = null;
+
+        try
+        {
+            var authors = _newAuthors
+                .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+            var creation = await Catalog.CreateAsync(
+                new NewBook(
+                    _newTitle,
+                    authors,
+                    Blank(_newIsbn),
+                    Blank(_newCoverUrl),
+                    _newTotalPages),
+                CancellationToken.None);
+
+            _creation = creation;
+
+            if (!creation.Ok || creation.Book is not { } book)
+            {
+                return;
+            }
+
+            var (_, problem) = await Gateway.AddAsync(book.Id, CancellationToken.None);
+
+            if (problem is { } trouble)
+            {
+                _addProblem = trouble;
+                return;
+            }
+
+            // On the shelf now, so the dead end that led here is over: close the form and clear
+            // the results it came from.
+            StopAddingByHand();
+            _results = null;
+            _searched = null;
+
+            await LoadShelfAsync();
+        }
+        finally
+        {
+            _creating = false;
+        }
+    }
+
+    /// <summary>Catalog trims and null-checks its optional fields; an empty box is not a value.</summary>
+    private static string? Blank(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private async Task AddToLibraryAsync(Guid bookId)
     {

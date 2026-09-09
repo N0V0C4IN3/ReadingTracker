@@ -1,0 +1,83 @@
+@implements IDisposable
+
+@*
+    PROTOTYPE — throwaway. Variant C, "Stage".
+
+    A carousel in the strict sense: one book at a time, front and centre, its neighbours receding
+    to either side, advancing on its own every few seconds. The book is the hero here and the
+    words are the caption — the inverse of A's hierarchy.
+
+    The bet: a wall of jackets is texture and nobody looks at any single one, whereas one book
+    held up is something a person actually reads the spine of.
+*@
+
+<section class="p-stage">
+    <p class="p-eyebrow p-eyebrow--ink">@Greeting</p>
+    <h1 class="p-display p-display--ink p-display--tight">ReadingTracker</h1>
+
+    <div class="p-flow" aria-hidden="true">
+        @foreach (var (book, position) in PrototypeBooks.All.Select((book, at) => (book, at)))
+        {
+            @*
+                Where this book sits relative to the one on stage, wrapped so the ring is seamless.
+                --away is the same number without its sign, worked out here rather than with CSS's
+                abs(), which is too new to rely on.
+            *@
+            <div class="p-flow__slot" style="--offset: @Offset(position); --away: @Math.Abs(Offset(position))">
+                <PrototypeCover Book="book" Real="RealCovers" />
+            </div>
+        }
+    </div>
+
+    <p class="p-stage__caption">
+        <strong>@Front.Title</strong>
+        <span>@Front.Author</span>
+    </p>
+
+    <p class="p-lede p-lede--ink p-lede--centred">
+        Track what you are reading, and how far through it you are.
+    </p>
+
+    <div class="p-actions p-actions--centred">@CallToAction</div>
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public required string Greeting { get; set; }
+
+    [Parameter]
+    public bool RealCovers { get; set; }
+
+    [Parameter]
+    public RenderFragment? CallToAction { get; set; }
+
+    private int _at;
+    private System.Timers.Timer? _advance;
+
+    private PrototypeBook Front => PrototypeBooks.All[_at];
+
+    protected override void OnInitialized()
+    {
+        _advance = new System.Timers.Timer(3200);
+        _advance.Elapsed += async (_, _) =>
+        {
+            _at = (_at + 1) % PrototypeBooks.All.Count;
+            await InvokeAsync(StateHasChanged);
+        };
+        _advance.Start();
+    }
+
+    /// <summary>
+    /// How many places away from the stage this book is, counted the short way round so the
+    /// ring wraps instead of every book stampeding back past the front.
+    /// </summary>
+    private int Offset(int position)
+    {
+        var count = PrototypeBooks.All.Count;
+        var raw = (position - _at + count) % count;
+
+        return raw > count / 2 ? raw - count : raw;
+    }
+
+    public void Dispose() => _advance?.Dispose();
+}

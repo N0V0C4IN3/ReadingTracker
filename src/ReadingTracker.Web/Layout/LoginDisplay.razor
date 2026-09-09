@@ -37,15 +37,25 @@
     private void SignIn() =>
         Navigation.NavigateToLogin("authentication/login");
 
-    private void SignOut()
+    /// <summary>
+    /// Signing out lands on the welcome screen, both ways round. Having asked to be signed out,
+    /// there is nothing to tell a reader afterwards and nowhere else they could want to be — a
+    /// page saying it happened, with a link to the only place to go, is a step they have to take
+    /// to get where they were already headed.
+    /// </summary>
+    private async Task SignOut()
     {
         // Registered only when dev sign-in is enabled, so this is what tells the two apart.
         if (AuthenticationStateProvider is DevAuthenticationStateProvider dev)
         {
-            _ = dev.SignOutAsync();
+            await dev.SignOutAsync();
+            Navigation.NavigateTo("/");
+
             return;
         }
 
-        Navigation.NavigateToLogout("authentication/logout");
+        // The return url is what stops RemoteAuthenticatorView rendering its own "you are signed
+        // out" page: given somewhere to go, it goes there instead.
+        Navigation.NavigateToLogout("authentication/logout", "/");
     }
 }

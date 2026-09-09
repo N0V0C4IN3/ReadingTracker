@@ -1,0 +1,77 @@
+@*
+    PROTOTYPE — throwaway. Variant D, "Live shelf".
+
+    Not a landing screen at all: a worked example of the thing itself. Someone else's shelf,
+    rendered in the app's own card language with real progress bars and real statuses, above a
+    sticky bar offering to start one of your own.
+
+    The bet: nobody signs up for a description of a reading tracker, and showing the product
+    beats describing it. The risk it is here to expose is whether a fake shelf reads as a demo
+    or as a bug — a stranger's books apparently already in your library.
+*@
+
+<section class="p-demo">
+    <p class="p-eyebrow p-eyebrow--ink">@Greeting</p>
+    <h1 class="p-display p-display--ink p-display--tight">This is a shelf.</h1>
+    <p class="p-lede p-lede--ink">Yours starts empty. Here is one that has been going a while.</p>
+
+    <div class="entries p-demo__shelf" aria-hidden="true">
+        @foreach (var shown in Shown)
+        {
+            <article class="entry">
+                <div class="entry__cover p-demo__cover">
+                    <PrototypeCover Book="shown.Book" Real="RealCovers" />
+                </div>
+
+                <div class="entry__body">
+                    <h3 class="entry__title">@shown.Book.Title</h3>
+                    <p class="entry__authors">@shown.Book.Author</p>
+
+                    <div class="entry__status">
+                        <span class="chip @(shown.Status == "Reading" ? "chip--on" : null)">@shown.Status</span>
+
+                        @if (shown.Percent is { } percent)
+                        {
+                            <div class="progress">
+                                <div class="progress__track">
+                                    <div class="progress__fill" style="width: @(percent)%"></div>
+                                </div>
+                                <span class="progress__label">@shown.Read of @shown.Length pages · @percent%</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </article>
+        }
+    </div>
+
+    <div class="p-demo__bar">
+        <span>Start your own shelf.</span>
+        @CallToAction
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public required string Greeting { get; set; }
+
+    [Parameter]
+    public bool RealCovers { get; set; }
+
+    [Parameter]
+    public RenderFragment? CallToAction { get; set; }
+
+    private sealed record Shelved(PrototypeBook Book, string Status, int? Percent, int Read, int Length);
+
+    /// <summary>
+    /// Made up, and made up to be plausible: a book in progress, one nearly done, one finished
+    /// and one not started, because a shelf where everything is at 50% shows nothing.
+    /// </summary>
+    private static IReadOnlyList<Shelved> Shown =>
+    [
+        new(PrototypeBooks.All[1], "Reading", 62, 383, 617),
+        new(PrototypeBooks.All[5], "Reading", 18, 74, 418),
+        new(PrototypeBooks.All[3], "Finished", 100, 532, 532),
+        new(PrototypeBooks.All[9], "Want to read", null, 0, 0),
+    ];
+}

@@ -3,40 +3,84 @@
     on them — small enough that a framework would be more bytes and more concepts than the thing
     it is styling.
 
-    Colours are declared once as custom properties, including a dark set behind
-    prefers-color-scheme, so the palette is changed in one place rather than hunted for.
+    Colours, translucency and depth are declared once as custom properties, including a dark set
+    behind prefers-color-scheme, so the material is changed in one place rather than hunted for.
+
+    Controls are flat: a fill, a radius, and a change of fill on hover. No gradients and no outlines
+    on top of fills — a button that is filled does not also need drawing round, and stacking the two
+    is what makes a control look like a control from fifteen years ago.
+
+    Surfaces are layered rather than flat: a tinted page beneath, translucent cards above it, and a
+    blurred header above those. Translucency is applied only through --card-translucent and friends,
+    and every one of them has an opaque fallback, because text on an unreadable background is a
+    worse outcome than a missing effect.
 */
 
 :root {
-    --ink: #1a1a1a;
-    --ink-soft: #5c5c5c;
-    --ink-faint: #8a8a8a;
-    --page: #fdfdfc;
+    /*
+        Tells the browser which way round to paint the parts of a control it draws itself — most
+        visibly the list a <select> drops down, which is rendered by the platform and not by
+        anything here. Without it the platform assumes light, so in dark mode it painted a pale
+        list and put our pale text on it: options that were there but could not be read.
+    */
+    color-scheme: light;
+
+    --ink: #17191a;
+    --ink-soft: #5b6160;
+    --ink-faint: #8b918f;
+    --page: #f3f2ee;
     --card: #ffffff;
-    --line: #e4e2dd;
-    --line-strong: #cfccc5;
-    --accent: #3b5f4a;
-    --accent-soft: #edf3ef;
-    --danger: #a33a2c;
-    --danger-soft: #fbeeec;
-    --radius: 8px;
-    --shadow: 0 1px 2px rgb(0 0 0 / 6%), 0 4px 12px rgb(0 0 0 / 4%);
+    --card-translucent: rgb(255 255 255 / 70%);
+    --card-raised: rgb(253 253 251 / 72%);
+    --line: rgb(0 0 0 / 7%);
+    --line-strong: rgb(0 0 0 / 14%);
+    --fill: rgb(20 30 25 / 6%);
+    --fill-hover: rgb(20 30 25 / 11%);
+    --accent: #2f6b4f;
+    --accent-hover: #275b43;
+    --accent-soft: rgb(47 107 79 / 11%);
+    --accent-ink: #ffffff;
+    --danger: #a3392b;
+    --danger-soft: rgb(163 57 43 / 10%);
+    --danger-fill: rgb(163 57 43 / 14%);
+    --radius: 16px;
+    --radius-sm: 10px;
+    --blur: saturate(180%) blur(20px);
+    --shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 10px 26px rgb(0 0 0 / 6%);
+    --shadow-lifted: 0 1px 2px rgb(0 0 0 / 5%), 0 16px 36px rgb(0 0 0 / 10%);
+    --ease: cubic-bezier(0.4, 0, 0.2, 1);
+    --quick: 160ms;
+
+    /* The welcome screen commits to one look in both schemes: white type on a deep wash over the
+       drifting spines. A palette that flipped with the system would flip the text to unreadable. */
+    --hero-ink: #ffffff;
+    --hero-deep: #14291f;
 }
 
 @media (prefers-color-scheme: dark) {
     :root {
-        --ink: #ececea;
-        --ink-soft: #a8a6a1;
-        --ink-faint: #7d7b76;
-        --page: #16181a;
-        --card: #1e2124;
-        --line: #2e3236;
-        --line-strong: #414549;
-        --accent: #8fc0a4;
-        --accent-soft: #23302a;
-        --danger: #e08375;
-        --danger-soft: #33211f;
-        --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 12px rgb(0 0 0 / 20%);
+        color-scheme: dark;
+
+        --ink: #ededea;
+        --ink-soft: #a6aba8;
+        --ink-faint: #7c817f;
+        --page: #111314;
+        --card: #1c1f21;
+        --card-translucent: rgb(35 39 41 / 66%);
+        --card-raised: rgb(28 31 33 / 72%);
+        --line: rgb(255 255 255 / 8%);
+        --line-strong: rgb(255 255 255 / 16%);
+        --fill: rgb(255 255 255 / 8%);
+        --fill-hover: rgb(255 255 255 / 14%);
+        --accent: #8ec5a4;
+        --accent-hover: #a3d4b6;
+        --accent-soft: rgb(142 197 164 / 15%);
+        --accent-ink: #0f2318;
+        --danger: #e28a7c;
+        --danger-soft: rgb(226 138 124 / 14%);
+        --danger-fill: rgb(226 138 124 / 18%);
+        --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 10px 26px rgb(0 0 0 / 32%);
+        --shadow-lifted: 0 1px 2px rgb(0 0 0 / 45%), 0 16px 36px rgb(0 0 0 / 42%);
     }
 }
 
@@ -48,25 +92,43 @@
 
 body {
     margin: 0;
+    /* Lets the welcome screen's hero break out of the column to the full width of the window.
+       `clip` rather than `hidden` so the vertical axis stays visible and the header keeps
+       sticking. */
+    overflow-x: clip;
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     line-height: 1.55;
     color: var(--ink);
     background: var(--page);
+    /* Two soft washes of the accent, so the translucent surfaces above have something to be
+       translucent against. Fixed, so they do not slide about as the shelf scrolls. */
+    background-image:
+        radial-gradient(60rem 40rem at 10% -12%, var(--accent-soft), transparent 60%),
+        radial-gradient(50rem 36rem at 95% 4%, var(--accent-soft), transparent 55%);
+    background-attachment: fixed;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
 }
 
 h1 {
-    font-size: 1.5rem;
+    font-size: 1.75rem;
     margin: 0;
+    letter-spacing: -0.025em;
+    font-weight: 700;
 }
 
 h2 {
-    font-size: 1.1rem;
-    margin: 0 0 0.75rem;
+    font-size: 1.15rem;
+    margin: 0 0 1rem;
+    letter-spacing: -0.015em;
+    font-weight: 650;
 }
 
 h3 {
     font-size: 1rem;
     margin: 0;
+    letter-spacing: -0.01em;
+    font-weight: 650;
 }
 
 a {
@@ -86,24 +148,64 @@ a {
     white-space: nowrap;
 }
 
+/*
+    The loading curtain over the welcome screen: opaque, the page's own colour, holding the boot
+    animation while the deck's jackets arrive behind it.
+
+    A curtain rather than a switch, because the screen underneath is finished the whole time. When
+    the jackets are in, this fades and what is already there is simply uncovered — where swapping
+    one for the other could only ever be a cut.
+
+    Full width of the window, like the poster it covers: the reading column it sits in is narrower
+    than the hero, so matching the column would leave the poster showing down both sides.
+*/
+.welcome {
+    position: relative;
+}
+
+.welcome__curtain {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100vw;
+    height: 100vh;
+    z-index: 5;
+    display: grid;
+    place-items: center;
+    background: var(--page);
+    transition: opacity 450ms var(--ease);
+}
+
+.welcome__curtain--lifted {
+    opacity: 0;
+    /* Gone as far as the cursor is concerned the moment it starts to lift, so the sign-in button
+       underneath is never a click that lands on nothing. */
+    pointer-events: none;
+}
+
 /* Header ------------------------------------------------------------------ */
 
 header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
     flex-wrap: wrap;
-    padding: 0.75rem 1.5rem;
+    padding: 0.7rem 1.5rem;
     border-bottom: 1px solid var(--line);
     background: var(--card);
 }
 
 header > a {
-    font-weight: 600;
+    font-weight: 700;
+    font-size: 1.02rem;
     text-decoration: none;
     color: inherit;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.02em;
 }
 
 header input {
@@ -111,8 +213,10 @@ header input {
 }
 
 main {
-    padding: 1.5rem;
-    max-width: 46rem;
+    --main-pad-top: 1.75rem;
+
+    padding: var(--main-pad-top) 1.25rem 5rem;
+    max-width: 52rem;
     margin: 0 auto;
 }
 
@@ -127,72 +231,150 @@ select {
 
 input,
 select {
-    padding: 0.35rem 0.5rem;
+    padding: 0.45rem 0.7rem;
     border: 1px solid var(--line-strong);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     background: var(--card);
     min-width: 0;
+    transition: border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease);
+}
+
+input::placeholder {
+    color: var(--ink-faint);
+}
+
+/*
+    Opaque, and stated on the option itself. The dropped-down list is drawn by the platform outside
+    the page, where a translucent fill has nothing behind it to be translucent against.
+*/
+select {
+    background-color: var(--card);
+}
+
+select option {
+    background-color: var(--card);
+    color: var(--ink);
+}
+
+input:hover:not(:disabled),
+select:hover:not(:disabled) {
+    border-color: var(--ink-faint);
 }
 
 input:focus-visible,
 select:focus-visible,
 button:focus-visible {
     outline: 2px solid var(--accent);
-    outline-offset: 1px;
+    outline-offset: 2px;
 }
 
+/*
+    FocusOnNavigate moves focus to the page's h1 on every navigation, so a screen reader starts
+    reading at the new page rather than wherever the last one left off. It marks that heading
+    tabindex="-1" to be able to, and the browser then draws a focus ring round the whole width of
+    the heading — a white box appearing over the page a moment after it loads, for a reason nobody
+    looking at it can see. Nothing here that carries tabindex="-1" can be reached by keyboard, so
+    there is no ring worth keeping.
+*/
+[tabindex="-1"]:focus,
+[tabindex="-1"]:focus-visible {
+    outline: none;
+}
+
+/*
+    The default button: a soft fill and nothing else. It reads as pressable without competing with
+    the one filled action beside it, which is what .button--primary is for.
+*/
 button {
-    padding: 0.4rem 0.85rem;
-    border: 1px solid var(--line-strong);
-    border-radius: 6px;
-    background: var(--card);
+    padding: 0.45rem 0.95rem;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: var(--fill);
+    color: var(--ink);
     cursor: pointer;
+    font-weight: 550;
+    transition:
+        background-color var(--quick) var(--ease),
+        color var(--quick) var(--ease),
+        transform var(--quick) var(--ease);
 }
 
 button:hover:not(:disabled) {
-    border-color: var(--accent);
-    color: var(--accent);
+    background: var(--fill-hover);
+}
+
+button:active:not(:disabled) {
+    transform: scale(0.97);
 }
 
 button:disabled {
-    opacity: 0.55;
+    opacity: 0.45;
     cursor: default;
 }
 
+/* The one thing you came to this surface to do. */
+.button--primary {
+    background: var(--accent);
+    color: var(--accent-ink);
+}
+
+.button--primary:hover:not(:disabled) {
+    background: var(--accent-hover);
+}
+
+.button--large {
+    padding: 0.7rem 1.5rem;
+    font-size: 1.05rem;
+    border-radius: 12px;
+    font-weight: 600;
+}
+
 button.danger {
-    border-color: var(--danger);
+    background: var(--danger-fill);
     color: var(--danger);
 }
 
+button.danger:hover:not(:disabled) {
+    background: var(--danger);
+    color: var(--card);
+}
+
+/*
+    A quiet action. Underlining these turned a row of four into a thicket, so they are text until
+    pointed at and take a fill when they are.
+*/
 .link-button {
-    border: none;
-    background: none;
-    padding: 0.15rem 0;
+    padding: 0.3rem 0.6rem;
+    background: transparent;
     color: var(--ink-soft);
-    text-decoration: underline;
-    text-underline-offset: 2px;
+    font-weight: 500;
 }
 
 .link-button:hover:not(:disabled) {
-    color: var(--accent);
+    background: var(--fill);
+    color: var(--ink);
 }
 
 .link-button--danger:hover:not(:disabled) {
+    background: var(--danger-fill);
     color: var(--danger);
 }
 
 .chip {
-    padding: 0.2rem 0.7rem;
+    padding: 0.3rem 0.85rem;
     border-radius: 999px;
     font-size: 0.85rem;
     color: var(--ink-soft);
 }
 
 .chip--on {
-    background: var(--accent-soft);
-    border-color: var(--accent);
-    color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-ink);
     font-weight: 600;
+}
+
+.chip--on:hover:not(:disabled) {
+    background: var(--accent-hover);
 }
 
 .filters {
@@ -201,31 +383,486 @@ button.danger {
     gap: 0.4rem;
 }
 
+/* Boot -------------------------------------------------------------------- */
+
+/*
+    What is on screen while the WebAssembly runtime downloads — before there is an application to
+    render anything. It is the first thing anyone sees on a cold visit, so it is centred and it
+    says how far along it is, rather than sitting in the top-left corner saying "Loading…".
+*/
+.splash {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.25rem;
+    padding: 2rem;
+}
+
+/* Four books being shelved, one after another. */
+.splash__books {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.3rem;
+    height: 2.5rem;
+}
+
+.splash__books span {
+    width: 0.6rem;
+    height: 100%;
+    border-radius: 2px 2px 1px 1px;
+    background: var(--accent);
+    opacity: 0.25;
+    transform-origin: bottom center;
+    animation: shelve 1.4s var(--ease) infinite;
+}
+
+.splash__books span:nth-child(2) { animation-delay: 0.15s; height: 82%; }
+.splash__books span:nth-child(3) { animation-delay: 0.3s; height: 94%; }
+.splash__books span:nth-child(4) { animation-delay: 0.45s; height: 76%; }
+
+@keyframes shelve {
+    0%, 100% { opacity: 0.25; transform: scaleY(0.85); }
+    40% { opacity: 1; transform: scaleY(1); }
+}
+
+/* The same wait, once the application is running and is asking who the reader is. */
+.settling {
+    min-height: 55vh;
+    display: grid;
+    place-items: center;
+}
+
+.splash__title {
+    margin: 0;
+    font-weight: 700;
+    font-size: 1.1rem;
+    letter-spacing: -0.02em;
+}
+
+.splash__track {
+    width: min(15rem, 60vw);
+    height: 4px;
+    border-radius: 999px;
+    background: var(--fill-hover);
+    overflow: hidden;
+}
+
+/* The runtime publishes its progress as a percentage on the document; this is that number, drawn.
+   The fallback keeps a sliver visible before the first update arrives. */
+.splash__fill {
+    height: 100%;
+    width: var(--blazor-load-percentage, 5%);
+    border-radius: 999px;
+    background: var(--accent);
+    transition: width 200ms var(--ease);
+}
+
+/* Welcome ----------------------------------------------------------------- */
+
+/*
+    Full width of the window, not of the reading column: this is the one screen that is a poster
+    rather than a page, and a poster inset in a 52rem column is a picture of a poster.
+*/
+.hero {
+    position: relative;
+    overflow: hidden;
+    width: 100vw;
+    margin: calc(var(--main-pad-top) * -1) calc(50% - 50vw) 0;
+    min-height: min(86vh, 40rem);
+    display: grid;
+    grid-template-rows: 1fr auto;
+    background:
+        /* Settles onto the page's own colour rather than stopping at it. Without this the poster
+           ends on a ruled line — deep green meeting the page in one pixel, right under the title
+           of the book on show — and the section below reads as something pasted on. */
+        linear-gradient(to bottom, transparent 74%, var(--page)),
+        radial-gradient(80% 70% at 15% 20%, #23624a, transparent 70%),
+        linear-gradient(170deg, #1b4636, var(--hero-deep));
+}
+
+/*
+    Full-bleed behind, but the words still line up with the column the rest of the app reads in.
+    Centred, because the deck below is centred: text ranged left over a deck ranged centre reads as
+    two things that happened to land on the same page.
+*/
+.hero__content {
+    align-self: center;
+    width: min(52rem, 100%);
+    margin-inline: auto;
+    padding: clamp(1.25rem, 2.5vw, 2rem) 1.25rem;
+    text-align: center;
+    color: var(--hero-ink);
+}
+
+/* Cover flow --------------------------------------------------------------- */
+
+/*
+    A deck of jackets seen at an angle: one held face-on at the front, the rest leaning away to
+    either side and receding into the dark. The width of a jacket is the unit everything else is
+    measured in, so the deck scales as one thing.
+*/
+/*
+    Sized by the window's height as well as its width. A deck measured only across gets taller as
+    the window gets wider, and on a short wide screen it pushes its own caption off the bottom.
+*/
+.flow {
+    --cover-w: clamp(7rem, min(16vw, 23vh), 13rem);
+    position: relative;
+    padding-bottom: clamp(2.75rem, 5vw, 4.25rem);
+}
+
+.flow__stage {
+    position: relative;
+    /*
+        The jacket is one and a half times its own width. The rest is room: a little above, so a
+        jacket that grows under the cursor has somewhere to grow into, and rather more below for
+        the reflection. The mask below clips to this box — mask-clip is border-box and there is no
+        value for "do not clip" — so anything that needs to be seen has to fit inside it.
+    */
+    height: calc(var(--cover-w) * 2.3);
+    perspective: 1400px;
+    perspective-origin: 50% 38%;
+    /* The deck carries on past both edges of the window rather than stopping at them. */
+    mask-image: linear-gradient(to right, transparent, #000 15%, #000 85%, transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 15%, #000 85%, transparent);
+}
+
+/*
+    Every book is in the deck at all times and only its numbers change, so turning the deck is one
+    transition rather than a set of arrivals and departures. The component works out where each one
+    stands; this only decides what the numbers mean.
+
+    Repeated for :active because the app's buttons shrink a little when pressed, and that rule sets
+    `transform` outright — on this button it would throw away the whole deck geometry for as long
+    as the mouse was down. The press is done with --lift instead, further down.
+*/
+.flow__slot,
+.flow__slot:active:not(:disabled) {
+    transform:
+        translateX(calc(-50% + var(--x) * var(--cover-w)))
+        translateZ(calc(var(--depth) * -1rem))
+        rotateY(calc(var(--turn) * 1deg))
+        scale(calc(var(--scale) * var(--lift, 1)));
+}
+
+.flow__slot {
+    position: absolute;
+    top: calc(var(--cover-w) * 0.08);
+    left: 50%;
+    width: var(--cover-w);
+    /* A jacket, not a button: none of the chrome the rest of the app's buttons carry, and none of
+       their centred label either — a drawn jacket sets its title ranged left. */
+    padding: 0;
+    border-radius: 0;
+    background: none;
+    text-align: left;
+    /* Slivers on the far side are drawn at zero opacity and take no clicks. */
+    pointer-events: none;
+    opacity: var(--fade);
+    z-index: var(--layer);
+    /*
+        Slow, because the deck turns about once a minute: at this spacing the movement is something
+        you notice out of the corner of your eye and look up at, rather than something that has
+        already finished by the time you do.
+    */
+    transition: transform 1100ms var(--ease), opacity 1100ms var(--ease);
+}
+
+.flow__slot--lit {
+    pointer-events: auto;
+}
+
+/* Neither the fill nor the dimming the app's buttons get — the jacket is the whole of the button. */
+.flow__slot:hover:not(:disabled),
+.flow__slot:disabled {
+    background: none;
+}
+
+.flow__slot:disabled {
+    opacity: var(--fade);
+}
+
+/* Enough of a step forward to feel picked up, not enough to shove its neighbours. */
+.flow__slot--lit:hover {
+    --lift: 1.09;
+}
+
+.flow__slot--lit:active {
+    --lift: 1.04;
+}
+
+/*
+    The shelf's jacket casts its shadow downwards, which here would fall in the one place the
+    reflection needs to be — a dark band between a book and its own reflection, which reads as the
+    reflection belonging to something else. On the stage the light is even and the shadow spreads
+    rather than drops.
+*/
+.flow .cover {
+    box-shadow: 0 0 1.5rem rgb(0 0 0 / 45%);
+}
+
+/*
+    The fore edge — the stack of paper down the open side, opposite the spine. A jacket with
+    nothing there reads as a printed rectangle standing on end; a few millimetres of page block is
+    most of what tells the eye it is looking at a book.
+
+    Always on the right, because every jacket in the deck faces us: the spine is on the left of a
+    front cover whichever way the book is leaning. Sized from the jacket's own width so it stays in
+    proportion on a phone. Above .cover__art, so a real cover does not paint over it.
+*/
+.flow .cover::after {
+    content: "";
+    position: absolute;
+    top: 1.5%;
+    right: 0;
+    bottom: 1.5%;
+    z-index: 1;
+    width: calc(var(--cover-w) * 0.035);
+    border-radius: 0 2px 2px 0;
+    background:
+        /* Single leaves, just visible — without them the block reads as a white stripe. */
+        repeating-linear-gradient(to right, rgb(90 76 56 / 22%) 0 1px, transparent 1px 3px),
+        linear-gradient(to right, rgb(0 0 0 / 30%), #efe9dd 30%, #fdfaf4 65%, rgb(120 104 78 / 45%));
+}
+
+/*
+    Sat in the last of the stage rather than under it. The reflection has faded to nothing well
+    before the stage ends, so this costs no height at all and puts the title where iTunes put it:
+    in the dark just below the book, over the tail of its own reflection.
+*/
+.flow__caption {
+    position: absolute;
+    inset-inline: 0;
+    /* Clear of the bottom of the poster, not sat on the line where it ends. */
+    bottom: clamp(1.25rem, 2.5vw, 2rem);
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    text-align: center;
+    color: var(--hero-ink);
+}
+
+.flow__caption strong {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1.15rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+.flow__caption span {
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    opacity: 0.65;
+}
+
+/*
+    A jacket, drawn rather than photographed: pale board, a serif title, a rule, the author in
+    small caps, and a darker strip down the spine edge. Set like a book because a coloured
+    rectangle with a name on it reads as a missing image.
+*/
+.cover {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    /*
+        The jacket standing on its own reflection is what makes the deck read as objects on a
+        surface rather than pictures on a page. WebKit-only, and deliberately left as an
+        enhancement: Firefox gets the deck without the floor, which is a poorer picture and not a
+        broken one. There is no property that reflects an <img> without drawing it twice, and
+        drawing seventeen jackets twice to please one browser is the worse trade.
+    */
+    /*
+        The mask is read in the jacket's own coordinates and flipped along with it, so it runs
+        bottom-up: the end of this gradient is the edge that touches the book. Written the obvious
+        way round it fades to nothing exactly where the reflection should be strongest, and leaves
+        a band of it floating below with a gap in between.
+    */
+    -webkit-box-reflect: below 1px linear-gradient(transparent 62%, rgb(0 0 0 / 26%) 84%, rgb(0 0 0 / 78%));
+    border-radius: 3px;
+    padding: 1rem 0.85rem;
+    border-left: 4px solid rgb(0 0 0 / 16%);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgb(0 0 0 / 25%), 0 12px 24px rgb(0 0 0 / 30%);
+    text-wrap: balance;
+}
+
+.cover__title {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 0.95rem;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+}
+
+.cover__rule {
+    width: 1.6rem;
+    height: 1px;
+    margin: 0.55rem 0;
+    background: currentColor;
+    opacity: 0.45;
+}
+
+.cover__author {
+    font-size: 0.6rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    opacity: 0.7;
+}
+
+/* The real jacket, over the drawn one. Nothing here hides the drawn jacket when this fails to
+   load: an <img> with no image simply has nothing to paint, and what is behind it shows. */
+.cover__art {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/*
+    In the deck the jackets are held back until every one of them has arrived, and then brought up
+    together — see CoverFlow.razor. Seventeen covers landing one by one in front of the reader is
+    the deck assembling itself on screen; the same seventeen arriving at once is a picture. What
+    shows meanwhile is the drawn jacket underneath, which is a book either way.
+*/
+.flow .cover__art {
+    opacity: 0;
+    transition: opacity 420ms var(--ease);
+}
+
+.flow--dressed .cover__art {
+    opacity: 1;
+}
+
+/* Six made-up jackets, so the shelf has the variety a real one does. */
+.cover--0 { background: #e8dfd1; color: #3b3227; }
+.cover--1 { background: #c2d3cc; color: #24352e; }
+.cover--2 { background: #dcc0a6; color: #43301f; }
+.cover--3 { background: #b8c6d7; color: #26303d; }
+.cover--4 { background: #d9b8b1; color: #402724; }
+.cover--5 { background: #cfc8a6; color: #38341f; }
+
+.hero__greeting {
+    margin: 0 0 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    opacity: 0.75;
+}
+
+.hero__title {
+    font-size: clamp(2.6rem, 9vw, 4.25rem);
+    line-height: 0.95;
+    letter-spacing: -0.04em;
+    font-weight: 800;
+    margin: 0;
+}
+
+.hero__pitch {
+    margin: 1rem auto 0;
+    font-size: clamp(1.05rem, 2.6vw, 1.35rem);
+    line-height: 1.35;
+    max-width: 30ch;
+    opacity: 0.92;
+}
+
+.hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    margin-top: 1.5rem;
+}
+
+/* On the wash, the filled action is the light one: an accent fill would sink into it. */
+.hero__actions button {
+    background: var(--hero-ink);
+    color: var(--hero-deep);
+    font-weight: 650;
+    padding: 0.7rem 1.5rem;
+    font-size: 1.02rem;
+    border-radius: 12px;
+}
+
+.hero__actions button:hover:not(:disabled) {
+    background: rgb(255 255 255 / 88%);
+}
+
+.hero__actions input {
+    background: rgb(255 255 255 / 12%);
+    border-color: rgb(255 255 255 / 28%);
+    color: var(--hero-ink);
+    padding: 0.7rem 0.9rem;
+    border-radius: 12px;
+}
+
+.hero__actions input::placeholder {
+    color: rgb(255 255 255 / 60%);
+}
+
+.hero__actions [role="alert"] {
+    flex-basis: 100%;
+    font-size: 0.85rem;
+    opacity: 0.85;
+}
+
+.hero__actions button:focus-visible,
+.hero__actions input:focus-visible {
+    outline-color: var(--hero-ink);
+}
+
+.pitch {
+    max-width: 34rem;
+    margin: 3rem auto;
+    text-align: center;
+    font-size: clamp(1.1rem, 3vw, 1.4rem);
+    line-height: 1.45;
+    letter-spacing: -0.015em;
+    color: var(--ink-soft);
+}
+
+.pitch strong {
+    color: var(--ink);
+    font-weight: 650;
+}
+
 /* Shelf ------------------------------------------------------------------- */
 
 .shelf__heading {
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
+    flex-direction: column;
+    gap: 0.85rem;
+    margin-bottom: 1.25rem;
 }
 
 .entries {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0.7rem;
 }
 
 .entry {
     display: flex;
-    gap: 1rem;
-    padding: 0.9rem;
+    gap: 1.1rem;
+    padding: 1.1rem;
     border: 1px solid var(--line);
     border-radius: var(--radius);
     background: var(--card);
     box-shadow: var(--shadow);
+    transition: box-shadow var(--quick) var(--ease);
+}
+
+.entry:hover {
+    box-shadow: var(--shadow-lifted);
 }
 
 .entry--working {
@@ -236,27 +873,27 @@ button.danger {
 .result img,
 .result__cover-placeholder {
     flex: 0 0 auto;
-    width: 3rem;
-    border-radius: 4px;
+    width: 3.25rem;
+    border-radius: 8px;
     overflow: hidden;
 }
 
 .entry__cover img {
     display: block;
     width: 100%;
-    border-radius: 4px;
+    border-radius: 8px;
 }
 
 .entry__cover-placeholder,
 .result__cover-placeholder {
     display: grid;
     place-items: center;
-    height: 4.5rem;
+    aspect-ratio: 2 / 3;
     background: var(--accent-soft);
     color: var(--accent);
-    font-weight: 600;
+    font-weight: 700;
     font-size: 1.2rem;
-    border-radius: 4px;
+    border-radius: 8px;
 }
 
 .entry__body {
@@ -265,11 +902,12 @@ button.danger {
 }
 
 .entry__title {
-    line-height: 1.35;
+    line-height: 1.3;
+    font-size: 1.05rem;
 }
 
 .entry__authors {
-    margin: 0.1rem 0 0.5rem;
+    margin: 0.15rem 0 0.7rem;
     color: var(--ink-soft);
     font-size: 0.9rem;
 }
@@ -277,14 +915,14 @@ button.danger {
 .entry__status {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.85rem;
     flex-wrap: wrap;
-    margin-bottom: 0.6rem;
+    margin-bottom: 0.5rem;
 }
 
 .status-select {
     font-size: 0.85rem;
-    padding: 0.2rem 0.4rem;
+    padding: 0.3rem 0.5rem;
 }
 
 .status-select--reading {
@@ -296,21 +934,22 @@ button.danger {
     background: var(--accent-soft);
 }
 
+/* Pulled out to the card's edge, so a row of quiet actions lines up with the title above it. */
 .entry__actions {
     display: flex;
-    gap: 0.9rem;
+    gap: 0.15rem;
     flex-wrap: wrap;
+    margin-left: -0.6rem;
     font-size: 0.85rem;
 }
 
 .entry__reasons {
-    margin: 0.6rem 0 0;
-    padding: 0.5rem 0.75rem;
+    margin: 0.75rem 0 0;
+    padding: 0.6rem 0.85rem;
     list-style: none;
-    border-left: 3px solid var(--danger);
     background: var(--danger-soft);
     color: var(--danger);
-    border-radius: 0 4px 4px 0;
+    border-radius: var(--radius-sm);
     font-size: 0.9rem;
 }
 
@@ -323,7 +962,7 @@ button.danger {
 .progress {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.6rem;
     flex: 1 1 12rem;
     min-width: 0;
 }
@@ -332,7 +971,7 @@ button.danger {
     flex: 1 1 auto;
     height: 6px;
     min-width: 4rem;
-    background: var(--line);
+    background: var(--fill-hover);
     border-radius: 999px;
     overflow: hidden;
 }
@@ -341,27 +980,31 @@ button.danger {
     height: 100%;
     background: var(--accent);
     border-radius: 999px;
+    transition: width var(--quick) var(--ease);
 }
 
 .progress__label {
     font-size: 0.8rem;
     color: var(--ink-soft);
     white-space: nowrap;
+    font-variant-numeric: tabular-nums;
 }
 
 /* Panels ------------------------------------------------------------------ */
 
 .panel {
-    margin-top: 0.75rem;
-    padding: 0.75rem;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--page);
+    margin-top: 0.85rem;
+    padding: 1rem;
+    border-radius: var(--radius-sm);
+    background: var(--fill);
 }
 
 .panel--danger {
-    border-color: var(--danger);
     background: var(--danger-soft);
+}
+
+.panel > p:first-child {
+    margin-top: 0;
 }
 
 .field {
@@ -369,7 +1012,7 @@ button.danger {
     align-items: center;
     gap: 0.5rem;
     flex-wrap: wrap;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.7rem;
 }
 
 .field:last-child {
@@ -393,9 +1036,14 @@ button.danger {
 
 .hint {
     flex-basis: 100%;
-    margin: 0.15rem 0 0;
+    margin: 0.25rem 0 0;
     font-size: 0.8rem;
     color: var(--ink-faint);
+}
+
+/* A hint that is telling the reader they got something wrong, rather than helping them along. */
+.hint--bad {
+    color: var(--danger);
 }
 
 .session-form {
@@ -414,9 +1062,9 @@ button.danger {
 
 .session-form__actions {
     display: flex;
-    gap: 0.75rem;
+    gap: 0.5rem;
     align-items: center;
-    margin-top: 0.75rem;
+    margin-top: 0.9rem;
 }
 
 /* Sessions ---------------------------------------------------------------- */
@@ -430,9 +1078,9 @@ button.danger {
 .session {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.6rem;
     flex-wrap: wrap;
-    padding: 0.4rem 0;
+    padding: 0.35rem 0;
     font-size: 0.9rem;
     border-bottom: 1px solid var(--line);
 }
@@ -443,7 +1091,7 @@ button.danger {
 
 .session__what {
     font-variant-numeric: tabular-nums;
-    font-weight: 500;
+    font-weight: 600;
 }
 
 .session__when,
@@ -458,10 +1106,15 @@ button.danger {
 
 /* Search ------------------------------------------------------------------ */
 
+/* Its own surface rather than a rule across the page: finding a book is a different job from
+   reading the shelf, and it stops the two running together into one column of cards. */
 .search {
-    margin-top: 2.5rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--line);
+    margin-top: 2.25rem;
+    padding: 1.25rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--card);
+    box-shadow: var(--shadow);
 }
 
 .search__inputs {
@@ -475,23 +1128,32 @@ button.danger {
     flex: 1 1 8rem;
 }
 
+.search__inputs button {
+    flex: 0 0 auto;
+    padding-inline: 1.25rem;
+}
+
 .results {
     list-style: none;
     margin: 0;
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.4rem;
 }
 
 .result {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.5rem;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--card);
+    gap: 0.85rem;
+    padding: 0.6rem;
+    border-radius: var(--radius-sm);
+    background: var(--fill);
+    transition: background-color var(--quick) var(--ease);
+}
+
+.result:hover {
+    background: var(--fill-hover);
 }
 
 .result img {
@@ -501,7 +1163,6 @@ button.danger {
 
 .result__cover-placeholder {
     width: 2.5rem;
-    height: 3.5rem;
 }
 
 .result__body {
@@ -515,33 +1176,76 @@ button.danger {
     font-size: 0.85rem;
 }
 
+/* Smaller than a page-level action: it is one row's button, repeated down the list. */
+.result button {
+    flex: 0 0 auto;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.9rem;
+}
+
+.pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.1rem;
+    font-size: 0.9rem;
+}
+
+/* Adding by hand ---------------------------------------------------------- */
+
+/* A form, not a row of controls: labels sit above their boxes and the boxes run the full width,
+   so five fields read as a column rather than as five differently indented lines. */
+.by-hand .field {
+    display: block;
+    margin-bottom: 0.85rem;
+}
+
+.by-hand .field label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-weight: 550;
+    color: var(--ink);
+}
+
+.by-hand .field input {
+    width: 100%;
+}
+
+.by-hand .field input[type="number"] {
+    width: 8rem;
+}
+
+.by-hand h3 {
+    margin-bottom: 0.15rem;
+}
+
+.by-hand > .hint {
+    margin: 0 0 1.1rem;
+}
+
 /* Page-level messages ----------------------------------------------------- */
 
 .notice {
-    padding: 0.6rem 0.85rem;
-    border-left: 3px solid var(--accent);
+    padding: 0.7rem 0.95rem;
     background: var(--accent-soft);
-    border-radius: 0 4px 4px 0;
+    border-radius: var(--radius-sm);
+    margin: 1rem 0 0;
 }
 
 /* Something went wrong, as opposed to something worth knowing. The accent reads as reassuring,
    which is the wrong note for the reason a sign-in failed. */
 .notice--bad {
-    border-left-color: var(--danger);
     background: var(--danger-soft);
     color: var(--danger);
 }
 
 .empty {
-    padding: 1.5rem;
+    padding: 2rem 1.5rem;
     text-align: center;
     color: var(--ink-soft);
     border: 1px dashed var(--line-strong);
     border-radius: var(--radius);
-}
-
-.welcome {
-    max-width: 30rem;
 }
 
 #blazor-error-ui {
@@ -555,12 +1259,75 @@ button.danger {
     border-top: 1px solid var(--danger);
 }
 
-@media (max-width: 30rem) {
+/* Translucency ------------------------------------------------------------ */
+
+/*
+    Only where the blur is actually supported. Everywhere else the surfaces keep the opaque --card
+    they are given above, because a translucent panel with nothing blurring behind it is text on
+    top of whatever happens to be underneath.
+*/
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    header {
+        background: var(--card-raised);
+        -webkit-backdrop-filter: var(--blur);
+        backdrop-filter: var(--blur);
+    }
+
+    .entry,
+    .search {
+        background-color: var(--card-translucent);
+        -webkit-backdrop-filter: var(--blur);
+        backdrop-filter: var(--blur);
+    }
+
+    /* Controls take the tint but not a blur of their own: they sit on surfaces that are already
+       blurring, and blurring an already-blurred backdrop only muddies it. Not <select>: see above. */
+    input {
+        background-color: var(--card-translucent);
+    }
+}
+
+/* Motion ------------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+
+    /* The deck itself stops turning too, which is a decision the component has to make rather
+       than the stylesheet: see CoverFlow.razor. Killing the transitions here would otherwise
+       leave it snapping from book to book, which is more startling than the sliding was. */
+
+    button:active:not(:disabled) {
+        transform: none;
+    }
+}
+
+@media (max-width: 40rem) {
     main {
-        padding: 1rem;
+        --main-pad-top: 1.25rem;
+
+        padding: var(--main-pad-top) 1rem 4rem;
+    }
+
+    .hero {
+        min-height: min(88vh, 36rem);
     }
 
     .entry {
-        gap: 0.75rem;
+        gap: 0.85rem;
+        padding: 0.9rem;
+    }
+
+    .search {
+        padding: 1rem;
+    }
+
+    .field label {
+        min-width: 5rem;
     }
 }

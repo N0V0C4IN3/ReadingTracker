@@ -2,6 +2,15 @@
     <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
         <Found Context="routeData">
             <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                @*
+                    Without this the framework shows its own default — the words "Authorizing..."
+                    in the top-left corner, unstyled — every time the app starts and asks who the
+                    reader is. It is the first thing anyone sees after the boot screen, so it gets
+                    the boot screen's own quiet placeholder rather than a debug string.
+                *@
+                <Authorizing>
+                    <Settling />
+                </Authorizing>
                 <NotAuthorized>
                     @if (context.User.Identity?.IsAuthenticated is true)
                     {

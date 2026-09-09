@@ -1,0 +1,46 @@
+@*
+    PROTOTYPE — throwaway. Variant B, "Split deck".
+
+    No poster and no dark ground: the page keeps the app's own light palette, the words take the
+    left half, and the books are a fanned deck on the right — overlapping, tilted, the way books
+    actually sit when someone puts a pile down. Nothing slides; the deck breathes.
+
+    The bet: the app is a quiet, papery thing, and a landing screen that looks like the app is
+    more honest than one that looks like an advertisement for it.
+*@
+
+<section class="p-split">
+    <div class="p-split__words">
+        <p class="p-eyebrow p-eyebrow--ink">@Greeting</p>
+        <h1 class="p-display p-display--ink">ReadingTracker</h1>
+        <p class="p-lede p-lede--ink">
+            Track what you are reading, and how far through it you are.
+        </p>
+        <div class="p-actions">@CallToAction</div>
+    </div>
+
+    <div class="p-deck" aria-hidden="true">
+        @* Back to front, so the one on top is the last in the source. *@
+        @foreach (var (book, position) in Deck)
+        {
+            <div class="p-deck__card" style="--at: @position">
+                <PrototypeCover Book="book" Real="RealCovers" />
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public required string Greeting { get; set; }
+
+    [Parameter]
+    public bool RealCovers { get; set; }
+
+    [Parameter]
+    public RenderFragment? CallToAction { get; set; }
+
+    /// <summary>A handful, not the whole list: a deck is a pile you could pick up.</summary>
+    private static IEnumerable<(PrototypeBook Book, int Position)> Deck =>
+        PrototypeBooks.All.Take(6).Select((book, position) => (book, position));
+}

@@ -1,0 +1,39 @@
+@*
+    PROTOTYPE — throwaway. Variant A, "Marquee".
+
+    A poster. Words on a full-bleed dark ground, one strip of jackets sliding past underneath.
+    The shape currently in main, kept as a variant so the others have something to beat.
+*@
+
+<section class="p-marquee">
+    <div class="p-marquee__words">
+        <p class="p-eyebrow">@Greeting</p>
+        <h1 class="p-display">ReadingTracker</h1>
+        <p class="p-lede">Track what you are reading, and how far through it you are.</p>
+        <div class="p-actions">@CallToAction</div>
+    </div>
+
+    <div class="p-strip" aria-hidden="true">
+        <div class="p-strip__track">
+            @* Twice through, so the loop has no seam where it restarts. *@
+            @for (var pass = 0; pass < 2; pass++)
+            {
+                @foreach (var book in PrototypeBooks.All)
+                {
+                    <PrototypeCover Book="book" Real="RealCovers" />
+                }
+            }
+        </div>
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public required string Greeting { get; set; }
+
+    [Parameter]
+    public bool RealCovers { get; set; }
+
+    [Parameter]
+    public RenderFragment? CallToAction { get; set; }
+}

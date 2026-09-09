@@ -6,8 +6,49 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ReadingTracker</title>
     <base href="/" />
+
+    <!-- The welcome screen's jackets come from here, and each one is a redirect: Open Library
+         hands off to archive.org, which extracts the image from inside a zip. Opening the
+         connections while the runtime is still downloading takes the handshakes off the front of
+         that chain. -->
+    <link rel="preconnect" href="https://covers.openlibrary.org" />
+    <link rel="preconnect" href="https://archive.org" />
+
+    <!--
+        The same jackets Components/CoverFlow.razor draws, fetched now rather than when the deck
+        first renders. Starting the runtime takes several seconds during which the connection is
+        doing nothing, and each of these is a three-hop redirect ending in an image pulled out of a
+        zip — left until the deck appears, they arrive one at a time in front of the reader.
+
+        prefetch rather than preload on purpose: preload warns in the console for anything not used
+        within seconds, and a reader who is already signed in never sees this deck. Low priority is
+        no loss here, because nothing else wants the connection while the runtime is starting.
+
+        KEEP IN STEP with the Wall list in Components/CoverFlow.razor. An id that falls out of step
+        costs a jacket its head start; it does not break anything.
+    -->
+    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/12356249-M.jpg" />
+    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/252882-M.jpg" />
+    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/10544254-M.jpg" />
+    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/8235363-M.jpg" />
+    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/12474938-M.jpg" />
+    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/12216503-M.jpg" />
+    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/12824691-M.jpg" />
+    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/11248037-M.jpg" />
+    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/6907719-M.jpg" />
+    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/12818862-M.jpg" />
+    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/13116014-M.jpg" />
+    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/8750241-M.jpg" />
+    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/13322313-M.jpg" />
+    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/8216412-M.jpg" />
+    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/12621988-M.jpg" />
+    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/8242253-M.jpg" />
+    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/181493-M.jpg" />
     <link rel="preload" id="webassembly" />
     <link rel="stylesheet" href="css/app.css" />
+    <!-- PROTOTYPE, throwaway: the welcome-screen variants behind ?variant=. Delete this line, the
+         file it points at, and Components/WelcomePrototype once one of them has won. -->
+    <link rel="stylesheet" href="css/welcome-prototype.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <!-- No link to ReadingTracker.Web.styles.css: that bundle is only built when a component
          has scoped styles in a .razor.css file, and none do — everything is in css/app.css. The
@@ -16,11 +57,57 @@
          the link back alongside the first .razor.css. -->
 
     <script type="importmap"></script>
+
+    <!-- Inline rather than a file of its own: it is three lines, and a separate script would cost
+         a request on every page load to answer one question asked once. The welcome screen's deck
+         of covers turns by itself, which is exactly the kind of movement someone asks the platform
+         to stop; CSS can only reach the transitions, not the timer driving them. -->
+    <script>
+        window.readingTracker = {
+            prefersStillness: () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+
+            // Resolves once every jacket in the deck has settled — arrived, or given up — so they
+            // can be shown as one picture instead of appearing in whatever order the network
+            // happens to deliver them. The drawn jackets underneath hold the shape meanwhile.
+            //
+            // Capped, because "all of them" cannot be waited on indefinitely: one cover stuck
+            // behind a slow redirect must not keep the other sixteen hidden.
+            coversSettled: (selector, capMs) => {
+                const arriving = Array.from(document.querySelectorAll(selector))
+                    .filter(img => !img.complete)
+                    .map(img => new Promise(settled => {
+                        img.addEventListener("load", settled, { once: true });
+                        img.addEventListener("error", settled, { once: true });
+                    }));
+
+                if (arriving.length === 0) {
+                    return Promise.resolve();
+                }
+
+                return Promise.race([
+                    Promise.all(arriving),
+                    new Promise(giveUp => setTimeout(giveUp, capMs))
+                ]);
+            }
+        };
+    </script>
 </head>
 
 <body>
+    <!-- Replaced wholesale the moment the root component renders, so nothing here needs taking
+         down afterwards. The bar is driven by --blazor-load-percentage, which the runtime sets on
+         the document as it pulls the framework down: a real measure of the wait, not a spinner
+         going round to look busy. -->
     <div id="app">
-        <p style="padding: 1.5rem; font-family: system-ui, sans-serif;">Loading ReadingTracker…</p>
+        <div class="splash">
+            <div class="splash__books" aria-hidden="true">
+                <span></span><span></span><span></span><span></span>
+            </div>
+            <p class="splash__title">ReadingTracker</p>
+            <div class="splash__track" role="progressbar" aria-label="Loading ReadingTracker">
+                <div class="splash__fill"></div>
+            </div>
+        </div>
     </div>
 
     <div id="blazor-error-ui">

@@ -1,0 +1,96 @@
+@using Microsoft.AspNetCore.Components.WebAssembly.Hosting
+@inject NavigationManager Navigation
+@inject IWebAssemblyHostEnvironment Environment
+
+@*
+    PROTOTYPE — throwaway.
+
+    The floating bar that flips between welcome-screen variants. Deliberately loud and unlike
+    anything else in the app, so it is never mistaken for part of the design being judged, and
+    rendered only in Development so a stray merge cannot ship it to a reader.
+*@
+
+@if (Environment.IsDevelopment())
+{
+    <div class="p-switcher" @onkeydown="CycleOnArrowsAsync" tabindex="-1" @ref="_bar">
+        <button type="button" class="p-switcher__arrow" @onclick="() => Step(-1)" aria-label="Previous variant">
+            ‹
+        </button>
+
+        <span class="p-switcher__label">@Current.Key <span>@Current.Name</span></span>
+
+        <button type="button" class="p-switcher__arrow" @onclick="() => Step(1)" aria-label="Next variant">
+            ›
+        </button>
+
+        <span class="p-switcher__divider"></span>
+
+        <button type="button"
+                class="p-switcher__toggle @(RealCovers ? "p-switcher__toggle--on" : null)"
+                @onclick="ToggleCovers">
+            @(RealCovers ? "Real covers" : "Drawn jackets")
+        </button>
+    </div>
+}
+
+@code {
+    /// <summary>The variants, in the order the arrows walk through them.</summary>
+    public static readonly (string Key, string Name)[] Variants =
+    [
+        ("A", "Marquee"),
+        ("B", "Split deck"),
+        ("C", "Stage"),
+        ("D", "Live shelf"),
+    ];
+
+    [Parameter, EditorRequired]
+    public required string Variant { get; set; }
+
+    [Parameter]
+    public bool RealCovers { get; set; }
+
+    private ElementReference _bar;
+
+    private (string Key, string Name) Current =>
+        Variants.FirstOrDefault(variant => variant.Key == Variant, Variants[0]);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // So the arrow keys land somewhere without the reader having to click the bar first.
+        if (firstRender && Environment.IsDevelopment())
+        {
+            await _bar.FocusAsync();
+        }
+    }
+
+    private void Step(int direction)
+    {
+        var at = Array.FindIndex(Variants, variant => variant.Key == Variant);
+        var next = ((at < 0 ? 0 : at) + direction + Variants.Length) % Variants.Length;
+
+        Go(Variants[next].Key, RealCovers);
+    }
+
+    private void ToggleCovers() => Go(Variant, !RealCovers);
+
+    private Task CycleOnArrowsAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "ArrowLeft")
+        {
+            Step(-1);
+        }
+        else if (e.Key == "ArrowRight")
+        {
+            Step(1);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Both choices live in the URL, so a variant worth talking about can be sent to someone else
+    /// as a link and comes back the same after a reload.
+    /// </summary>
+    private void Go(string variant, bool realCovers) =>
+        Navigation.NavigateTo($"/?variant={variant}&covers={(realCovers ? "real" : "drawn")}", replace: true);
+}

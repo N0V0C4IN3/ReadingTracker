@@ -1,0 +1,243 @@
+@implements IDisposable
+@inject IJSRuntime JS
+@using System.Globalization
+
+@*
+    A deck of jackets seen at an angle, one held face-on at the front and the rest leaning away to
+    either side — the shape iTunes used for album art. It mostly stands still: about once a minute
+    it turns a single place, one way or the other, which reads as a thing that is alive rather than
+    a thing that is scrolling. Hovering holds it where it is, and any book you can see can be
+    clicked to bring it to the front.
+
+    It lives in its own component rather than in the welcome screen because it re-renders on a
+    timer, and there is no reason for the rest of that page to re-render with it.
+*@
+
+<div class="flow @(_dressed ? "flow--dressed" : null)" @onmouseenter="Hold" @onmouseleave="Release">
+    <div class="flow__stage">
+        @foreach (var (book, position) in Wall.Select((book, at) => (book, at)))
+        {
+            var place = Place(position);
+
+            @*
+                A button, because it does something when you click it — and one that is genuinely
+                disabled once it is too far round to see, so the far side of the deck is neither a
+                tab stop nor something a screen reader offers.
+            *@
+            <button @key="book.Title"
+                    type="button"
+                    class="flow__slot @(place.Lit ? "flow__slot--lit" : null)"
+                    style="@place.Style"
+                    disabled="@(!place.Lit)"
+                    aria-label="Show @book.Title by @book.Author"
+                    @onclick="() => Show(position)">
+                <span class="cover cover--@(position % CoverTones)">
+                    <span class="cover__title">@book.Title</span>
+                    <span class="cover__rule"></span>
+                    <span class="cover__author">@book.Author</span>
+
+                    @*
+                        Laid over the drawn jacket, never instead of it: a cover that is slow,
+                        throttled or gone leaves the drawn one showing rather than a hole.
+                        Deliberately not lazy — a jacket that only loads once the deck has turned
+                        it to the front arrives visibly late, in front of the reader.
+                    *@
+                    <img class="cover__art"
+                         src="https://covers.openlibrary.org/b/id/@(book.CoverId)-M.jpg"
+                         alt="" />
+                </span>
+            </button>
+        }
+    </div>
+
+    <p class="flow__caption">
+        <strong>@Front.Title</strong>
+        <span>@Front.Author</span>
+    </p>
+</div>
+
+@code {
+    /// <summary>
+    /// How long a book stays at the front. Long, deliberately: a deck that turns every few seconds
+    /// is a thing being scrolled at you, and the eye never settles on any of it. At half a minute
+    /// the movement is still a surprise rather than a rhythm.
+    /// </summary>
+    private static readonly TimeSpan Dwell = TimeSpan.FromSeconds(30);
+
+    /// <summary>How many jacket designs the stylesheet draws.</summary>
+    private const int CoverTones = 6;
+
+    /// <summary>
+    /// The books in the deck: long out of copyright, with Open Library's cover for each.
+    ///
+    /// The ids are written down rather than looked up. A welcome screen that has to search an API
+    /// before it knows what to draw is a welcome screen that waits — and Open Library rate limits
+    /// a run of searches, so the wait is not hypothetical. Fetching seventeen known images is a
+    /// different thing from asking seventeen questions first.
+    ///
+    /// Every title here has been checked to have a cover. That is the curation the drawn jackets
+    /// underneath cannot do for us: one drawn jacket in a deck of photographed ones does not read
+    /// as a considered fallback, it reads as a broken image. Anna Karenina was dropped for exactly
+    /// this reason — Open Library has no cover for it.
+    ///
+    /// wwwroot/index.html prefetches these same covers while the runtime is still starting, so
+    /// that by the time this renders they are already in the cache. Keep the two lists in step —
+    /// an id only in one place costs that jacket its head start rather than breaking anything.
+    /// </summary>
+    private static readonly (string Title, string Author, int CoverId)[] Wall =
+    [
+        ("Frankenstein", "Mary Shelley", 12356249),
+        ("Middlemarch", "George Eliot", 252882),
+        ("Moby-Dick", "Herman Melville", 10544254),
+        ("Jane Eyre", "Charlotte Brontë", 8235363),
+        ("The Odyssey", "Homer", 12474938),
+        ("Dracula", "Bram Stoker", 12216503),
+        ("Persuasion", "Jane Austen", 12824691),
+        ("Walden", "H. D. Thoreau", 11248037),
+        // Not 9009316, whose cover art reads "THE TIME MASCHINE" in display type.
+        ("The Time Machine", "H. G. Wells", 6907719),
+        ("Wuthering Heights", "Emily Brontë", 12818862),
+        ("Crime and Punishment", "F. Dostoevsky", 13116014),
+        ("The Awakening", "Kate Chopin", 8750241),
+        ("Great Expectations", "Charles Dickens", 13322313),
+        ("Dubliners", "James Joyce", 8216412),
+        ("The Iliad", "Homer", 12621988),
+        ("North and South", "E. Gaskell", 8242253),
+        ("The Turn of the Screw", "Henry James", 181493),
+    ];
+
+    /// <summary>
+    /// How long the deck will wait for the last jacket before showing the ones it has. Long enough
+    /// to cover a slow connection, short enough that a cover service having a bad day does not
+    /// leave a reader looking at drawn rectangles for as long as they stay on the page.
+    /// </summary>
+    private static readonly TimeSpan LongestWaitForJackets = TimeSpan.FromSeconds(6);
+
+    /// <summary>
+    /// Raised once every jacket is in place. The welcome screen waits on this before showing
+    /// itself, so the deck is never seen being built.
+    /// </summary>
+    [Parameter]
+    public EventCallback Dressed { get; set; }
+
+    private int _at;
+    private bool _dressed;
+    private System.Timers.Timer? _turn;
+
+    private (string Title, string Author, int CoverId) Front => Wall[_at];
+
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        if (!first)
+        {
+            return;
+        }
+
+        // index.html starts fetching the jackets while the runtime is still loading, which usually
+        // has them here before this renders — but not always, and a deck that fills in one book at
+        // a time in front of the reader looks like it is still being built. Held back until they
+        // have all arrived, then shown as one picture. This comes before the stillness check
+        // because that one can return early, and a deck that never dresses is worse than one that
+        // never turns.
+        await JS.InvokeVoidAsync(
+            "readingTracker.coversSettled", ".flow__stage .cover__art", LongestWaitForJackets.TotalMilliseconds);
+
+        _dressed = true;
+        StateHasChanged();
+
+        await Dressed.InvokeAsync();
+
+        // A deck that turns on its own is exactly the kind of movement someone asks the platform
+        // to stop. Asked once, after the first paint, so the deck is on screen either way and only
+        // the turning waits on the answer.
+        if (await JS.InvokeAsync<bool>("readingTracker.prefersStillness"))
+        {
+            return;
+        }
+
+        _turn = new System.Timers.Timer(Dwell.TotalMilliseconds);
+        _turn.Elapsed += async (_, _) =>
+        {
+            // One place, either way. Always turning the same way makes a queue of books going past;
+            // picking a side makes the deck look like it is being idly leafed through.
+            var way = Random.Shared.Next(2) == 0 ? 1 : -1;
+
+            _at = (_at + way + Wall.Length) % Wall.Length;
+            await InvokeAsync(StateHasChanged);
+        };
+        _turn.Start();
+    }
+
+    /// <summary>
+    /// Held still while the cursor is on the deck: a jacket that turns away as it is being looked
+    /// at — or worse, as it is being aimed at — is a jacket nobody gets to look at. Stopping the
+    /// timer rather than skipping a tick means the book on show keeps a full turn once the cursor
+    /// leaves, instead of moving the moment it does.
+    /// </summary>
+    private void Hold() => _turn?.Stop();
+
+    private void Release() => _turn?.Start();
+
+    /// <summary>
+    /// Brings a book to the front, the way clicking one in the deck should. The wait starts again
+    /// from here: having just chosen a book to look at, a reader should get the full minute with
+    /// it rather than whatever was left of someone else's.
+    /// </summary>
+    private void Show(int position)
+    {
+        _at = position;
+
+        if (_turn is { } turning)
+        {
+            turning.Stop();
+            turning.Start();
+        }
+    }
+
+    /// <summary>
+    /// Where a book stands in the deck, worked out from how far round it is from the front.
+    ///
+    /// The distance is counted the short way round, so the deck turns by one place rather than
+    /// every book stampeding back past the front when the front wraps to the start.
+    /// </summary>
+    private Slot Place(int position)
+    {
+        var raw = (position - _at + Wall.Length) % Wall.Length;
+        var offset = raw > Wall.Length / 2 ? raw - Wall.Length : raw;
+        var away = Math.Abs(offset);
+        var lean = Math.Sign(offset);
+
+        return new Slot(
+            // The deck bunches as it recedes: the first neighbour steps a long way clear of the
+            // book at the front, each one after it only a little further.
+            X: lean * (0.72 + (away - 1) * 0.38),
+            Depth: away * 2.8,
+            // One angle for everyone behind the front, not one that grows: multiplying it would
+            // turn the third book past the edge and show its back.
+            Turn: lean * -64,
+            Scale: 1 - Math.Min(away, 5) * 0.04,
+            Fade: away <= 3 ? 1 : Math.Max(0, 1 - (away - 3) * 0.5),
+            Layer: Wall.Length - away,
+            // Anything still on screen is something a reader can aim at, and nothing else is: the
+            // far side of the deck is drawn at zero opacity, and an invisible button is a trap.
+            Lit: away <= 4);
+    }
+
+    /// <summary>
+    /// A book's place in the deck, handed to the stylesheet as plain numbers so the CSS keeps the
+    /// units and this keeps the arithmetic.
+    /// </summary>
+    private readonly record struct Slot(
+        double X, double Depth, int Turn, double Scale, double Fade, int Layer, bool Lit)
+    {
+        /// <remarks>
+        /// Formatted invariantly on purpose. This runs in the reader's browser under the reader's
+        /// culture, and half of Europe writes 0,58 — which CSS reads as two values, or as nothing.
+        /// </remarks>
+        public string Style => string.Create(
+            CultureInfo.InvariantCulture,
+            $"--x:{X:0.###};--depth:{Depth:0.##};--turn:{Turn};--scale:{Scale:0.###};--fade:{Fade:0.##};--layer:{Layer}");
+    }
+
+    public void Dispose() => _turn?.Dispose();
+}
