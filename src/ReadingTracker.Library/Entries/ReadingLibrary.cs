@@ -164,8 +164,7 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
     public async Task<(ReadingSession? Session, SessionProblem? Problem)> LogSessionAsync(
         string readerId,
         Guid entryId,
-        decimal startPosition,
-        decimal endPosition,
+        decimal amount,
         DateTimeOffset? occurredAt,
         int? durationMinutes,
         int? totalPages,
@@ -178,7 +177,7 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
             return (null, SessionProblem.NoSuchEntry);
         }
 
-        if (SessionValidation.Check(startPosition, endPosition, entry.TrackingMethod, totalPages) is { } problem)
+        if (SessionValidation.Check(amount, entry.TrackingMethod, totalPages) is { } problem)
         {
             return (null, problem);
         }
@@ -189,8 +188,7 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
         {
             Id = Guid.CreateVersion7(),
             LibraryEntryId = entry.Id,
-            StartPosition = startPosition,
-            EndPosition = endPosition,
+            Amount = amount,
             Unit = entry.TrackingMethod,
 
             // Normalised to UTC rather than stored as it arrived. Postgres `timestamp with time
@@ -231,17 +229,22 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
     }
 
     /// <summary>
-    /// Changes a session the reader already logged. The session keeps the Unit it was recorded
-    /// in: a correction restates what was read, and the reader's own unit is what those numbers
-    /// mean. Leaving <paramref name="occurredAt"/> out keeps the session where it is in time,
-    /// since a session that has already happened cannot stop having happened.
+    /// Changes a session the reader already logged. The correction is stated in
+    /// <paramref name="unit"/> — the method the reader is tracking by now, which is the one the
+    /// history they are looking at is written in — and the session is re-stamped with it. A
+    /// correction is the reader saying what they read, so it is recorded in the unit they said
+    /// it in; only a *change of tracking method* leaves the record alone and converts on the
+    /// way out.
+    ///
+    /// Leaving <paramref name="occurredAt"/> out keeps the session where it is in time, since a
+    /// session that has already happened cannot stop having happened.
     /// </summary>
     public async Task<(ReadingSession? Session, SessionProblem? Problem)> CorrectSessionAsync(
         string readerId,
         Guid entryId,
         Guid sessionId,
-        decimal startPosition,
-        decimal endPosition,
+        decimal amount,
+        TrackingMethod unit,
         DateTimeOffset? occurredAt,
         int? durationMinutes,
         int? totalPages,
@@ -254,14 +257,14 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
             return (null, SessionProblem.NoSuchSession);
         }
 
-        if (SessionValidation.Check(startPosition, endPosition, session.Unit, totalPages) is { } problem)
+        if (SessionValidation.Check(amount, unit, totalPages) is { } problem)
         {
             // Rejected outright, so the session the reader already had is left alone.
             return (null, problem);
         }
 
-        session.StartPosition = startPosition;
-        session.EndPosition = endPosition;
+        session.Amount = amount;
+        session.Unit = unit;
         session.DurationMinutes = durationMinutes;
         // UTC for the same reason as logging one: see LogSessionAsync.
         session.OccurredAt = (occurredAt ?? session.OccurredAt).ToUniversalTime();
@@ -272,8 +275,9 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
     }
 
     /// <summary>
-    /// Removes a session. Progress is derived, so it follows on its own: back to the session
-    /// before it, or to nothing at all when that was the only one.
+    /// Removes a session. Progress is derived, so it follows on its own: the reader's total
+    /// drops by what this session recorded, or there is no total left at all when it was the
+    /// only one.
     /// </summary>
     public async Task<bool> DeleteSessionAsync(
         string readerId,
@@ -310,32 +314,40 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
             .FirstOrDefaultAsync(cancellationToken);
 
     /// <summary>
-    /// Works out how far through each entry its reader is, from the latest ReadingSession.
-    /// Progress is never stored: deriving it is what stops history and position disagreeing.
+    /// Adds up what each reader has read of each entry. Progress is never stored: deriving it
+    /// is what stops the history and the total disagreeing.
+    ///
+    /// Totals are kept apart by unit rather than added up here, because pages and percentages
+    /// can only be added together with a page count — which belongs to the entry, and which the
+    /// caller has already gone to Catalog for.
     /// </summary>
-    public async Task<IReadOnlyDictionary<Guid, ReadingSession>> LatestSessionsAsync(
+    public async Task<IReadOnlyDictionary<Guid, ReadingTotals>> TotalsAsync(
         IReadOnlyCollection<Guid> entryIds,
         CancellationToken cancellationToken)
     {
         if (entryIds.Count == 0)
         {
-            return new Dictionary<Guid, ReadingSession>();
+            return new Dictionary<Guid, ReadingTotals>();
         }
 
-        var sessions = await database.ReadingSessions
+        var totals = await database.ReadingSessions
             .Where(session => entryIds.Contains(session.LibraryEntryId))
+            .GroupBy(session => new { session.LibraryEntryId, session.Unit })
+            .Select(perUnit => new
+            {
+                perUnit.Key.LibraryEntryId,
+                perUnit.Key.Unit,
+                Amount = perUnit.Sum(session => session.Amount),
+            })
             .ToListAsync(cancellationToken);
 
-        return sessions
-            .GroupBy(session => session.LibraryEntryId)
+        return totals
+            .GroupBy(total => total.LibraryEntryId)
             .ToDictionary(
                 perEntry => perEntry.Key,
-                // Latest by when the reading happened, falling back to when it was logged so
-                // two sessions on the same day still have a definite order.
-                perEntry => perEntry
-                    .OrderByDescending(session => session.OccurredAt)
-                    .ThenByDescending(session => session.LoggedAt)
-                    .First());
+                perEntry => perEntry.Aggregate(
+                    ReadingTotals.Nothing,
+                    (running, total) => running.Plus(total.Amount, total.Unit)));
     }
 
     /// <summary>

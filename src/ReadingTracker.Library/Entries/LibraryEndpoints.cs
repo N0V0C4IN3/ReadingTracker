@@ -38,7 +38,7 @@ public static class LibraryEndpoints
                 [.. entries.Select(entry => entry.BookId).Distinct()],
                 cancellationToken);
 
-            var latest = await library.LatestSessionsAsync([.. entries.Select(entry => entry.Id)], cancellationToken);
+            var totals = await library.TotalsAsync([.. entries.Select(entry => entry.Id)], cancellationToken);
 
             return Results.Ok(entries.Select(entry =>
             {
@@ -48,7 +48,7 @@ public static class LibraryEndpoints
                     entry,
                     book,
                     Progress.Of(
-                        latest.GetValueOrDefault(entry.Id),
+                        totals.GetValueOrDefault(entry.Id, ReadingTotals.Nothing),
                         entry.TrackingMethod,
                         entry.EffectivePageCount(book?.TotalPages)));
             }));
@@ -240,15 +240,14 @@ public static class LibraryEndpoints
             var (session, problem) = await library.LogSessionAsync(
                 readerId,
                 entryId,
-                body.StartPosition,
-                body.EndPosition,
+                body.Amount,
                 body.OccurredAt,
                 body.DurationMinutes,
                 totalPages,
                 cancellationToken);
 
             return problem is { } refused
-                ? SessionRefused(refused, totalPages)
+                ? SessionRefused(refused, totalPages, entry.TrackingMethod)
                 : Results.Created(
                     $"/api/library/{entryId}/sessions/{session!.Id}",
                     SessionResponse.From(session, entry.TrackingMethod, totalPages));
@@ -280,15 +279,15 @@ public static class LibraryEndpoints
                 readerId,
                 entryId,
                 sessionId,
-                body.StartPosition,
-                body.EndPosition,
+                body.Amount,
+                entry.TrackingMethod,
                 body.OccurredAt,
                 body.DurationMinutes,
                 totalPages,
                 cancellationToken);
 
             return problem is { } refused
-                ? SessionRefused(refused, totalPages)
+                ? SessionRefused(refused, totalPages, entry.TrackingMethod)
                 : Results.Ok(SessionResponse.From(session!, entry.TrackingMethod, totalPages));
         })
         .WithName("CorrectReadingSession");
@@ -351,12 +350,13 @@ public static class LibraryEndpoints
             (await catalog.TryFindBooksAsync([entry.BookId], cancellationToken))
                 .GetValueOrDefault(entry.BookId)?.TotalPages);
 
-    private static IResult SessionRefused(SessionProblem problem, int? totalPages) => problem switch
+    private static IResult SessionRefused(SessionProblem problem, int? totalPages, TrackingMethod unit) => problem switch
     {
-        SessionProblem.EndsBeforeItStarts => SessionRejected("A session cannot end before it starts."),
-        SessionProblem.RunsPastTheEndOfTheBook => SessionRejected(
-            $"This book has {totalPages} pages, so the session cannot end past that."),
-        SessionProblem.PositionOutOfRange => SessionRejected("That position is outside the book."),
+        SessionProblem.NotAnAmountOfReading => SessionRejected("Say how much you read — more than nothing."),
+
+        SessionProblem.LongerThanTheBook => SessionRejected(unit is TrackingMethod.Percentage
+            ? "A book is only 100% long, so one sitting cannot be more than that."
+            : $"This book has {totalPages} pages, so one sitting cannot be more than that."),
 
         // NoSuchEntry and NoSuchSession: not there, or not this reader's to know about.
         _ => Results.NotFound(),
@@ -414,50 +414,49 @@ public static class LibraryEndpoints
     }
 
     /// <summary>
-    /// Where the reader has got to. Derived from their latest session every time it is asked
-    /// for, never stored, so it cannot disagree with the history it comes from.
+    /// How much of the book the reader has read. Added up from their sessions every time it is
+    /// asked for, never stored, so it cannot disagree with the history it comes from.
+    /// <paramref name="AmountRead"/> and <paramref name="Unit"/> are null together, when the
+    /// reader has logged in both pages and percent and no page count exists to add them up with.
     /// </summary>
-    private sealed record ProgressResponse(decimal Position, string Unit, int? PercentComplete)
+    private sealed record ProgressResponse(decimal? AmountRead, string? Unit, int? PercentComplete)
     {
         public static ProgressResponse From(ReadingProgress progress) =>
-            new(progress.Position, progress.Unit.ToString(), progress.PercentComplete);
+            new(progress.AmountRead, progress.Unit?.ToString(), progress.PercentComplete);
     }
 
     /// <summary>
-    /// A session as it was recorded, plus the same stretch of reading expressed in whatever
-    /// method the reader now tracks the book by. The recorded values are never converted —
-    /// they are the record of what the reader actually entered.
+    /// A session as it was recorded, plus the same reading expressed in whatever method the
+    /// reader now tracks the book by. The recorded amount is never converted — it is the record
+    /// of what the reader actually entered.
     /// </summary>
     private sealed record SessionResponse(
         Guid Id,
-        decimal StartPosition,
-        decimal EndPosition,
+        decimal Amount,
         string Unit,
         DateTimeOffset OccurredAt,
         int? DurationMinutes,
-        DisplayedPositionResponse? Displayed)
+        DisplayedAmountResponse? Displayed)
     {
         public static SessionResponse From(ReadingSession session, TrackingMethod method, int? totalPages) =>
             new(
                 session.Id,
-                session.StartPosition,
-                session.EndPosition,
+                session.Amount,
                 session.Unit.ToString(),
                 session.OccurredAt,
                 session.DurationMinutes,
-                DisplayedPositionResponse.Of(session, method, totalPages));
+                DisplayedAmountResponse.Of(session, method, totalPages));
     }
 
     /// <summary>
     /// The session in the reader's current method. Null when that would need a page count
-    /// nobody has: better to say nothing than to invent a position.
+    /// nobody has: better to say nothing than to invent an amount.
     /// </summary>
-    private sealed record DisplayedPositionResponse(decimal StartPosition, decimal EndPosition, string Unit)
+    private sealed record DisplayedAmountResponse(decimal Amount, string Unit)
     {
-        public static DisplayedPositionResponse? Of(ReadingSession session, TrackingMethod method, int? totalPages) =>
-            UnitConversion.Convert(session.StartPosition, session.Unit, method, totalPages) is { } start &&
-            UnitConversion.Convert(session.EndPosition, session.Unit, method, totalPages) is { } end
-                ? new DisplayedPositionResponse(start, end, method.ToString())
+        public static DisplayedAmountResponse? Of(ReadingSession session, TrackingMethod method, int? totalPages) =>
+            UnitConversion.Convert(session.Amount, session.Unit, method, totalPages) is { } amount
+                ? new DisplayedAmountResponse(amount, method.ToString())
                 : null;
     }
 
@@ -468,11 +467,11 @@ public static class LibraryEndpoints
 
     /// <summary>
     /// A stretch of reading as the reader describes it, whether they are logging it for the
-    /// first time or correcting it afterwards.
+    /// first time or correcting it afterwards. <paramref name="Amount"/> is how much they read,
+    /// in whatever method they track this book by — not the pages it spanned.
     /// </summary>
     private sealed record SessionRequest(
-        decimal StartPosition,
-        decimal EndPosition,
+        decimal Amount,
         DateTimeOffset? OccurredAt,
         int? DurationMinutes);
 

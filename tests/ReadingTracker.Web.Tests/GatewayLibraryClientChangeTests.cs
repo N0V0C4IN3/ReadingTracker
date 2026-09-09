@@ -43,19 +43,21 @@ public sealed class GatewayLibraryClientChangeTests
         gateway.Respond = _ => new HttpResponseMessage(HttpStatusCode.BadRequest)
         {
             Content = new StringContent(
-                """{"errors":{"session":["A session cannot end before it starts."]}}""",
+                """{"errors":{"session":["This book has 445 pages, so one sitting cannot be more than that."]}}""",
                 System.Text.Encoding.UTF8,
                 "application/problem+json"),
         };
 
         var outcome = await client.LogSessionAsync(
             EntryId,
-            new NewSession(60, 10, null, null),
+            new NewSession(600, null, null),
             CancellationToken.None);
 
         Assert.False(outcome.Ok);
         Assert.Equal(LibraryChangeProblem.Refused, outcome.Problem);
-        Assert.Equal("A session cannot end before it starts.", Assert.Single(outcome.Reasons));
+        Assert.Equal(
+            "This book has 445 pages, so one sitting cannot be more than that.",
+            Assert.Single(outcome.Reasons));
     }
 
     [Fact]
@@ -178,18 +180,17 @@ public sealed class GatewayLibraryClientChangeTests
         };
 
         var when = new DateTimeOffset(2026, 9, 8, 0, 0, 0, TimeSpan.FromHours(3));
-        var outcome = await client.LogSessionAsync(EntryId, new NewSession(98, 120, when, 45), CancellationToken.None);
+        var outcome = await client.LogSessionAsync(EntryId, new NewSession(22, when, 45), CancellationToken.None);
 
         Assert.True(outcome.Ok);
         Assert.Equal(HttpMethod.Post, gateway.LastRequest!.Method);
         Assert.Equal($"/api/library/{EntryId}/sessions", gateway.LastRequest.RequestUri!.AbsolutePath);
-        Assert.Contains("\"startPosition\":98", body);
-        Assert.Contains("\"endPosition\":120", body);
+        Assert.Contains("\"amount\":22", body);
         Assert.Contains("\"durationMinutes\":45", body);
     }
 
     [Fact]
-    public async Task Reads_a_session_back_with_the_position_in_the_readers_current_method()
+    public async Task Reads_a_session_back_with_the_amount_in_the_readers_current_method()
     {
         var (client, gateway) = CreateClient();
         gateway.Respond = _ => StubHttpMessageHandler.Json($"[{Session()}]");
@@ -201,9 +202,9 @@ public sealed class GatewayLibraryClientChangeTests
 
         // Logged in pages, displayed as the percentage the reader now tracks by. Both travel,
         // because the recorded values are the record of what the reader actually entered.
-        Assert.Equal(98, session.StartPosition);
+        Assert.Equal(22, session.Amount);
         Assert.Equal("Pages", session.Unit);
-        Assert.Equal(27, session.Displayed!.EndPosition);
+        Assert.Equal(5, session.Displayed!.Amount);
         Assert.Equal("Percentage", session.Displayed.Unit);
     }
 
@@ -216,7 +217,7 @@ public sealed class GatewayLibraryClientChangeTests
         var outcome = await client.CorrectSessionAsync(
             EntryId,
             SessionId,
-            new NewSession(98, 130, null, null),
+            new NewSession(30, null, null),
             CancellationToken.None);
 
         Assert.True(outcome.Ok);
@@ -335,12 +336,11 @@ public sealed class GatewayLibraryClientChangeTests
         $$"""
         {
           "id": "{{SessionId}}",
-          "startPosition": 98,
-          "endPosition": 120,
+          "amount": 22,
           "unit": "Pages",
           "occurredAt": "2026-09-08T00:00:00+00:00",
           "durationMinutes": 45,
-          "displayed": { "startPosition": 22, "endPosition": 27, "unit": "Percentage" }
+          "displayed": { "amount": 5, "unit": "Percentage" }
         }
         """;
 }

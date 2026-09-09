@@ -23,29 +23,35 @@ public sealed record BookDetails(
     string? CoverUrl,
     int? TotalPages);
 
-public sealed record Progress(decimal Position, string Unit, int? PercentComplete);
+/// <summary>
+/// How much of a book the reader has read, added up from their sessions. <paramref name="AmountRead"/>
+/// and <paramref name="Unit"/> are null together, when the reader has logged in both pages and
+/// percent and no page count exists to add the two together with.
+/// </summary>
+public sealed record Progress(decimal? AmountRead, string? Unit, int? PercentComplete);
 
 /// <summary>
-/// A ReadingSession as it was recorded, plus <paramref name="Displayed"/> — the same stretch of
-/// reading in whatever method the reader tracks the book by now. The recorded values are never
-/// converted, because they are the record of what the reader actually entered; Library sends both
-/// so a client never has to work the conversion out for itself.
+/// A ReadingSession as it was recorded, plus <paramref name="Displayed"/> — the same reading in
+/// whatever method the reader tracks the book by now. The recorded amount is never converted,
+/// because it is the record of what the reader actually entered; Library sends both so a client
+/// never has to work the conversion out for itself.
 /// </summary>
 public sealed record ReadingSessionView(
     Guid Id,
-    decimal StartPosition,
-    decimal EndPosition,
+    decimal Amount,
     string Unit,
     DateTimeOffset OccurredAt,
     int? DurationMinutes,
-    DisplayedPosition? Displayed);
+    DisplayedAmount? Displayed);
 
-public sealed record DisplayedPosition(decimal StartPosition, decimal EndPosition, string Unit);
+public sealed record DisplayedAmount(decimal Amount, string Unit);
 
-/// <summary>A stretch of reading, as the reader describes it when logging or correcting one.</summary>
+/// <summary>
+/// A stretch of reading, as the reader describes it when logging or correcting one:
+/// <paramref name="Amount"/> is how much they read, in the method they track this book by.
+/// </summary>
 public sealed record NewSession(
-    decimal StartPosition,
-    decimal EndPosition,
+    decimal Amount,
     DateTimeOffset? OccurredAt,
     int? DurationMinutes);
 

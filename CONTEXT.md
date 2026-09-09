@@ -29,8 +29,12 @@ How long a book is *for one reader*: their own page count for the edition in the
 _Avoid_: Page count (ambiguous — say whose), Total pages (that is the Book's field specifically)
 
 **ReadingSession**:
-A discrete, timestamped stretch of reading activity against one LibraryEntry — e.g. "read from page 40 to 62 on Tuesday evening." The record of *when and how much* someone read, in whichever TrackingMethod was active when it was logged. A LibraryEntry's full reading history is its sequence of ReadingSessions. Re-reading a book produces new ReadingSessions rather than a new ReadingStatus or a new Book record.
-_Avoid_: Log, reading log, entry (these are ambiguous with application/infrastructure logging, which is a separate, non-domain concern)
+A discrete, timestamped stretch of reading activity against one LibraryEntry — e.g. "read 22 pages on Tuesday evening." The record of *when and how much* someone read: an amount, in whichever TrackingMethod was active when it was logged, and never the pages it spanned (ADR-0010). A LibraryEntry's full reading history is its sequence of ReadingSessions. Re-reading a book produces new ReadingSessions rather than a new ReadingStatus or a new Book record, and so a Reader can have read more of a Book than the Book has in it.
+_Avoid_: Log, reading log, entry (these are ambiguous with application/infrastructure logging, which is a separate, non-domain concern), Position (a session says how much, not where)
+
+**Amount read**:
+How much of a Book a Reader has got through: the sum of their ReadingSessions for that LibraryEntry, worked out on every read rather than stored, so it can never disagree with the history it comes from. Expressed in the LibraryEntry's TrackingMethod where the effective page count allows the conversion, and otherwise in the unit the Reader actually logged. It is a total, not a place in the book — it can exceed the Book's length, and the percentage derived from it stops at 100% where the total does not.
+_Avoid_: Progress (fine in prose, but ambiguous between this and the percentage shown beside it), Position, Current page
 
 **ReadingStatus**:
 The current state of a LibraryEntry: `Want to Read`, `Reading`, `Finished`, `On Hold`, or `Dropped`. A LibraryEntry has exactly one current ReadingStatus at a time; it does not itself carry history — history lives in ReadingSessions.

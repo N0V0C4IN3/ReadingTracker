@@ -78,7 +78,6 @@
         @if (_panel == Panel.Log)
         {
             <SessionForm Unit="@Entry.TrackingMethod"
-                         EffectivePageCount="Entry.EffectivePageCount"
                          SubmitLabel="Log it"
                          OnSubmit="LogAsync"
                          OnCancel="Close" />
@@ -104,7 +103,6 @@
                                 @if (_editing == session.Id)
                                 {
                                     <SessionForm Unit="@Entry.TrackingMethod"
-                                                 EffectivePageCount="Entry.EffectivePageCount"
                                                  SubmitLabel="Save"
                                                  Existing="session"
                                                  OnSubmit="@(edited => CorrectAsync(session.Id, edited))"
@@ -444,17 +442,15 @@
         };
     }
 
-    private string Describe(ReadingSessionView session)
+    private static string Describe(ReadingSessionView session)
     {
         // Prefer the reader's current method, which Library has already converted for us; fall
         // back to the unit it was actually logged in when no page count makes that possible.
-        var (start, end, unit) = session.Displayed is { } displayed
-            ? (displayed.StartPosition, displayed.EndPosition, displayed.Unit)
-            : (session.StartPosition, session.EndPosition, session.Unit);
+        var (amount, unit) = session.Displayed is { } displayed
+            ? (displayed.Amount, displayed.Unit)
+            : (session.Amount, session.Unit);
 
-        return unit == "Percentage"
-            ? $"{Trim(start)}% → {Trim(end)}%"
-            : $"p.{Trim(start)} → p.{Trim(end)}";
+        return unit == "Percentage" ? $"{Trim(amount)}%" : $"{Trim(amount)} {(amount == 1m ? "page" : "pages")}";
     }
 
     private static string Trim(decimal value) =>
