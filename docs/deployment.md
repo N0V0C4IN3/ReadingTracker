@@ -96,10 +96,21 @@ someone changed in the portal to put out a fire.
 | --- | --- |
 | Catalog | `ConnectionStrings__CatalogDb`, `RabbitMq__ConnectionString`, `GoogleBooks__ApiKey` |
 | Library | `ConnectionStrings__LibraryDb`, `RabbitMq__ConnectionString` |
-| Gateway | `AllowedOrigins__0` (the Static Web Apps URL), the two service URLs |
+| Gateway | `Google__ClientId`, `AllowedOrigins__0`, `ReverseProxy__Clusters__catalog__Destinations__primary__Address`, `ReverseProxy__Clusters__library__Destinations__primary__Address` |
 
-`AllowedOrigins` has no default: the Gateway refuses to start without it rather than come up with
-CORS that no browser can pass.
+Two of the Gateway's are easy to miss and both stop it starting rather than letting it come up
+half-configured:
+
+- `Google__ClientId` lives only in `appsettings.Development.json`, because a deployment was
+  always meant to supply its own. Without it the Gateway would have nothing to check a token's
+  audience against, and would accept tokens issued to any Google application in the world — so
+  it refuses to start instead. Unless you have made a separate OAuth client for production, this
+  is the same client id already committed in that file.
+- `AllowedOrigins` has no default either, rather than coming up with CORS no browser can pass.
+
+The two `ReverseProxy` addresses are the internal FQDNs of the Catalog and Library container apps,
+with a trailing slash. Routing itself is committed in `appsettings.json`; only the addresses are
+environmental.
 
 ### 4. Google
 
