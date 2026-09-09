@@ -36,7 +36,14 @@ authenticate it.
 
 One project, one database. Both Catalog and Library use the same instance and keep to their own
 schema ([ADR-0004](adr/0004-schema-per-service-shared-postgres.md)), so one connection string
-serves both. Each service migrates itself on boot under an advisory lock
+serves both.
+
+Choose the Azure region first and put Neon in whichever of its regions is geographically nearest.
+Every query crosses from Azure to whichever cloud Neon sits in, and a region is the one decision
+here that is expensive to revisit — moving a project later means a dump and restore, while
+everything else is a connection string. Neon ran in Azure regions until April 2026 and no longer
+does, so this really is cross-cloud; Frankfurt to Frankfurt (Azure Germany West Central against
+Neon's AWS `eu-central-1`) is about as close as the two get in Europe. Each service migrates itself on boot under an advisory lock
 ([ADR-0006](adr/0006-serialize-migrations-with-an-advisory-lock.md)) — there is no migration step
 in the pipeline and there should not be one.
 
