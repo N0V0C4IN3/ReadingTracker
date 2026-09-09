@@ -1,18 +1,35 @@
 @page "/authentication/{action}"
+@using Microsoft.Extensions.Options
+@using ReadingTracker.Web.Services
+@inject IOptions<DevSignInOptions> DevSignIn
 
 @*
     Handles every step of the sign-in round trip: the redirect out to Google, the return to
     /authentication/login-callback, and signing out again. The path is not arbitrary — it is
     registered with Google as this application's redirect URI, so renaming it here means
     changing it there too.
+
+    With dev sign-in enabled there is no Google round trip and no RemoteAuthenticatorView to
+    render — the services it needs are not registered at all (ADR-0009) — so this route offers
+    the dev sign-in instead, which is what the "sign in again" links elsewhere expect to find.
 *@
 
-<RemoteAuthenticatorView Action="@Action">
-    <LogOutSucceeded>
-        <p>You are signed out.</p>
-        <a href="/">Back to ReadingTracker</a>
-    </LogOutSucceeded>
-</RemoteAuthenticatorView>
+@if (DevSignIn.Value.Enabled)
+{
+    <h1>Sign in</h1>
+    <p>Google sign-in is switched off for this build. Sign in as any reader id you like.</p>
+    <DevSignInForm />
+    <p><a href="/">Back to ReadingTracker</a></p>
+}
+else
+{
+    <RemoteAuthenticatorView Action="@Action">
+        <LogOutSucceeded>
+            <p>You are signed out.</p>
+            <a href="/">Back to ReadingTracker</a>
+        </LogOutSucceeded>
+    </RemoteAuthenticatorView>
+}
 
 @code {
     [Parameter]

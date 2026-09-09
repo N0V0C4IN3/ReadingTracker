@@ -1,7 +1,9 @@
 @page "/"
+@using Microsoft.Extensions.Options
 @using ReadingTracker.Web.Services
 @inject GatewayLibraryClient Gateway
 @inject GatewayCatalogClient Catalog
+@inject IOptions<DevSignInOptions> DevSignIn
 
 <PageTitle>ReadingTracker</PageTitle>
 
@@ -106,7 +108,14 @@
     </Authorized>
     <NotAuthorized>
         <p>Track what you are reading, and how far through it you are.</p>
-        <p>Sign in with Google to begin.</p>
+        @if (DevSignIn.Value.Enabled)
+        {
+            <p>Sign in as any reader id to begin.</p>
+        }
+        else
+        {
+            <p>Sign in with Google to begin.</p>
+        }
     </NotAuthorized>
 </AuthorizeView>
 
@@ -124,14 +133,39 @@
     private SearchUnavailable? _searchProblem;
     private AddToLibraryProblem? _addProblem;
 
-    protected override async Task OnInitializedAsync()
+    /// <summary>Whose shelf is on screen, so a re-render is not mistaken for a change of reader.</summary>
+    private string? _shelfBelongsTo;
+
+    // Not OnInitializedAsync: signing in does not always reload the page. Google's does, because it
+    // is a redirect out and back, but dev sign-in (ADR-0009) happens in place — so a page that only
+    // ever fetched on initialisation would sit on "Loading your shelf…" until the reader refreshed
+    // by hand. Reacting to the cascaded authentication state instead covers both.
+    protected override async Task OnParametersSetAsync()
     {
+        var state = AuthenticationState is null ? null : await AuthenticationState;
+
+        var reader = state?.User.Identity?.IsAuthenticated is true
+            ? state.User.FindFirst("sub")?.Value ?? state.User.Identity.Name
+            : null;
+
+        if (reader == _shelfBelongsTo)
+        {
+            return;
+        }
+
+        _shelfBelongsTo = reader;
+
+        // One reader's results must never be left on screen for the next one.
+        _entries = null;
+        _problem = null;
+        _searchResults = null;
+        _searchProblem = null;
+        _addProblem = null;
+
         // Fetching before we know there is a reader would send the Gateway a request with no
         // token on every anonymous page load — harmless, since it just gets a 401 back, but
         // pointless network traffic for a page that has already decided not to show it.
-        var state = AuthenticationState is null ? null : await AuthenticationState;
-
-        if (state?.User.Identity?.IsAuthenticated is true)
+        if (reader is not null)
         {
             (_entries, _problem) = await Gateway.GetEntriesAsync(CancellationToken.None);
         }

@@ -126,6 +126,12 @@ services:
     profiles: [services]
     ports:
       - "5200:8080"
+    environment:
+      # The container entrypoint runs with --no-launch-profile, so without this the app would be
+      # served as Production and never fetch wwwroot/appsettings.Development.json — leaving the
+      # frontend on Google sign-in while the gateway beside it has dev sign-in turned on. Setting
+      # it here keeps the two halves agreeing. See ADR-0009.
+      ASPNETCORE_ENVIRONMENT: Development
     depends_on:
       gateway:
         condition: service_started
