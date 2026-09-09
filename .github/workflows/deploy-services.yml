@@ -129,15 +129,22 @@ jobs:
         with:
           azcliversion: latest
           inlineScript: |
+            # Every app gets an fqdn, internal or not — it is just unreachable from here when
+            # it is not external. Checking for an empty fqdn instead of this would never skip.
+            external=$(az containerapp show \
+              --name '${{ vars.CONTAINER_APP_PREFIX }}-${{ matrix.service }}' \
+              --resource-group '${{ vars.AZURE_RESOURCE_GROUP }}' \
+              --query 'properties.configuration.ingress.external' --output tsv)
+
+            if [ "$external" != "true" ]; then
+              echo "::notice::${{ matrix.service }} has internal-only ingress; skipping the health check."
+              exit 0
+            fi
+
             fqdn=$(az containerapp show \
               --name '${{ vars.CONTAINER_APP_PREFIX }}-${{ matrix.service }}' \
               --resource-group '${{ vars.AZURE_RESOURCE_GROUP }}' \
               --query 'properties.configuration.ingress.fqdn' --output tsv)
-
-            if [ -z "$fqdn" ]; then
-              echo "::notice::${{ matrix.service }} has no external ingress; skipping the health check."
-              exit 0
-            fi
 
             # Scale-to-zero means the first request pays for a cold start, so this is patient
             # before it is unhappy.
