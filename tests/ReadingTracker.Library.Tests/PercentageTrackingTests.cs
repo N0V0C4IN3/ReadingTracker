@@ -13,11 +13,11 @@ public sealed class PercentageTrackingTests(LibraryApiFixture fixture)
         var entryId = await fixture.AddBookAsync(client, 300);
 
         var switched = await TrackByAsync(client, entryId, "Percentage");
-        await LogAsync(client, entryId, 0, 35);
+        await LogAsync(client, entryId, 35);
 
         Assert.Equal(HttpStatusCode.OK, switched.StatusCode);
         var progress = (await EntryAsync(client, entryId)).Progress;
-        Assert.Equal(35, progress!.Position);
+        Assert.Equal(35, progress!.AmountRead);
         Assert.Equal("Percentage", progress.Unit);
         Assert.Equal(35, progress.PercentComplete);
     }
@@ -27,31 +27,31 @@ public sealed class PercentageTrackingTests(LibraryApiFixture fixture)
     {
         var client = fixture.ClientFor("switch-reader");
         var entryId = await fixture.AddBookAsync(client, 300);
-        await LogAsync(client, entryId, 1, 150);
+        await LogAsync(client, entryId, 150);
 
         await TrackByAsync(client, entryId, "Percentage");
 
         // The record of what the reader actually entered is untouched by the switch...
         var session = Assert.Single(await SessionsAsync(client, entryId));
-        Assert.Equal(150, session.EndPosition);
+        Assert.Equal(150, session.Amount);
         Assert.Equal("Pages", session.Unit);
 
         // ...and the conversion happens for display only.
-        Assert.Equal(50, session.Displayed!.EndPosition);
+        Assert.Equal(50, session.Displayed!.Amount);
         Assert.Equal("Percentage", session.Displayed.Unit);
     }
 
     [Fact]
-    public async Task Shows_where_i_am_in_the_units_i_am_now_tracking_in()
+    public async Task Shows_what_i_have_read_in_the_units_i_am_now_tracking_in()
     {
         var client = fixture.ClientFor("converted-progress-reader");
         var entryId = await fixture.AddBookAsync(client, 300);
-        await LogAsync(client, entryId, 1, 150);
+        await LogAsync(client, entryId, 150);
 
         await TrackByAsync(client, entryId, "Percentage");
 
         var progress = (await EntryAsync(client, entryId)).Progress;
-        Assert.Equal(50, progress!.Position);
+        Assert.Equal(50, progress!.AmountRead);
         Assert.Equal("Percentage", progress.Unit);
     }
 
@@ -61,14 +61,30 @@ public sealed class PercentageTrackingTests(LibraryApiFixture fixture)
         var client = fixture.ClientFor("back-to-pages-reader");
         var entryId = await fixture.AddBookAsync(client, 300);
         await TrackByAsync(client, entryId, "Percentage");
-        await LogAsync(client, entryId, 0, 25);
+        await LogAsync(client, entryId, 25);
 
         await TrackByAsync(client, entryId, "Pages");
 
         var progress = (await EntryAsync(client, entryId)).Progress;
-        Assert.Equal(75, progress!.Position);
+        Assert.Equal(75, progress!.AmountRead);
         Assert.Equal("Pages", progress.Unit);
         Assert.Equal("Percentage", Assert.Single(await SessionsAsync(client, entryId)).Unit);
+    }
+
+    [Fact]
+    public async Task Adds_up_pages_and_percentages_i_logged_either_side_of_a_switch()
+    {
+        var client = fixture.ClientFor("both-units-reader");
+        var entryId = await fixture.AddBookAsync(client, 300);
+        await LogAsync(client, entryId, 60);
+
+        await TrackByAsync(client, entryId, "Percentage");
+        await LogAsync(client, entryId, 25);
+
+        // 60 pages is 20% of 300, and the reader has read 45% of the book between them.
+        var progress = (await EntryAsync(client, entryId)).Progress;
+        Assert.Equal(45, progress!.AmountRead);
+        Assert.Equal("Percentage", progress.Unit);
     }
 
     [Fact]
@@ -76,14 +92,14 @@ public sealed class PercentageTrackingTests(LibraryApiFixture fixture)
     {
         var client = fixture.ClientFor("tidy-percentage-reader");
         var entryId = await fixture.AddBookAsync(client, 705);
-        await LogAsync(client, entryId, 1, 350);
+        await LogAsync(client, entryId, 350);
 
         await TrackByAsync(client, entryId, "Percentage");
 
         // 350 of 705 is 49.645390070921985...%, which is noise, not precision.
         var progress = (await EntryAsync(client, entryId)).Progress;
-        Assert.Equal(49.6m, progress!.Position);
-        Assert.Equal(49.6m, Assert.Single(await SessionsAsync(client, entryId)).Displayed!.EndPosition);
+        Assert.Equal(49.6m, progress!.AmountRead);
+        Assert.Equal(49.6m, Assert.Single(await SessionsAsync(client, entryId)).Displayed!.Amount);
     }
 
     [Fact]
@@ -93,10 +109,10 @@ public sealed class PercentageTrackingTests(LibraryApiFixture fixture)
         var entryId = await fixture.AddBookAsync(client, 300);
         await TrackByAsync(client, entryId, "Percentage");
 
-        await LogAsync(client, entryId, 0, 17.5m);
+        await LogAsync(client, entryId, 17.5m);
 
         // Nothing is converted here, so what the reader entered is what comes back.
-        Assert.Equal(17.5m, (await EntryAsync(client, entryId)).Progress!.Position);
+        Assert.Equal(17.5m, (await EntryAsync(client, entryId)).Progress!.AmountRead);
     }
 
     [Fact]
@@ -104,29 +120,56 @@ public sealed class PercentageTrackingTests(LibraryApiFixture fixture)
     {
         var client = fixture.ClientFor("unknown-length-reader");
         var entryId = await fixture.AddBookAsync(client, totalPages: null);
-        await LogAsync(client, entryId, 1, 120);
+        await LogAsync(client, entryId, 120);
 
         await TrackByAsync(client, entryId, "Percentage");
 
         // Nobody knows how long the book is, so there is no honest percentage to give. The
-        // reader is still told where they are, in the unit they actually logged.
+        // reader is still told what they read, in the unit they actually logged.
         var progress = (await EntryAsync(client, entryId)).Progress;
-        Assert.Equal(120, progress!.Position);
+        Assert.Equal(120, progress!.AmountRead);
         Assert.Equal("Pages", progress.Unit);
         Assert.Null(progress.PercentComplete);
         Assert.Null(Assert.Single(await SessionsAsync(client, entryId)).Displayed);
     }
 
     [Fact]
-    public async Task Refuses_a_percentage_past_a_hundred()
+    public async Task Admits_it_cannot_total_two_units_with_no_length_to_bridge_them()
+    {
+        var client = fixture.ClientFor("unbridgeable-reader");
+        var entryId = await fixture.AddBookAsync(client, totalPages: null);
+        await LogAsync(client, entryId, 120);
+        await TrackByAsync(client, entryId, "Percentage");
+        await LogAsync(client, entryId, 20);
+
+        // 120 pages and 20% cannot be added together without knowing how long the book is, and
+        // answering "120" or "20" would be a smaller number than the reader's own reading.
+        var progress = (await EntryAsync(client, entryId)).Progress;
+        Assert.NotNull(progress);
+        Assert.Null(progress.AmountRead);
+        Assert.Null(progress.Unit);
+        Assert.Null(progress.PercentComplete);
+
+        // Saying how long the book is settles it: 120 of 400 is 30%, plus the 20% logged after.
+        await client.PutAsJsonAsync($"/api/library/{entryId}/page-count", new { totalPages = 400 });
+        Assert.Equal(50, (await EntryAsync(client, entryId)).Progress!.AmountRead);
+    }
+
+    [Fact]
+    public async Task Never_says_i_have_read_more_than_all_of_a_book()
     {
         var client = fixture.ClientFor("over-hundred-reader");
         var entryId = await fixture.AddBookAsync(client, 300);
         await TrackByAsync(client, entryId, "Percentage");
 
-        var response = await LogAsync(client, entryId, 90, 140);
+        var response = await LogAsync(client, entryId, 140);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        // 140% is not a share of a book anyone can have read. The session is kept as stated —
+        // it may be a typo, and only the reader can say — but the total stops at all of it.
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var progress = (await EntryAsync(client, entryId)).Progress;
+        Assert.Equal(100, progress!.AmountRead);
+        Assert.Equal(100, progress.PercentComplete);
     }
 
     [Fact]
@@ -170,12 +213,8 @@ public sealed class PercentageTrackingTests(LibraryApiFixture fixture)
     private static Task<HttpResponseMessage> TrackByAsync(HttpClient client, Guid entryId, string method) =>
         client.PutAsJsonAsync($"/api/library/{entryId}/tracking-method", new { trackingMethod = method });
 
-    private static Task<HttpResponseMessage> LogAsync(HttpClient client, Guid entryId, decimal start, decimal end) =>
-        client.PostAsJsonAsync($"/api/library/{entryId}/sessions", new
-        {
-            startPosition = start,
-            endPosition = end,
-        });
+    private static Task<HttpResponseMessage> LogAsync(HttpClient client, Guid entryId, decimal amount) =>
+        client.PostAsJsonAsync($"/api/library/{entryId}/sessions", new { amount });
 
     private static async Task<Guid> AddAsync(HttpClient client, Guid bookId) =>
         (await (await client.PostAsJsonAsync("/api/library", new { bookId })).Content.ReadFromJsonAsync<Entry>())!.Id;
@@ -188,9 +227,9 @@ public sealed class PercentageTrackingTests(LibraryApiFixture fixture)
 
     private sealed record Entry(Guid Id, string TrackingMethod, Progress? Progress);
 
-    private sealed record Progress(decimal Position, string Unit, int? PercentComplete);
+    private sealed record Progress(decimal? AmountRead, string? Unit, int? PercentComplete);
 
-    private sealed record Session(Guid Id, decimal EndPosition, string Unit, DisplayedPosition? Displayed);
+    private sealed record Session(Guid Id, decimal Amount, string Unit, DisplayedAmount? Displayed);
 
-    private sealed record DisplayedPosition(decimal StartPosition, decimal EndPosition, string Unit);
+    private sealed record DisplayedAmount(decimal Amount, string Unit);
 }

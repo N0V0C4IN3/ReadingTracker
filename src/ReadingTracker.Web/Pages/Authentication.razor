@@ -1,7 +1,10 @@
 @page "/authentication/{action}"
 @using Microsoft.Extensions.Options
 @using ReadingTracker.Web.Services
+@implements IDisposable
 @inject IOptions<DevSignInOptions> DevSignIn
+@inject IJSRuntime JsRuntime
+@inject NavigationManager Navigation
 
 @*
     Handles every step of the sign-in round trip: the redirect out to Google, the return to
@@ -12,6 +15,13 @@
     With dev sign-in enabled there is no Google round trip and no RemoteAuthenticatorView to
     render — the services it needs are not registered at all (ADR-0009) — so this route offers
     the dev sign-in instead, which is what the "sign in again" links elsewhere expect to find.
+
+    The failure templates and the stalled-callback notice below both exist because this library
+    cannot report a failed sign-in to this application. Its completeSignIn only returns an error
+    when it can find the state parameter in the URL's query string, and the implicit id_token
+    flow puts everything in the fragment instead — so every failure here arrives as "nothing
+    happened", and the page would otherwise sit on "Completing login..." for ever with no
+    message, no error UI and nothing in the console. See wwwroot/js/signInDiagnostics.js.
 *@
 
 @if (DevSignIn.Value.Enabled)
@@ -21,17 +31,136 @@
     <DevSignInForm />
     <p><a href="/">Back to ReadingTracker</a></p>
 }
+else if (_stalled)
+{
+    <h1>Sign-in did not complete</h1>
+
+    @if (_reason is { Length: > 0 })
+    {
+        <p class="notice notice--bad" role="alert">@_reason</p>
+    }
+    else
+    {
+        <p class="notice notice--bad" role="alert">Google sent us back, but the sign-in could not be finished.</p>
+    }
+
+    <p>
+        Signing in again usually settles it: a sign-in that was started in another tab, already
+        used once, or left half-finished cannot be completed here.
+    </p>
+    <p>
+        <a href="authentication/login">Sign in again</a> ·
+        <a href="/">Back to ReadingTracker</a>
+    </p>
+}
 else
 {
     <RemoteAuthenticatorView Action="@Action">
+        @*
+            Every step that is only ever passed through gets the same quiet placeholder. Left to
+            itself this component narrates them — "Checking login state...", "Completing login...",
+            "Processing logout" — in small text in the corner of an empty page, which is a debug
+            log a reader has been handed by accident. Only the two failures below have anything
+            worth saying, because only they need the reader to do something.
+        *@
+        <LoggingIn>
+            <Settling />
+        </LoggingIn>
+        <CompletingLoggingIn>
+            <Settling />
+        </CompletingLoggingIn>
+        <LogOut>
+            <Settling />
+        </LogOut>
+        <CompletingLogOut>
+            <Settling />
+        </CompletingLogOut>
+        <LogInFailed>
+            <h1>Sign-in did not complete</h1>
+            <p class="notice notice--bad" role="alert">@context</p>
+            <p>
+                <a href="authentication/login">Sign in again</a> ·
+                <a href="/">Back to ReadingTracker</a>
+            </p>
+        </LogInFailed>
+        <LogOutFailed>
+            <h1>Sign-out did not complete</h1>
+            <p class="notice notice--bad" role="alert">@context</p>
+            <p><a href="/">Back to ReadingTracker</a></p>
+        </LogOutFailed>
+        @*
+            Signing out from the header hands this a return url, so it redirects to the welcome
+            screen and this template never renders. It is here for the one way round that has no
+            return url — someone arriving at /authentication/logout-succeeded directly — where it
+            is a frame in passing rather than a page to be read, and gets the boot screen's own
+            placeholder rather than a dead end with a link on it.
+        *@
         <LogOutSucceeded>
-            <p>You are signed out.</p>
-            <a href="/">Back to ReadingTracker</a>
+            <Settling />
         </LogOutSucceeded>
     </RemoteAuthenticatorView>
 }
 
 @code {
+    /// <summary>
+    /// Long enough that a slow-but-working callback is never interrupted — completing one is
+    /// local work, not a network round trip — and short enough that nobody sits watching a line
+    /// of text wondering whether it is still doing something.
+    /// </summary>
+    private static readonly TimeSpan LongerThanItShouldTake = TimeSpan.FromSeconds(5);
+
     [Parameter]
     public string? Action { get; set; }
+
+    private readonly CancellationTokenSource _leftThePage = new();
+
+    private bool _stalled;
+    private string? _reason;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || DevSignIn.Value.Enabled)
+        {
+            return;
+        }
+
+        // Signing out from the header already carries a return url here, so this is for the way
+        // round that does not: landing on this address directly. Either way there is nothing to
+        // read on a page that says a thing has finished, so it never becomes somewhere to sit.
+        //
+        // "logged-out" is the framework's own name for this step, not the one the template it
+        // renders is called; anything else here is an action RemoteAuthenticatorView rejects.
+        if (Action is "logged-out")
+        {
+            Navigation.NavigateTo("/", replace: true);
+
+            return;
+        }
+
+        // A callback that works navigates away, disposing this component and cancelling the wait.
+        if (Action is not "login-callback")
+        {
+            return;
+        }
+
+        try
+        {
+            await Task.Delay(LongerThanItShouldTake, _leftThePage.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        _reason = await JsRuntime.InvokeAsync<string?>("readingTrackerLastSignInError");
+        _stalled = true;
+
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        _leftThePage.Cancel();
+        _leftThePage.Dispose();
+    }
 }

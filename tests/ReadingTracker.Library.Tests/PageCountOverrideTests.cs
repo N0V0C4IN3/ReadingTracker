@@ -11,7 +11,7 @@ public sealed class PageCountOverrideTests(LibraryApiFixture fixture)
     {
         var client = fixture.ClientFor("wrong-count-reader");
         var entryId = await fixture.AddBookAsync(client, 300);
-        await LogAsync(client, entryId, 1, 120);
+        await LogAsync(client, entryId, 120);
 
         var response = await SetPageCountAsync(client, entryId, 705);
 
@@ -27,7 +27,7 @@ public sealed class PageCountOverrideTests(LibraryApiFixture fixture)
     {
         var client = fixture.ClientFor("cleared-count-reader");
         var entryId = await fixture.AddBookAsync(client, 300);
-        await LogAsync(client, entryId, 1, 120);
+        await LogAsync(client, entryId, 120);
         await SetPageCountAsync(client, entryId, 705);
 
         await SetPageCountAsync(client, entryId, null);
@@ -43,7 +43,7 @@ public sealed class PageCountOverrideTests(LibraryApiFixture fixture)
     {
         var client = fixture.ClientFor("unknown-count-reader");
         var entryId = await fixture.AddBookAsync(client, totalPages: null);
-        await LogAsync(client, entryId, 1, 100);
+        await LogAsync(client, entryId, 100);
 
         // Without a count there is no percentage to give...
         Assert.Null((await EntryAsync(client, entryId)).Progress!.PercentComplete);
@@ -59,13 +59,13 @@ public sealed class PageCountOverrideTests(LibraryApiFixture fixture)
     {
         var client = fixture.ClientFor("converting-count-reader");
         var entryId = await fixture.AddBookAsync(client, 300);
-        await LogAsync(client, entryId, 1, 120);
+        await LogAsync(client, entryId, 120);
         await SetPageCountAsync(client, entryId, 480);
 
         await client.PutAsJsonAsync($"/api/library/{entryId}/tracking-method", new { trackingMethod = "Percentage" });
 
         // 120 of 480 is a quarter of the way in.
-        Assert.Equal(25, (await EntryAsync(client, entryId)).Progress!.Position);
+        Assert.Equal(25, (await EntryAsync(client, entryId)).Progress!.AmountRead);
     }
 
     [Fact]
@@ -127,12 +127,8 @@ public sealed class PageCountOverrideTests(LibraryApiFixture fixture)
     private static Task<HttpResponseMessage> SetPageCountAsync(HttpClient client, Guid entryId, int? totalPages) =>
         client.PutAsJsonAsync($"/api/library/{entryId}/page-count", new { totalPages });
 
-    private static Task<HttpResponseMessage> LogAsync(HttpClient client, Guid entryId, decimal start, decimal end) =>
-        client.PostAsJsonAsync($"/api/library/{entryId}/sessions", new
-        {
-            startPosition = start,
-            endPosition = end,
-        });
+    private static Task<HttpResponseMessage> LogAsync(HttpClient client, Guid entryId, decimal amount) =>
+        client.PostAsJsonAsync($"/api/library/{entryId}/sessions", new { amount });
 
     private static async Task<Guid> AddAsync(HttpClient client, Guid bookId) =>
         (await (await client.PostAsJsonAsync("/api/library", new { bookId })).Content.ReadFromJsonAsync<Entry>())!.Id;
@@ -142,5 +138,5 @@ public sealed class PageCountOverrideTests(LibraryApiFixture fixture)
 
     private sealed record Entry(Guid Id, int? PageCountOverride, int? EffectivePageCount, Progress? Progress);
 
-    private sealed record Progress(decimal Position, string Unit, int? PercentComplete);
+    private sealed record Progress(decimal? AmountRead, string? Unit, int? PercentComplete);
 }

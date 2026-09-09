@@ -46,6 +46,8 @@ public static class BookEndpoints
             string? isbn,
             string? title,
             string? author,
+            int? page,
+            int? pageSize,
             BookCatalog catalog,
             CancellationToken cancellationToken) =>
         {
@@ -59,9 +61,17 @@ public static class BookEndpoints
                 });
             }
 
-            // An ISBN names one edition exactly, so it wins over the fuzzier fields.
+            if (PagingErrors(page, pageSize) is { Count: > 0 } pagingErrors)
+            {
+                return Results.ValidationProblem(pagingErrors);
+            }
+
+            var window = new SearchWindow(page ?? 1, pageSize ?? SearchWindow.DefaultPageSize);
+
+            // An ISBN names one edition exactly, so it wins over the fuzzier fields — and there
+            // is only ever one page of one edition, whatever window was asked for.
             var search = string.IsNullOrWhiteSpace(isbn)
-                ? await catalog.SearchByTitleAndAuthorAsync(title, author, cancellationToken)
+                ? await catalog.SearchByTitleAndAuthorAsync(title, author, window, cancellationToken)
                 : await catalog.SearchByIsbnAsync(isbn.Trim(), cancellationToken);
 
             return search.Status switch
@@ -73,7 +83,11 @@ public static class BookEndpoints
                     detail: "No book data provider could be reached. This does not mean the book does not exist.",
                     statusCode: StatusCodes.Status503ServiceUnavailable),
 
-                _ => Results.Ok(new BookSearchResponse([.. search.Books.Select(BookResponse.From)])),
+                _ => Results.Ok(new BookSearchResponse(
+                    [.. search.Books.Select(BookResponse.From)],
+                    window.Page,
+                    window.PageSize,
+                    search.HasMore)),
             };
         })
         .WithName("SearchBooks");
@@ -118,6 +132,28 @@ public static class BookEndpoints
     }
 
     /// <summary>
+    /// A page that cannot exist is a mistake in the request, not an empty result: answering it
+    /// with no matches would read as "there are no more books" rather than "you asked for
+    /// page zero".
+    /// </summary>
+    private static Dictionary<string, string[]> PagingErrors(int? page, int? pageSize)
+    {
+        var errors = new Dictionary<string, string[]>();
+
+        if (page is < 1)
+        {
+            errors[nameof(page)] = ["Pages start at 1."];
+        }
+
+        if (pageSize is < 1 or > SearchWindow.MaxPageSize)
+        {
+            errors[nameof(pageSize)] = [$"Ask for between 1 and {SearchWindow.MaxPageSize} results a page."];
+        }
+
+        return errors;
+    }
+
+    /// <summary>
     /// A Book's details as typed in by hand. Title and author are the minimum that makes a
     /// Book meaningful; everything else is what the reader happens to know.
     /// </summary>
@@ -151,7 +187,16 @@ public static class BookEndpoints
         string? CoverUrl,
         int? TotalPages);
 
-    private sealed record BookSearchResponse(IReadOnlyList<BookResponse> Results);
+    /// <summary>
+    /// A page of matches. There is no total: Google Books' own count is an estimate that moves
+    /// between requests and Open Library counts works rather than the editions it lists, so
+    /// <paramref name="HasMore"/> is the most that can honestly be said about what follows.
+    /// </summary>
+    private sealed record BookSearchResponse(
+        IReadOnlyList<BookResponse> Results,
+        int Page,
+        int PageSize,
+        bool HasMore);
 
     private sealed record BookResponse(
         Guid Id,

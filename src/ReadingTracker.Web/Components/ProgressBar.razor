@@ -1,0 +1,82 @@
+@using ReadingTracker.Web.Services
+
+@*
+    How much of a book the reader has read. Library adds it up from their sessions every time it
+    is asked for, never stores it, so this is always in step with the history behind it.
+
+    A book with no sessions yet has no progress at all — not zero. Saying "0%" would claim
+    something about the reader's reading that nothing has established.
+*@
+
+@if (Progress is { } progress)
+{
+    <div class="progress">
+        @if (progress.AmountRead is null)
+        {
+            @* Some of it logged in pages, some in percent, and no page count to add the two
+               together with. The reader can fix it, and the Settings panel is where. *@
+            <span class="progress__label">Set a page count to total this up</span>
+        }
+        else if (progress.PercentComplete is { } percent)
+        {
+            <div class="progress__track" role="progressbar"
+                 aria-valuenow="@percent" aria-valuemin="0" aria-valuemax="100"
+                 aria-label="How much of this book you have read">
+                <div class="progress__fill" style="width: @(percent)%"></div>
+            </div>
+            @* Tracking by percentage makes the bar's percentage and the reader's own total the
+               same quantity, and "14% · 13.5%" reads as two facts that disagree. Say it once. *@
+            <span class="progress__label">
+                @if (progress.Unit == "Percentage")
+                {
+                    <text>@Read(progress)</text>
+                }
+                else
+                {
+                    <text>@percent% · @Read(progress)</text>
+                }
+            </span>
+        }
+        else
+        {
+            @* No page count anywhere, so a percentage cannot be worked out. The total is still
+               worth showing: it is what the reader actually told us. *@
+            <span class="progress__label">@Read(progress)</span>
+        }
+    </div>
+}
+else
+{
+    <span class="progress__label muted">Not started</span>
+}
+
+@code {
+    [Parameter]
+    public Progress? Progress { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string TrackingMethod { get; set; }
+
+    [Parameter]
+    public int? EffectivePageCount { get; set; }
+
+    /// <summary>
+    /// What the reader has read, in words. Against a known length it is worth saying what the
+    /// total is out of, and Library has already stopped that total at the whole book — so this
+    /// says "208 of 208 pages read" and never more, however much was logged.
+    /// </summary>
+    private string Read(Progress progress)
+    {
+        var amount = Trim(progress.AmountRead!.Value);
+
+        if (progress.Unit == "Percentage")
+        {
+            return $"{amount}% read";
+        }
+
+        return EffectivePageCount is { } total ? $"{amount} of {total} pages read" : $"{amount} pages read";
+    }
+
+    private static string Trim(decimal value) =>
+        value == decimal.Truncate(value) ? decimal.Truncate(value).ToString() : value.ToString("0.#");
+}

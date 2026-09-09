@@ -1,0 +1,150 @@
+name: Deploy services
+
+# Catalog, Library and Gateway to Azure Container Apps (ADR-0005). The frontend is not here —
+# it is static files on Azure Static Web Apps, and has its own workflow.
+#
+# All three are built and deployed together on every run rather than filtered by path. A
+# Container Apps revision is cheap, and "which services did this commit touch" is exactly the
+# kind of cleverness that eventually deploys two services that disagree about a contract.
+#
+# Nothing here holds a credential. Azure is reached by OIDC federated login, so there is no
+# long-lived secret to rotate or leak; the images go to this repository's own GHCR namespace
+# using the token GitHub already issues to the job. What each service needs to *run* —
+# connection strings, the broker, AllowedOrigins, the Google Books key — lives on the container
+# app itself, set once in Azure, not passed through here. See docs/deployment.md.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+# One deployment at a time, and never cancelled halfway: a cancelled `containerapp update`
+# leaves a revision half-rolled-out, which is worse than waiting.
+concurrency:
+  group: deploy-services
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    strategy:
+      # One service failing should not leave the other two unattempted and unreported.
+      fail-fast: false
+      matrix:
+        service: [catalog, library, gateway]
+        include:
+          - service: catalog
+            project: ReadingTracker.Catalog
+          - service: library
+            project: ReadingTracker.Library
+          - service: gateway
+            project: ReadingTracker.Gateway
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fail on the configuration rather than half way through a deployment. Everything below
+      # this point assumes these exist, and an unset variable in a shell expansion is an empty
+      # string, which `az` would cheerfully accept as a resource group named "".
+      - name: Check the deployment is configured
+        env:
+          CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          APP_PREFIX: ${{ vars.CONTAINER_APP_PREFIX }}
+        run: |
+          missing=""
+          for name in CLIENT_ID TENANT_ID SUBSCRIPTION_ID RESOURCE_GROUP APP_PREFIX; do
+            [ -n "${!name}" ] || missing="$missing AZURE_$name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository variables:$missing — see docs/deployment.md"
+            exit 1
+          fi
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Tagged by commit so a deployed revision names exactly what is in it, with `latest`
+      # alongside for a human pulling the image by hand. The registry namespace is lowercased
+      # because GHCR rejects capitals and GitHub owners may have them.
+      - name: Work out the image name
+        id: image
+        run: echo "name=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')-${{ matrix.service }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          # The repo root: each Dockerfile copies from src/, so the context has to be above it.
+          context: .
+          file: src/${{ matrix.project }}/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.image.outputs.name }}:${{ github.sha }}
+            ${{ steps.image.outputs.name }}:latest
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,scope=${{ matrix.service }},mode=max
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # Only the image is set here. Everything else about the app — its secrets, its ingress,
+      # its scaling — is deliberately left as whatever Azure already holds, so a deployment
+      # cannot quietly revert a setting somebody changed in the portal to put out a fire.
+      - name: Deploy the new image
+        uses: azure/cli@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            az containerapp update \
+              --name '${{ vars.CONTAINER_APP_PREFIX }}-${{ matrix.service }}' \
+              --resource-group '${{ vars.AZURE_RESOURCE_GROUP }}' \
+              --image '${{ steps.image.outputs.name }}:${{ github.sha }}'
+
+      # A green deployment that serves errors is not a green deployment. Container Apps reports
+      # the revision healthy from its own probe; this asks the service the same question from
+      # outside, which is the only place a reader ever asks it from.
+      - name: Check it answers
+        uses: azure/cli@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            fqdn=$(az containerapp show \
+              --name '${{ vars.CONTAINER_APP_PREFIX }}-${{ matrix.service }}' \
+              --resource-group '${{ vars.AZURE_RESOURCE_GROUP }}' \
+              --query 'properties.configuration.ingress.fqdn' --output tsv)
+
+            if [ -z "$fqdn" ]; then
+              echo "::notice::${{ matrix.service }} has no external ingress; skipping the health check."
+              exit 0
+            fi
+
+            # Scale-to-zero means the first request pays for a cold start, so this is patient
+            # before it is unhappy.
+            for attempt in $(seq 1 12); do
+              code=$(curl -fsS -o /dev/null -w '%{http_code}' "https://$fqdn/health" || true)
+              if [ "$code" = "200" ]; then
+                echo "${{ matrix.service }} healthy at https://$fqdn/health"
+                exit 0
+              fi
+              echo "attempt $attempt: /health said '${code:-no response}'"
+              sleep 10
+            done
+
+            echo "::error::${{ matrix.service }} never returned 200 from /health"
+            exit 1

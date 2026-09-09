@@ -1,0 +1,20 @@
+@*
+    The quiet placeholder for every moment the application is busy with something a reader did not
+    ask to watch: working out who is signed in, and each leg of the sign-in and sign-out round trip.
+
+    It exists because the alternative is what the framework does by default — "Checking login
+    state...", "Completing login...", "Processing logout" — a line of small text in the top-left
+    corner of an otherwise empty page. Each is a different sentence about the same thing, which is
+    "wait a moment", and none of them is anything a reader can act on. One shape, centred, saying
+    the same thing without words, is less to look at and less to read.
+
+    It is deliberately the boot screen's own animation, so the whole start-up reads as one wait
+    rather than a sequence of unrelated screens.
+*@
+
+<div class="settling">
+    <div class="splash__books" aria-hidden="true">
+        <span></span><span></span><span></span><span></span>
+    </div>
+    <span class="visually-hidden" role="status">Loading</span>
+</div>

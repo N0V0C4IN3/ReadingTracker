@@ -7,31 +7,100 @@ namespace ReadingTracker.Library.Tests;
 public sealed class ReadingSessionTests(LibraryApiFixture fixture)
 {
     [Fact]
-    public async Task Records_what_i_read_and_works_out_how_far_through_i_am()
+    public async Task Records_what_i_read_and_works_out_how_much_of_the_book_that_is()
     {
         var client = fixture.ClientFor("session-reader");
-        var entryId = await fixture.AddBookAsync(client,300);
+        var entryId = await fixture.AddBookAsync(client, 300);
 
         var logged = await client.PostAsJsonAsync($"/api/library/{entryId}/sessions", new
         {
-            startPosition = 98,
-            endPosition = 120,
+            amount = 120,
         });
 
         Assert.Equal(HttpStatusCode.Created, logged.StatusCode);
         var entry = await GetEntryAsync(client, entryId);
-        Assert.Equal(120, entry.Progress!.Position);
+        Assert.Equal(120, entry.Progress!.AmountRead);
         Assert.Equal("Pages", entry.Progress.Unit);
         Assert.Equal(40, entry.Progress.PercentComplete);
+    }
+
+    [Fact]
+    public async Task Adds_up_everything_i_have_read_of_a_book()
+    {
+        var client = fixture.ClientFor("adding-up-reader");
+        var entryId = await fixture.AddBookAsync(client, 300);
+
+        await LogAsync(client, entryId, 40);
+        await LogAsync(client, entryId, 56);
+        await LogAsync(client, entryId, 24);
+
+        // A total, not a position: the reader has read 120 pages of this book.
+        var entry = await GetEntryAsync(client, entryId);
+        Assert.Equal(120, entry.Progress!.AmountRead);
+        Assert.Equal(40, entry.Progress.PercentComplete);
+    }
+
+    [Fact]
+    public async Task Adds_my_reading_up_the_same_whatever_order_i_logged_it_in()
+    {
+        var client = fixture.ClientFor("any-order-reader");
+        var entryId = await fixture.AddBookAsync(client, 400);
+
+        // Logged second, but happened first.
+        await LogAsync(client, entryId, 60, occurredAt: DateTimeOffset.UtcNow.AddDays(-1));
+        await LogAsync(client, entryId, 40, occurredAt: DateTimeOffset.UtcNow.AddDays(-5));
+
+        // A sum has no most-recent term, which is the point: nothing turns on which session
+        // happened to be logged last, or on a clock the reader may have set wrongly.
+        Assert.Equal(100, (await GetEntryAsync(client, entryId)).Progress!.AmountRead);
+    }
+
+    [Fact]
+    public async Task Stops_my_total_at_the_whole_book_however_much_i_log()
+    {
+        var client = fixture.ClientFor("rereading-reader");
+        var entryId = await fixture.AddBookAsync(client, 300);
+        await LogAsync(client, entryId, 300);
+
+        var again = await LogAsync(client, entryId, 300);
+
+        // Nothing is refused and nothing is lost — both sessions are on the record — but how far
+        // through the book the reader is cannot be further than its end.
+        Assert.Equal(HttpStatusCode.Created, again.StatusCode);
+        var entry = await GetEntryAsync(client, entryId);
+        Assert.Equal(300, entry.Progress!.AmountRead);
+        Assert.Equal(100, entry.Progress.PercentComplete);
+        Assert.Equal(2, (await SessionsAsync(client, entryId)).Count);
+    }
+
+    [Fact]
+    public async Task Keeps_what_i_logged_so_a_page_count_i_fix_later_still_adds_up()
+    {
+        var client = fixture.ClientFor("longer-edition-reader");
+        var entryId = await fixture.AddBookAsync(client, 300);
+
+        // Their edition is longer than the catalog's, so this looks like too much at the time.
+        await LogAsync(client, entryId, 280);
+        await LogAsync(client, entryId, 120);
+
+        Assert.Equal(300, (await GetEntryAsync(client, entryId)).Progress!.AmountRead);
+
+        await client.PutAsJsonAsync($"/api/library/{entryId}/page-count", new { totalPages = 480 });
+
+        // Truncating the second session to what "fitted" would have thrown those 100 pages away
+        // for good. Recording what the reader said is what lets the correction put it right.
+        var entry = await GetEntryAsync(client, entryId);
+        Assert.Equal(400, entry.Progress!.AmountRead);
+        Assert.Equal(83, entry.Progress.PercentComplete);
     }
 
     [Fact]
     public async Task Tells_me_how_far_through_i_am_in_whole_percent()
     {
         var client = fixture.ClientFor("rounding-reader");
-        var entryId = await fixture.AddBookAsync(client,705);
+        var entryId = await fixture.AddBookAsync(client, 705);
 
-        await LogAsync(client, entryId, 1, 120);
+        await LogAsync(client, entryId, 120);
 
         // 17.02% is noise: nobody reads a book to two decimal places.
         Assert.Equal(17, (await GetEntryAsync(client, entryId)).Progress!.PercentComplete);
@@ -41,9 +110,9 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
     public async Task Does_not_say_a_hundred_percent_while_i_still_have_a_page_to_read()
     {
         var client = fixture.ClientFor("nearly-done-reader");
-        var entryId = await fixture.AddBookAsync(client,705);
+        var entryId = await fixture.AddBookAsync(client, 705);
 
-        await LogAsync(client, entryId, 700, 704);
+        await LogAsync(client, entryId, 704);
 
         // 99.86% rounds to 100, which would show a full bar on an unfinished book.
         Assert.Equal(99, (await GetEntryAsync(client, entryId)).Progress!.PercentComplete);
@@ -53,48 +122,33 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
     public async Task Does_not_say_nothing_when_i_have_read_a_little_of_a_long_book()
     {
         var client = fixture.ClientFor("just-started-reader");
-        var entryId = await fixture.AddBookAsync(client,705);
+        var entryId = await fixture.AddBookAsync(client, 705);
 
-        await LogAsync(client, entryId, 1, 2);
+        await LogAsync(client, entryId, 2);
 
         // 0.28% rounds to nothing, which would show an empty bar to a reader who has read.
         Assert.Equal(1, (await GetEntryAsync(client, entryId)).Progress!.PercentComplete);
     }
 
     [Fact]
-    public async Task Takes_my_position_from_the_most_recent_session_whatever_order_i_logged_them_in()
-    {
-        var client = fixture.ClientFor("latest-reader");
-        var entryId = await fixture.AddBookAsync(client,400);
-
-        // Logged second, but happened first.
-        await LogAsync(client, entryId, 200, 260, occurredAt: DateTimeOffset.UtcNow.AddDays(-1));
-        await LogAsync(client, entryId, 1, 40, occurredAt: DateTimeOffset.UtcNow.AddDays(-5));
-
-        var entry = await GetEntryAsync(client, entryId);
-
-        Assert.Equal(260, entry.Progress!.Position);
-    }
-
-    [Fact]
     public async Task Starts_the_book_when_i_log_reading_against_something_i_only_wanted_to_read()
     {
         var client = fixture.ClientFor("autostart-reader");
-        var entryId = await fixture.AddBookAsync(client,300);
+        var entryId = await fixture.AddBookAsync(client, 300);
 
-        await LogAsync(client, entryId, 1, 20);
+        await LogAsync(client, entryId, 20);
 
         // The reader has plainly started; making them say so twice is busywork.
         Assert.Equal("Reading", (await GetEntryAsync(client, entryId)).Status);
     }
 
     [Fact]
-    public async Task Does_not_declare_a_book_finished_just_because_i_reached_the_last_page()
+    public async Task Does_not_declare_a_book_finished_just_because_i_read_all_of_it()
     {
         var client = fixture.ClientFor("endmatter-reader");
-        var entryId = await fixture.AddBookAsync(client,300);
+        var entryId = await fixture.AddBookAsync(client, 300);
 
-        await LogAsync(client, entryId, 280, 300);
+        await LogAsync(client, entryId, 300);
 
         // People stop before the end matter, and finishing is the reader's call.
         Assert.Equal("Reading", (await GetEntryAsync(client, entryId)).Status);
@@ -104,27 +158,26 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
     public async Task Shows_me_the_history_of_how_i_read_a_book()
     {
         var client = fixture.ClientFor("history-reader");
-        var entryId = await fixture.AddBookAsync(client,300);
-        await LogAsync(client, entryId, 1, 40, occurredAt: DateTimeOffset.UtcNow.AddDays(-2));
-        await LogAsync(client, entryId, 40, 96, occurredAt: DateTimeOffset.UtcNow.AddDays(-1));
+        var entryId = await fixture.AddBookAsync(client, 300);
+        await LogAsync(client, entryId, 40, occurredAt: DateTimeOffset.UtcNow.AddDays(-2));
+        await LogAsync(client, entryId, 56, occurredAt: DateTimeOffset.UtcNow.AddDays(-1));
 
         var sessions = await client.GetFromJsonAsync<IReadOnlyList<Session>>($"/api/library/{entryId}/sessions");
 
         Assert.Equal(2, sessions!.Count);
-        Assert.Contains(sessions, session => session.StartPosition == 1 && session.EndPosition == 40);
-        Assert.Contains(sessions, session => session.StartPosition == 40 && session.EndPosition == 96);
+        Assert.Contains(sessions, session => session.Amount == 40);
+        Assert.Contains(sessions, session => session.Amount == 56);
     }
 
     [Fact]
     public async Task Records_how_long_i_read_for_when_i_say_so()
     {
         var client = fixture.ClientFor("duration-reader");
-        var entryId = await fixture.AddBookAsync(client,300);
+        var entryId = await fixture.AddBookAsync(client, 300);
 
         await client.PostAsJsonAsync($"/api/library/{entryId}/sessions", new
         {
-            startPosition = 10,
-            endPosition = 30,
+            amount = 20,
             durationMinutes = 45,
         });
 
@@ -133,33 +186,49 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
     }
 
     [Fact]
-    public async Task Refuses_a_session_that_ends_before_it_starts()
+    public async Task Refuses_a_session_in_which_nothing_was_read()
     {
-        var client = fixture.ClientFor("backwards-reader");
-        var entryId = await fixture.AddBookAsync(client,300);
+        var client = fixture.ClientFor("nothing-read-reader");
+        var entryId = await fixture.AddBookAsync(client, 300);
 
-        var response = await client.PostAsJsonAsync($"/api/library/{entryId}/sessions", new
-        {
-            startPosition = 120,
-            endPosition = 98,
-        });
+        var nothing = await LogAsync(client, entryId, 0);
+        var backwards = await LogAsync(client, entryId, -20);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, nothing.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, backwards.StatusCode);
+        Assert.Null((await GetEntryAsync(client, entryId)).Progress);
     }
 
     [Fact]
-    public async Task Refuses_a_session_that_runs_past_the_end_of_the_book()
+    public async Task Takes_a_sitting_longer_than_the_whole_book_rather_than_arguing_about_it()
     {
         var client = fixture.ClientFor("overrun-reader");
-        var entryId = await fixture.AddBookAsync(client,300);
+        var entryId = await fixture.AddBookAsync(client, 300);
 
-        var response = await client.PostAsJsonAsync($"/api/library/{entryId}/sessions", new
-        {
-            startPosition = 290,
-            endPosition = 460,
-        });
+        var response = await LogAsync(client, entryId, 460);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        // Their edition may be longer than the one the catalog knows, or they may have
+        // misremembered. Either way, throwing the reading away over it helps nobody: it is
+        // recorded as stated, and the total stops at the end of the book.
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var entry = await GetEntryAsync(client, entryId);
+        Assert.Equal(300, entry.Progress!.AmountRead);
+        Assert.Equal(100, entry.Progress.PercentComplete);
+        Assert.Equal(460, Assert.Single(await SessionsAsync(client, entryId)).Amount);
+    }
+
+    [Fact]
+    public async Task Takes_any_amount_when_nobody_knows_how_long_the_book_is()
+    {
+        var client = fixture.ClientFor("unmeasured-reader");
+        var entryId = await fixture.AddBookAsync(client, totalPages: null);
+
+        var response = await LogAsync(client, entryId, 460);
+
+        // There is no length to have read more than, and losing the reading would be worse
+        // than losing the check.
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(460, (await GetEntryAsync(client, entryId)).Progress!.AmountRead);
     }
 
     [Fact]
@@ -168,7 +237,7 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
         var mine = await fixture.AddBookAsync(fixture.ClientFor("session-owner"), 300);
 
         var response = await fixture.ClientFor("session-intruder")
-            .PostAsJsonAsync($"/api/library/{mine}/sessions", new { startPosition = 1, endPosition = 10 });
+            .PostAsJsonAsync($"/api/library/{mine}/sessions", new { amount = 10 });
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -177,35 +246,81 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
     public async Task Has_no_progress_until_i_have_read_something()
     {
         var client = fixture.ClientFor("unread-reader");
-        var entryId = await fixture.AddBookAsync(client,300);
+        var entryId = await fixture.AddBookAsync(client, 300);
 
         Assert.Null((await GetEntryAsync(client, entryId)).Progress);
+    }
+
+    [Fact]
+    public async Task Records_when_i_read_from_a_timezone_that_is_not_utc()
+    {
+        var client = fixture.ClientFor("moscow-reader");
+        var entryId = await fixture.AddBookAsync(client, 300);
+
+        // What a browser east of UTC actually sends for "I read this on the 8th": local midnight
+        // carrying its own offset. Postgres accepts only a zero offset through Npgsql, so storing
+        // this as it arrives fails the whole request — every test until now happened to use
+        // UtcNow, which is exactly why nothing caught it.
+        var whenIRead = new DateTimeOffset(2026, 9, 8, 0, 0, 0, TimeSpan.FromHours(3));
+
+        var logged = await LogAsync(client, entryId, 60, whenIRead);
+
+        Assert.Equal(HttpStatusCode.Created, logged.StatusCode);
+
+        var sessions = await client.GetFromJsonAsync<IReadOnlyList<Session>>($"/api/library/{entryId}/sessions");
+
+        // The same instant, whatever offset it is written with.
+        Assert.Equal(whenIRead, Assert.Single(sessions!).OccurredAt);
+    }
+
+    [Fact]
+    public async Task Corrects_a_session_to_a_time_in_a_timezone_that_is_not_utc()
+    {
+        var client = fixture.ClientFor("corrections-abroad-reader");
+        var entryId = await fixture.AddBookAsync(client, 300);
+        await LogAsync(client, entryId, 40);
+
+        var sessionId = (await client.GetFromJsonAsync<IReadOnlyList<Session>>($"/api/library/{entryId}/sessions"))!
+            .Single().Id;
+
+        var actually = new DateTimeOffset(2026, 9, 7, 21, 30, 0, TimeSpan.FromHours(-5));
+
+        var corrected = await client.PutAsJsonAsync($"/api/library/{entryId}/sessions/{sessionId}", new
+        {
+            amount = 40,
+            occurredAt = actually,
+        });
+
+        Assert.Equal(HttpStatusCode.OK, corrected.StatusCode);
+
+        var sessions = await client.GetFromJsonAsync<IReadOnlyList<Session>>($"/api/library/{entryId}/sessions");
+        Assert.Equal(actually, Assert.Single(sessions!).OccurredAt);
     }
 
     private static Task<HttpResponseMessage> LogAsync(
         HttpClient client,
         Guid entryId,
-        int start,
-        int end,
+        decimal amount,
         DateTimeOffset? occurredAt = null) =>
         client.PostAsJsonAsync($"/api/library/{entryId}/sessions", new
         {
-            startPosition = start,
-            endPosition = end,
+            amount,
             occurredAt,
         });
+
+    private static async Task<IReadOnlyList<Session>> SessionsAsync(HttpClient client, Guid entryId) =>
+        (await client.GetFromJsonAsync<IReadOnlyList<Session>>($"/api/library/{entryId}/sessions"))!;
 
     private static async Task<Entry> GetEntryAsync(HttpClient client, Guid entryId) =>
         (await client.GetFromJsonAsync<IReadOnlyList<Entry>>("/api/library"))!.Single(e => e.Id == entryId);
 
     private sealed record Entry(Guid Id, Guid BookId, string Status, Progress? Progress);
 
-    private sealed record Progress(decimal Position, string Unit, int? PercentComplete);
+    private sealed record Progress(decimal? AmountRead, string? Unit, int? PercentComplete);
 
     private sealed record Session(
         Guid Id,
-        decimal StartPosition,
-        decimal EndPosition,
+        decimal Amount,
         string Unit,
         DateTimeOffset OccurredAt,
         int? DurationMinutes);

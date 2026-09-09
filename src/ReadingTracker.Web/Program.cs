@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using Microsoft.JSInterop;
 using ReadingTracker.Web;
 using ReadingTracker.Web.Services;
 
@@ -80,7 +81,33 @@ else
 AddGatewayClient<GatewayLibraryClient>();
 AddGatewayClient<GatewayCatalogClient>();
 
-await builder.Build().RunAsync();
+var host = builder.Build();
+
+if (!devSignIn.Enabled)
+{
+    // Installed before anything renders, so it is already watching when the callback page runs
+    // its own sign-in completion. See wwwroot/js/signInDiagnostics.js for why a failed sign-in
+    // otherwise leaves no trace at all.
+    //
+    // Nothing here is allowed to stop the application starting. This only ever explains a
+    // failure; an application that refuses to boot because the thing that explains failures
+    // could not be loaded has turned a diagnostic into an outage — which is exactly what
+    // happened the first time this was written without the catch, when a stale asset hash
+    // blocked the import and took the whole page down with it.
+    try
+    {
+        var module = await host.Services.GetRequiredService<IJSRuntime>()
+            .InvokeAsync<IJSObjectReference>("import", "./js/signInDiagnostics.js");
+
+        await module.InvokeVoidAsync("watchSignInCallback");
+    }
+    catch (Exception exception)
+    {
+        Console.Error.WriteLine($"Sign-in diagnostics could not be installed: {exception.Message}");
+    }
+}
+
+await host.RunAsync();
 
 void AddGatewayClient<TClient>()
     where TClient : class
