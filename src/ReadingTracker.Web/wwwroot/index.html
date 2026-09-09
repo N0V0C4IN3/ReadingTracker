@@ -9,7 +9,12 @@
     <link rel="preload" id="webassembly" />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
-    <link href="ReadingTracker.Web.styles.css" rel="stylesheet" />
+    <!-- No link to ReadingTracker.Web.styles.css: that bundle is only built when a component
+         has scoped styles in a .razor.css file, and none do — everything is in css/app.css. The
+         project template links it unconditionally, which meant a 404 in the console on every
+         single page load, and console noise is what a real error has to be spotted among. Add
+         the link back alongside the first .razor.css. -->
+
     <script type="importmap"></script>
 </head>
 
