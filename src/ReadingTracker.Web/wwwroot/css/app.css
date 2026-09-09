@@ -524,6 +524,14 @@ button.danger {
     border-radius: 0 4px 4px 0;
 }
 
+/* Something went wrong, as opposed to something worth knowing. The accent reads as reassuring,
+   which is the wrong note for the reason a sign-in failed. */
+.notice--bad {
+    border-left-color: var(--danger);
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
 .empty {
     padding: 1.5rem;
     text-align: center;
