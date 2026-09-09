@@ -68,12 +68,12 @@ public sealed class CorrectReadingSessionTests(LibraryApiFixture fixture)
             $"/api/library/{entryId}/sessions/{sessionId}",
             new { amount = 0 });
 
-        var longerThanTheBook = await client.PutAsJsonAsync(
+        var backwards = await client.PutAsJsonAsync(
             $"/api/library/{entryId}/sessions/{sessionId}",
-            new { amount = 460 });
+            new { amount = -20 });
 
         Assert.Equal(HttpStatusCode.BadRequest, nothing.StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, longerThanTheBook.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, backwards.StatusCode);
         // The session the reader already had is left as it was.
         Assert.Equal(30, Assert.Single(await SessionsAsync(client, entryId)).Amount);
     }

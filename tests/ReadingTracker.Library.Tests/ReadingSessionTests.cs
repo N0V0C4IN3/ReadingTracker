@@ -56,7 +56,7 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
     }
 
     [Fact]
-    public async Task Lets_me_log_reading_a_book_i_have_already_finished_once()
+    public async Task Stops_my_total_at_the_whole_book_however_much_i_log()
     {
         var client = fixture.ClientFor("rereading-reader");
         var entryId = await fixture.AddBookAsync(client, 300);
@@ -64,12 +64,34 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
 
         var again = await LogAsync(client, entryId, 300);
 
-        // Re-reading is reading. The total says so plainly, and the bar stops at full rather
-        // than running off the end of itself.
+        // Nothing is refused and nothing is lost — both sessions are on the record — but how far
+        // through the book the reader is cannot be further than its end.
         Assert.Equal(HttpStatusCode.Created, again.StatusCode);
         var entry = await GetEntryAsync(client, entryId);
-        Assert.Equal(600, entry.Progress!.AmountRead);
+        Assert.Equal(300, entry.Progress!.AmountRead);
         Assert.Equal(100, entry.Progress.PercentComplete);
+        Assert.Equal(2, (await SessionsAsync(client, entryId)).Count);
+    }
+
+    [Fact]
+    public async Task Keeps_what_i_logged_so_a_page_count_i_fix_later_still_adds_up()
+    {
+        var client = fixture.ClientFor("longer-edition-reader");
+        var entryId = await fixture.AddBookAsync(client, 300);
+
+        // Their edition is longer than the catalog's, so this looks like too much at the time.
+        await LogAsync(client, entryId, 280);
+        await LogAsync(client, entryId, 120);
+
+        Assert.Equal(300, (await GetEntryAsync(client, entryId)).Progress!.AmountRead);
+
+        await client.PutAsJsonAsync($"/api/library/{entryId}/page-count", new { totalPages = 480 });
+
+        // Truncating the second session to what "fitted" would have thrown those 100 pages away
+        // for good. Recording what the reader said is what lets the correction put it right.
+        var entry = await GetEntryAsync(client, entryId);
+        Assert.Equal(400, entry.Progress!.AmountRead);
+        Assert.Equal(83, entry.Progress.PercentComplete);
     }
 
     [Fact]
@@ -178,15 +200,21 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
     }
 
     [Fact]
-    public async Task Refuses_a_sitting_longer_than_the_whole_book()
+    public async Task Takes_a_sitting_longer_than_the_whole_book_rather_than_arguing_about_it()
     {
         var client = fixture.ClientFor("overrun-reader");
         var entryId = await fixture.AddBookAsync(client, 300);
 
         var response = await LogAsync(client, entryId, 460);
 
-        // Nobody reads 460 pages of a 300-page book in one sitting; they mistyped.
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        // Their edition may be longer than the one the catalog knows, or they may have
+        // misremembered. Either way, throwing the reading away over it helps nobody: it is
+        // recorded as stated, and the total stops at the end of the book.
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var entry = await GetEntryAsync(client, entryId);
+        Assert.Equal(300, entry.Progress!.AmountRead);
+        Assert.Equal(100, entry.Progress.PercentComplete);
+        Assert.Equal(460, Assert.Single(await SessionsAsync(client, entryId)).Amount);
     }
 
     [Fact]
@@ -279,6 +307,9 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
             amount,
             occurredAt,
         });
+
+    private static async Task<IReadOnlyList<Session>> SessionsAsync(HttpClient client, Guid entryId) =>
+        (await client.GetFromJsonAsync<IReadOnlyList<Session>>($"/api/library/{entryId}/sessions"))!;
 
     private static async Task<Entry> GetEntryAsync(HttpClient client, Guid entryId) =>
         (await client.GetFromJsonAsync<IReadOnlyList<Entry>>("/api/library"))!.Single(e => e.Id == entryId);

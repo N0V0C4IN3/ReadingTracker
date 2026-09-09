@@ -62,8 +62,8 @@ else
 
     /// <summary>
     /// What the reader has read, in words. Against a known length it is worth saying what the
-    /// total is out of — and a reader who has been through a book twice really has read more
-    /// pages than it has, which is why this is never clamped the way the bar is.
+    /// total is out of, and Library has already stopped that total at the whole book — so this
+    /// says "208 of 208 pages read" and never more, however much was logged.
     /// </summary>
     private string Read(Progress progress)
     {

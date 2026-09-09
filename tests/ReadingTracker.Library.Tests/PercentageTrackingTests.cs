@@ -156,7 +156,7 @@ public sealed class PercentageTrackingTests(LibraryApiFixture fixture)
     }
 
     [Fact]
-    public async Task Refuses_a_sitting_of_more_than_a_whole_book()
+    public async Task Never_says_i_have_read_more_than_all_of_a_book()
     {
         var client = fixture.ClientFor("over-hundred-reader");
         var entryId = await fixture.AddBookAsync(client, 300);
@@ -164,7 +164,12 @@ public sealed class PercentageTrackingTests(LibraryApiFixture fixture)
 
         var response = await LogAsync(client, entryId, 140);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        // 140% is not a share of a book anyone can have read. The session is kept as stated —
+        // it may be a typo, and only the reader can say — but the total stops at all of it.
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var progress = (await EntryAsync(client, entryId)).Progress;
+        Assert.Equal(100, progress!.AmountRead);
+        Assert.Equal(100, progress.PercentComplete);
     }
 
     [Fact]

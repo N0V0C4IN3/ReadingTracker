@@ -168,6 +168,19 @@
             </div>
         }
 
+        @* Offered, never done for them: people log the last page and keep going into the end
+           matter, and a book that marks itself finished is a book arguing with its reader. Only
+           ever raised by a log that took them to the end, so it does not nag someone who is
+           sitting at 100% and has already said no. *@
+        @if (_panel == Panel.Finished)
+        {
+            <div class="panel">
+                <p>That is all of <strong>@(Entry.Book?.Title ?? "this book")</strong>. Mark it as finished?</p>
+                <button type="button" @onclick="MarkFinishedAsync" disabled="@_working">Mark it finished</button>
+                <button type="button" class="link-button" @onclick="Close" disabled="@_working">Not yet</button>
+            </div>
+        }
+
         @if (_panel == Panel.Remove)
         {
             <div class="panel panel--danger">
@@ -180,7 +193,7 @@
 </article>
 
 @code {
-    private enum Panel { None, Log, History, Settings, Remove }
+    private enum Panel { None, Log, History, Settings, Remove, Finished }
 
     /// <summary>The wording readers see, against the values Library actually accepts.</summary>
     private static readonly Dictionary<string, string> Statuses = new()
@@ -264,6 +277,15 @@
         await RunAsync(token => Library.SetStatusAsync(Entry.Id, status, token), _ => Refresh());
     }
 
+    /// <summary>Their answer to the prompt a completed book raises, which is the same change
+    /// the status control makes — the prompt only saves them going to find it.</summary>
+    private async Task MarkFinishedAsync() =>
+        await RunAsync(token => Library.SetStatusAsync(Entry.Id, "Finished", token), async _ =>
+        {
+            Close();
+            await Refresh();
+        });
+
     private async Task TrackingMethodChangedAsync(ChangeEventArgs e)
     {
         if (e.Value?.ToString() is not { } method || method == Entry.TrackingMethod)
@@ -298,7 +320,16 @@
         await RunAsync(token => Library.LogSessionAsync(Entry.Id, session, token), async _ =>
         {
             Close();
-            await Refresh();
+
+            // Read from the entry Library just handed back rather than from Entry, which is
+            // still the one this component was rendered with — the parent has not re-rendered us
+            // yet. Only a log that took the reader to the end raises this, and only while the
+            // book is not already finished, so nobody is asked twice about the same book and a
+            // reader who said "not yet" is left alone until they read more.
+            if (await Refresh() is { Progress.PercentComplete: 100, Status: not "Finished" })
+            {
+                _panel = Panel.Finished;
+            }
         });
 
     private async Task CorrectAsync(Guid sessionId, NewSession session) =>
@@ -335,20 +366,26 @@
     /// the change — so keeping the old value would show a number that is quietly wrong, which is
     /// worse than showing none. Only Library can say what progress is now, so ask it.
     /// </summary>
-    private async Task Refresh()
+    private async Task<LibraryEntry?> Refresh()
     {
         var (entries, problem) = await Library.GetEntriesAsync(null, CancellationToken.None);
 
         if (problem is LibraryUnavailable.NotSignedIn)
         {
             await OnSignedOut.InvokeAsync();
-            return;
+            return null;
         }
 
-        if (entries?.FirstOrDefault(entry => entry.Id == Entry.Id) is { } fresh)
+        if (entries?.FirstOrDefault(entry => entry.Id == Entry.Id) is not { } fresh)
         {
-            await OnChanged.InvokeAsync(fresh);
+            return null;
         }
+
+        await OnChanged.InvokeAsync(fresh);
+
+        // Handed back as well as raised, because a caller that has just changed something often
+        // needs to know what it changed to before the parent has re-rendered this component.
+        return fresh;
     }
 
     private async Task ReloadSessions()

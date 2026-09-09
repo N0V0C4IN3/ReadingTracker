@@ -243,11 +243,10 @@ public static class LibraryEndpoints
                 body.Amount,
                 body.OccurredAt,
                 body.DurationMinutes,
-                totalPages,
                 cancellationToken);
 
             return problem is { } refused
-                ? SessionRefused(refused, totalPages, entry.TrackingMethod)
+                ? SessionRefused(refused)
                 : Results.Created(
                     $"/api/library/{entryId}/sessions/{session!.Id}",
                     SessionResponse.From(session, entry.TrackingMethod, totalPages));
@@ -283,11 +282,10 @@ public static class LibraryEndpoints
                 entry.TrackingMethod,
                 body.OccurredAt,
                 body.DurationMinutes,
-                totalPages,
                 cancellationToken);
 
             return problem is { } refused
-                ? SessionRefused(refused, totalPages, entry.TrackingMethod)
+                ? SessionRefused(refused)
                 : Results.Ok(SessionResponse.From(session!, entry.TrackingMethod, totalPages));
         })
         .WithName("CorrectReadingSession");
@@ -350,13 +348,9 @@ public static class LibraryEndpoints
             (await catalog.TryFindBooksAsync([entry.BookId], cancellationToken))
                 .GetValueOrDefault(entry.BookId)?.TotalPages);
 
-    private static IResult SessionRefused(SessionProblem problem, int? totalPages, TrackingMethod unit) => problem switch
+    private static IResult SessionRefused(SessionProblem problem) => problem switch
     {
         SessionProblem.NotAnAmountOfReading => SessionRejected("Say how much you read — more than nothing."),
-
-        SessionProblem.LongerThanTheBook => SessionRejected(unit is TrackingMethod.Percentage
-            ? "A book is only 100% long, so one sitting cannot be more than that."
-            : $"This book has {totalPages} pages, so one sitting cannot be more than that."),
 
         // NoSuchEntry and NoSuchSession: not there, or not this reader's to know about.
         _ => Results.NotFound(),

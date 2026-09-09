@@ -11,37 +11,20 @@ public enum SessionProblem
 
     /// <summary>Nothing, or less than nothing, was read. A session records some reading.</summary>
     NotAnAmountOfReading,
-
-    /// <summary>More was read in one sitting than the book has in it, which is a typo.</summary>
-    LongerThanTheBook,
 }
 
 public static class SessionValidation
 {
     /// <summary>
-    /// Checks that an amount of reading is one a person could have done in a sitting.
-    /// <paramref name="totalPages"/> is null when the book's length is unknown, in which case
-    /// there is no length to have read more than.
+    /// Checks that an amount of reading is one a person could have done. The only thing that is
+    /// not is nothing at all.
     ///
-    /// Only the session in front of us is measured against the book, never the running total.
-    /// Someone who reads a book twice has read twice its length, and refusing to record that
-    /// would make re-reading unloggable — which is a far more common thing to do than typing a
-    /// number bigger than the whole book.
+    /// Reading more than the book has left in it is deliberately *not* refused. A reader who is
+    /// twenty pages from the end and logs forty has either misremembered, or is holding an
+    /// edition longer than the one we have a count for — and neither is worth throwing their
+    /// reading away over. It is recorded as they stated it, their total stops at the whole book
+    /// (see <see cref="Progress"/>), and they are asked whether that means they have finished.
     /// </summary>
-    public static SessionProblem? Check(decimal amount, TrackingMethod unit, int? totalPages)
-    {
-        if (amount <= 0m)
-        {
-            return SessionProblem.NotAnAmountOfReading;
-        }
-
-        if (unit is TrackingMethod.Percentage)
-        {
-            return amount > 100m ? SessionProblem.LongerThanTheBook : null;
-        }
-
-        return totalPages is { } total && amount > total
-            ? SessionProblem.LongerThanTheBook
-            : null;
-    }
+    public static SessionProblem? Check(decimal amount) =>
+        amount <= 0m ? SessionProblem.NotAnAmountOfReading : null;
 }

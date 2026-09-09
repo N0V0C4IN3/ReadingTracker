@@ -159,7 +159,8 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
     /// Records a stretch of reading. Starting a book the reader had only meant to read moves
     /// it to Reading: they have plainly started, and making them say so twice is busywork.
     /// Reaching the last page deliberately does not finish it — people stop before the end
-    /// matter, and finishing is the reader's call.
+    /// matter, and finishing is the reader's call, which the client is expected to put to them
+    /// rather than take for them.
     /// </summary>
     public async Task<(ReadingSession? Session, SessionProblem? Problem)> LogSessionAsync(
         string readerId,
@@ -167,7 +168,6 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
         decimal amount,
         DateTimeOffset? occurredAt,
         int? durationMinutes,
-        int? totalPages,
         CancellationToken cancellationToken)
     {
         var entry = await FindAsync(readerId, entryId, cancellationToken);
@@ -177,7 +177,7 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
             return (null, SessionProblem.NoSuchEntry);
         }
 
-        if (SessionValidation.Check(amount, entry.TrackingMethod, totalPages) is { } problem)
+        if (SessionValidation.Check(amount) is { } problem)
         {
             return (null, problem);
         }
@@ -247,7 +247,6 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
         TrackingMethod unit,
         DateTimeOffset? occurredAt,
         int? durationMinutes,
-        int? totalPages,
         CancellationToken cancellationToken)
     {
         var session = await FindSessionAsync(readerId, entryId, sessionId, cancellationToken);
@@ -257,7 +256,7 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
             return (null, SessionProblem.NoSuchSession);
         }
 
-        if (SessionValidation.Check(amount, unit, totalPages) is { } problem)
+        if (SessionValidation.Check(amount) is { } problem)
         {
             // Rejected outright, so the session the reader already had is left alone.
             return (null, problem);

@@ -17,7 +17,7 @@ public static class Progress
         // Shown in the method the reader now tracks by where that can be worked out...
         if (totals.In(method, totalPages) is { } inTheirMethod)
         {
-            return new ReadingProgress(inTheirMethod, method, PercentComplete(inTheirMethod, method, totalPages));
+            return Reached(inTheirMethod, method, totalPages);
         }
 
         // ...and otherwise in the unit they actually logged, never in one we had to guess at. Only
@@ -27,13 +27,34 @@ public static class Progress
 
         if (totals.In(logged, totalPages) is { } asLogged)
         {
-            return new ReadingProgress(asLogged, logged, PercentComplete(asLogged, logged, totalPages));
+            return Reached(asLogged, logged, totalPages);
         }
 
         // Pages and percentages both logged, and no page count to add them up with. Saying "you
         // have read 40" of a total that is really 40 pages *and* 20% would be a smaller number
         // than the reader's own reading, which is worse than admitting we cannot say.
         return new ReadingProgress(null, null, null);
+    }
+
+    /// <summary>
+    /// How far through the book a total puts the reader, which is never further than the end of
+    /// it. A reader twenty pages from the end who logs forty has not read 320 pages of a
+    /// 300-page book; they have read all of it, and probably want to be asked whether they have
+    /// finished. What they typed stays on the record either way — only this derived total stops.
+    ///
+    /// Nothing stops when nobody knows how long the book is, because there is no end to stop at.
+    /// </summary>
+    private static ReadingProgress Reached(decimal amountRead, TrackingMethod unit, int? totalPages)
+    {
+        decimal? wholeBook = unit switch
+        {
+            TrackingMethod.Percentage => 100m,
+            _ => totalPages,
+        };
+
+        var read = wholeBook is { } whole && amountRead > whole ? whole : amountRead;
+
+        return new ReadingProgress(read, unit, PercentComplete(read, unit, totalPages));
     }
 
     /// <summary>
@@ -54,8 +75,8 @@ public static class Progress
     /// off the two ends it would misreport: a reader with a page still to go is never shown
     /// 100%, and one who has read a little of a long book is never shown 0%.
     ///
-    /// A reader who has been through a book more than once has read more of it than it has, so
-    /// the bar stops at full rather than running off the end of itself.
+    /// So 100 means the whole book and nothing less, which is what lets a client ask "have you
+    /// finished?" on the strength of it without ever asking someone who has a chapter to go.
     /// </summary>
     private static int WholePercent(decimal exact) => exact switch
     {

@@ -43,21 +43,19 @@ public sealed class GatewayLibraryClientChangeTests
         gateway.Respond = _ => new HttpResponseMessage(HttpStatusCode.BadRequest)
         {
             Content = new StringContent(
-                """{"errors":{"session":["This book has 445 pages, so one sitting cannot be more than that."]}}""",
+                """{"errors":{"session":["Say how much you read — more than nothing."]}}""",
                 System.Text.Encoding.UTF8,
                 "application/problem+json"),
         };
 
         var outcome = await client.LogSessionAsync(
             EntryId,
-            new NewSession(600, null, null),
+            new NewSession(0, null, null),
             CancellationToken.None);
 
         Assert.False(outcome.Ok);
         Assert.Equal(LibraryChangeProblem.Refused, outcome.Problem);
-        Assert.Equal(
-            "This book has 445 pages, so one sitting cannot be more than that.",
-            Assert.Single(outcome.Reasons));
+        Assert.Equal("Say how much you read — more than nothing.", Assert.Single(outcome.Reasons));
     }
 
     [Fact]
