@@ -60,17 +60,22 @@ Two further things on the connection string:
   that is per service, per replica. Two services cold-starting a few replicas each will exhaust
   a free-tier Neon compute long before they need that many.
 
-### 2. A broker
+### 2. The broker
 
-**This is the one decision ADR-0005 does not make.** It names hosting for the services, the
-database and the frontend, and says nothing about RabbitMQ, which
-[ADR-0003](adr/0003-rabbitmq-for-cross-service-events.md) put between Catalog and Library.
+A managed shared instance — CloudAMQP's free tier — rather than a RabbitMQ container we run
+ourselves ([ADR-0011](adr/0011-rabbitmq-runs-as-a-managed-shared-instance.md)). Create an
+instance and copy its URL.
 
-It does not stop a deployment: publishing is wrapped so a broker that cannot be reached is logged
-and stepped over rather than thrown, and every synchronous path keeps working. What stops is the
-event flow between Catalog and Library. Decide it deliberately and write it down rather than
-discovering it in production. CloudAMQP's free tier is the usual answer for a demo; a container
-app running the RabbitMQ image is the other.
+It will be an `amqps://` URL, and that needs nothing done to it. Both services build their
+connection from a URI and RabbitMQ.Client enables TLS from the scheme on its own, so the whole
+change is the connection string. The same value goes to both Catalog and Library: one publishes
+book events, the other consumes them, and they have to be on the same broker to be talking at
+all.
+
+If it is wrong or missing, nothing crashes. Publishing is wrapped, so an unreachable broker is
+logged and stepped over and every synchronous path keeps working — which is precisely why it is
+worth checking rather than assuming. After deploying, add a book and confirm it appears on the
+shelf; that is the path the events carry.
 
 ### 3. Azure
 
@@ -137,7 +142,7 @@ repository on the `master` branch.
 
 The frontend needs the gateway's address, so the services go first.
 
-1. Create the Neon database and settle the broker.
+1. Create the Neon database and the CloudAMQP instance.
 2. Create the Azure resources and set each container app's configuration.
 3. Set the variables and the secret here.
 4. Run **Deploy services**. It ends by checking `/health` from outside.
@@ -160,3 +165,10 @@ starting. The health check in the services workflow is patient about this on pur
 the services, the settings file for the frontend — and neither signs in and loads a shelf. That
 gap is the deployment-shaped version of the one [#59](https://github.com/N0V0C4IN3/ReadingTracker/issues/59)
 describes.
+
+**A silent broker.** `/health` does not cover RabbitMQ, deliberately: a service that cannot reach
+the broker is still able to serve every request a reader makes, so reporting it unhealthy would
+take a working service out of rotation over a degraded feature. The cost is that a broken
+broker connection is invisible to every automated check there is. Adding a book and watching it
+reach the shelf is the manual test; a `degraded` health status that Container Apps does not act
+on is the fix, if this ever bites.
