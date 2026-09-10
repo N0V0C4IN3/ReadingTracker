@@ -34,11 +34,16 @@ public static class LibraryEndpoints
 
             // One trip to Catalog for the whole shelf, not one per book. Best-effort: if
             // Catalog is unreachable the entries still come back, just without book details.
-            var books = await catalog.TryFindBooksAsync(
+            // Run alongside Totals rather than after it — neither depends on the other's
+            // result, and the Catalog round trip is the slower of the two.
+            var booksTask = catalog.TryFindBooksAsync(
                 [.. entries.Select(entry => entry.BookId).Distinct()],
                 cancellationToken);
+            var totalsTask = library.TotalsAsync([.. entries.Select(entry => entry.Id)], cancellationToken);
 
-            var totals = await library.TotalsAsync([.. entries.Select(entry => entry.Id)], cancellationToken);
+            await Task.WhenAll(booksTask, totalsTask);
+            var books = await booksTask;
+            var totals = await totalsTask;
 
             return Results.Ok(entries.Select(entry =>
             {
@@ -325,8 +330,12 @@ public static class LibraryEndpoints
                 return Results.NotFound();
             }
 
-            var totalPages = await EffectivePageCountAsync(catalog, entry, cancellationToken);
-            var sessions = await library.ListSessionsAsync(entryId, cancellationToken);
+            var totalPagesTask = EffectivePageCountAsync(catalog, entry, cancellationToken);
+            var sessionsTask = library.ListSessionsAsync(entryId, cancellationToken);
+
+            await Task.WhenAll(totalPagesTask, sessionsTask);
+            var totalPages = await totalPagesTask;
+            var sessions = await sessionsTask;
 
             return Results.Ok(sessions.Select(session =>
                 SessionResponse.From(session, entry.TrackingMethod, totalPages)));
