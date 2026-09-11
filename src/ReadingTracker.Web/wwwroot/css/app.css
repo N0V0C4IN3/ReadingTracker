@@ -184,6 +184,35 @@ a {
     pointer-events: none;
 }
 
+/*
+    The welcome arrives in order — greeting, title, pitch, the way in, then the deck — instead of
+    the whole poster appearing at once behind a curtain that has just lifted. Each is a few frames
+    behind the one above it, which is enough to read as a sequence without anybody waiting on it.
+
+    It is keyed to the curtain lifting rather than to the component mounting, because the poster is
+    built and painted long before it is shown: run on mount, the whole thing would play behind the
+    curtain and be over before anyone saw it.
+*/
+@keyframes rise {
+    from { opacity: 0; transform: translateY(0.65rem); }
+    to { opacity: 1; transform: none; }
+}
+
+.welcome--shown .hero__greeting,
+.welcome--shown .hero__title,
+.welcome--shown .hero__pitch,
+.welcome--shown .hero__actions,
+.welcome--shown .flow,
+.welcome--shown .pitch {
+    animation: rise 560ms var(--ease) both;
+}
+
+.welcome--shown .hero__title { animation-delay: 70ms; }
+.welcome--shown .hero__pitch { animation-delay: 140ms; }
+.welcome--shown .hero__actions { animation-delay: 210ms; }
+.welcome--shown .flow { animation-delay: 180ms; }
+.welcome--shown .pitch { animation-delay: 300ms; }
+
 /* Header ------------------------------------------------------------------ */
 
 header {
@@ -427,11 +456,22 @@ button.danger:hover:not(:disabled) {
     40% { opacity: 1; transform: scaleY(1); }
 }
 
-/* The same wait, once the application is running and is asking who the reader is. */
-.settling {
-    min-height: 55vh;
-    display: grid;
-    place-items: center;
+/*
+    The same wait, once the application is running. Identical to the boot screen on purpose — see
+    Components/Settling.razor — so the handover from the runtime's own screen to this one cannot be
+    seen. It inherits everything from .splash; the only difference is that it is laid over a page
+    that already exists, so it fills the window rather than the document.
+*/
+.splash--settling {
+    position: absolute;
+    inset: 0;
+    min-height: 100vh;
+    background: var(--page);
+}
+
+/* The download is finished by the time this draws; the bar says so rather than restarting. */
+.splash__fill--settled {
+    width: 100%;
 }
 
 .splash__title {
@@ -524,6 +564,12 @@ button.danger:hover:not(:disabled) {
     height: calc(var(--cover-w) * 2.3);
     perspective: 1400px;
     perspective-origin: 50% 38%;
+    /*
+        A sideways drag turns the deck and a vertical one scrolls the page. Without this the
+        browser claims both, and the deck — which fills most of a phone screen — never sees a
+        gesture at all. See the touch handlers in CoverFlow.razor.
+    */
+    touch-action: pan-y;
     /* The deck carries on past both edges of the window rather than stopping at them. */
     mask-image: linear-gradient(to right, transparent, #000 15%, #000 85%, transparent);
     -webkit-mask-image: linear-gradient(to right, transparent, #000 15%, #000 85%, transparent);
@@ -563,11 +609,11 @@ button.danger:hover:not(:disabled) {
     opacity: var(--fade);
     z-index: var(--layer);
     /*
-        Slow, because the deck turns about once a minute: at this spacing the movement is something
-        you notice out of the corner of your eye and look up at, rather than something that has
-        already finished by the time you do.
+        Unhurried, but not slower than the hand that moves it: the deck turns every few seconds now
+        and can be dragged, and a turn that outlasts the gesture that asked for it feels like lag
+        rather than weight.
     */
-    transition: transform 1100ms var(--ease), opacity 1100ms var(--ease);
+    transition: transform 620ms var(--ease), opacity 620ms var(--ease);
 }
 
 .flow__slot--lit {
@@ -646,6 +692,16 @@ button.danger:hover:not(:disabled) {
     color: var(--hero-ink);
 }
 
+/*
+    Re-created whenever the book at the front changes — see the @key in CoverFlow.razor — so this
+    plays again each turn. The deck takes a beat to bring the new jacket round; a caption that has
+    already changed by then is labelling the wrong book for the length of the turn.
+*/
+.flow__caption {
+    animation: rise 520ms var(--ease) both;
+    animation-delay: 120ms;
+}
+
 .flow__caption strong {
     font-family: Georgia, "Times New Roman", serif;
     font-size: 1.15rem;
@@ -670,19 +726,11 @@ button.danger:hover:not(:disabled) {
     width: 100%;
     aspect-ratio: 2 / 3;
     /*
-        The jacket standing on its own reflection is what makes the deck read as objects on a
-        surface rather than pictures on a page. WebKit-only, and deliberately left as an
-        enhancement: Firefox gets the deck without the floor, which is a poorer picture and not a
-        broken one. There is no property that reflects an <img> without drawing it twice, and
-        drawing seventeen jackets twice to please one browser is the worse trade.
+        The reflection is a second copy of this jacket, flipped — see .cover--mirror below and the
+        markup in CoverFlow.razor. It used to be -webkit-box-reflect, which needs no second
+        element but is a non-standard property Firefox has never implemented and mobile browsers
+        drop often enough that the deck turned up on a phone standing on nothing at all.
     */
-    /*
-        The mask is read in the jacket's own coordinates and flipped along with it, so it runs
-        bottom-up: the end of this gradient is the edge that touches the book. Written the obvious
-        way round it fades to nothing exactly where the reflection should be strongest, and leaves
-        a band of it floating below with a gap in between.
-    */
-    -webkit-box-reflect: below 1px linear-gradient(transparent 62%, rgb(0 0 0 / 26%) 84%, rgb(0 0 0 / 78%));
     border-radius: 3px;
     padding: 1rem 0.85rem;
     border-left: 4px solid rgb(0 0 0 / 16%);
@@ -739,6 +787,36 @@ button.danger:hover:not(:disabled) {
 
 .flow--dressed .cover__art {
     opacity: 1;
+}
+
+/*
+    The jacket as the floor sees it: the same drawn cover and the same photograph, flipped, fading
+    out as it gets further from the book.
+
+    The mask is read in the jacket's own coordinates and flipped along with it, so it runs
+    bottom-up: the end of this gradient is the edge that touches the book. Written the obvious way
+    round it fades to nothing exactly where the reflection should be strongest, and leaves a band
+    of it floating below with a gap in between.
+
+    The 1px gap is the thickness of the surface. Without it the book and its reflection meet
+    exactly and the pair reads as one tall symmetrical object rather than a book on a floor.
+*/
+.cover--mirror {
+    margin-top: 1px;
+    transform: scaleY(-1);
+    mask-image: linear-gradient(transparent 62%, rgb(0 0 0 / 26%) 84%, rgb(0 0 0 / 78%));
+    -webkit-mask-image: linear-gradient(transparent 62%, rgb(0 0 0 / 26%) 84%, rgb(0 0 0 / 78%));
+    /* A reflection is not a thing you can pick up. */
+    pointer-events: none;
+}
+
+/*
+    A reflection does not cast its own shadow: the drop shadow the jacket carries would appear
+    under the reflection, which is to say floating in mid-air below the floor.
+*/
+.flow .cover--mirror,
+.cover--mirror {
+    box-shadow: none;
 }
 
 /* Six made-up jackets, so the shelf has the variety a real one does. */
@@ -858,7 +936,12 @@ button.danger:hover:not(:disabled) {
     border-radius: var(--radius);
     background: var(--card);
     box-shadow: var(--shadow);
-    transition: box-shadow var(--quick) var(--ease);
+    transition: box-shadow var(--quick) var(--ease), transform var(--quick) var(--ease);
+}
+
+/* Picked up very slightly. Enough to answer the cursor; not enough to move the text under it. */
+.entry:hover {
+    transform: translateY(-1px);
 }
 
 .entry:hover {

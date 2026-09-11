@@ -1,6 +1,7 @@
 @*
     The quiet placeholder for every moment the application is busy with something a reader did not
-    ask to watch: working out who is signed in, and each leg of the sign-in and sign-out round trip.
+    ask to watch: working out who is signed in, dressing the welcome deck, and each leg of the
+    sign-in and sign-out round trip.
 
     It exists because the alternative is what the framework does by default — "Checking login
     state...", "Completing login...", "Processing logout" — a line of small text in the top-left
@@ -8,13 +9,28 @@
     "wait a moment", and none of them is anything a reader can act on. One shape, centred, saying
     the same thing without words, is less to look at and less to read.
 
-    It is deliberately the boot screen's own animation, so the whole start-up reads as one wait
-    rather than a sequence of unrelated screens.
+    It is a copy of wwwroot/index.html's boot screen, down to the progress bar, and that is the
+    whole point of it. The runtime hands over partway through the wait, and anything that does not
+    match exactly reads as a second screen — the bar disappearing and four bars alone appearing in
+    its place, which is what this looked like before. Matching it means the handover is invisible:
+    one loading screen from the first paint to the welcome, however many components drew it.
+
+    KEEP IN STEP with the #app markup in wwwroot/index.html.
 *@
 
-<div class="settling">
+<div class="splash splash--settling">
     <div class="splash__books" aria-hidden="true">
         <span></span><span></span><span></span><span></span>
+    </div>
+    <p class="splash__title">ReadingTracker</p>
+    @*
+        The runtime stops updating --blazor-load-percentage once it has handed over, so by here it
+        is at 100% and stays there: the bar arrives full and holds, rather than restarting or
+        vanishing. The fallback is 100% rather than the boot screen's sliver for the same reason —
+        whatever is being waited for now, downloading the application is not it.
+    *@
+    <div class="splash__track" role="progressbar" aria-label="Loading ReadingTracker">
+        <div class="splash__fill splash__fill--settled"></div>
     </div>
     <span class="visually-hidden" role="status">Loading</span>
 </div>
