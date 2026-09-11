@@ -1,7 +1,20 @@
 name: Deploy services
 
-# Catalog, Library and Gateway to Azure Container Apps (ADR-0005). The frontend is not here —
-# it is static files on Azure Static Web Apps, and has its own workflow.
+# Catalog, Library and Gateway to Azure Container Apps.
+#
+# ADR-0012 moved the services off Azure and onto a Raspberry Pi, so this no longer deploys
+# anything a reader reaches: the frontend calls the Pi, and the container apps behind this
+# workflow serve nobody. It is kept, and kept working, because it is the way back — abandoning
+# self-hosting means running this and pointing WEB_GATEWAY_BASE_ADDRESS at Azure again, and a
+# workflow deleted in a hurry is a workflow rewritten from memory under pressure.
+#
+# It no longer runs on a push. Left on the master trigger it rebuilt and redeployed three
+# container apps nobody was using on every single commit, which costs minutes, keeps a dead
+# deployment alive, and makes it look from the Actions tab as though Azure is still where this
+# application lives. Run it by hand from the Actions tab if you need it.
+#
+# The frontend is not here — it stays on Azure Static Web Apps (ADR-0012) and has its own
+# workflow, which does still deploy on every push.
 #
 # All three are built and deployed together on every run rather than filtered by path. A
 # Container Apps revision is cheap, and "which services did this commit touch" is exactly the
@@ -14,8 +27,6 @@ name: Deploy services
 # app itself, set once in Azure, not passed through here. See docs/deployment.md.
 
 on:
-  push:
-    branches: [master]
   workflow_dispatch:
 
 permissions:
