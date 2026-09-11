@@ -43,7 +43,7 @@
                         it to the front arrives visibly late, in front of the reader.
                     *@
                     <img class="cover__art"
-                         src="https://covers.openlibrary.org/b/id/@(book.CoverId)-M.jpg"
+                         src="covers/@(book.CoverId)-M.jpg"
                          alt="" />
                 </span>
             </button>
@@ -74,6 +74,13 @@
     /// before it knows what to draw is a welcome screen that waits — and Open Library rate limits
     /// a run of searches, so the wait is not hypothetical. Fetching seventeen known images is a
     /// different thing from asking seventeen questions first.
+    ///
+    /// The jackets themselves are served from wwwroot/covers rather than from Open Library, and
+    /// the ids survive only as the filenames, which is where each one came from. Fetching them
+    /// live was measured at roughly two seconds apiece: covers.openlibrary.org answers most ids
+    /// with a 302 to archive.org, which then pulls the jpeg out of a zip. Seventeen of those, on
+    /// the screen a signed-out reader sees first and lands back on after signing out, routinely
+    /// spent the whole cap below waiting. They are 312 KB together and they never change.
     ///
     /// Every title here has been checked to have a cover. That is the curation the drawn jackets
     /// underneath cannot do for us: one drawn jacket in a deck of photographed ones does not read
@@ -107,11 +114,14 @@
     ];
 
     /// <summary>
-    /// How long the deck will wait for the last jacket before showing the ones it has. Long enough
-    /// to cover a slow connection, short enough that a cover service having a bad day does not
-    /// leave a reader looking at drawn rectangles for as long as they stay on the page.
+    /// How long the deck will wait for the last jacket before showing the ones it has.
+    ///
+    /// Short, because the jackets now ship with the application and come off the same CDN as the
+    /// rest of it: they are either in cache or a few tens of milliseconds away, and anything
+    /// longer than this is not a slow image but a broken one. It was six seconds while they were
+    /// fetched from Open Library, and a reader signing out watched most of it.
     /// </summary>
-    private static readonly TimeSpan LongestWaitForJackets = TimeSpan.FromSeconds(6);
+    private static readonly TimeSpan LongestWaitForJackets = TimeSpan.FromMilliseconds(500);
 
     /// <summary>
     /// Raised once every jacket is in place. The welcome screen waits on this before showing

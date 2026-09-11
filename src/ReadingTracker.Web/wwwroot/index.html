@@ -7,18 +7,15 @@
     <title>ReadingTracker</title>
     <base href="/" />
 
-    <!-- The welcome screen's jackets come from here, and each one is a redirect: Open Library
-         hands off to archive.org, which extracts the image from inside a zip. Opening the
-         connections while the runtime is still downloading takes the handshakes off the front of
-         that chain. -->
-    <link rel="preconnect" href="https://covers.openlibrary.org" />
-    <link rel="preconnect" href="https://archive.org" />
-
     <!--
         The same jackets Components/CoverFlow.razor draws, fetched now rather than when the deck
         first renders. Starting the runtime takes several seconds during which the connection is
-        doing nothing, and each of these is a three-hop redirect ending in an image pulled out of a
-        zip — left until the deck appears, they arrive one at a time in front of the reader.
+        doing nothing, so the deck is usually already dressed by the time it appears.
+
+        They are served from wwwroot/covers, so there is no third party to preconnect to any more.
+        They used to come from Open Library, which answers most ids with a redirect to archive.org
+        and an image pulled out of a zip -- about two seconds each, seventeen times, on the screen
+        a signed-out reader sees first.
 
         prefetch rather than preload on purpose: preload warns in the console for anything not used
         within seconds, and a reader who is already signed in never sees this deck. Low priority is
@@ -27,23 +24,23 @@
         KEEP IN STEP with the Wall list in Components/CoverFlow.razor. An id that falls out of step
         costs a jacket its head start; it does not break anything.
     -->
-    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/12356249-M.jpg" />
-    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/252882-M.jpg" />
-    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/10544254-M.jpg" />
-    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/8235363-M.jpg" />
-    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/12474938-M.jpg" />
-    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/12216503-M.jpg" />
-    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/12824691-M.jpg" />
-    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/11248037-M.jpg" />
-    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/6907719-M.jpg" />
-    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/12818862-M.jpg" />
-    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/13116014-M.jpg" />
-    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/8750241-M.jpg" />
-    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/13322313-M.jpg" />
-    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/8216412-M.jpg" />
-    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/12621988-M.jpg" />
-    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/8242253-M.jpg" />
-    <link rel="prefetch" href="https://covers.openlibrary.org/b/id/181493-M.jpg" />
+    <link rel="prefetch" href="covers/12356249-M.jpg" />
+    <link rel="prefetch" href="covers/252882-M.jpg" />
+    <link rel="prefetch" href="covers/10544254-M.jpg" />
+    <link rel="prefetch" href="covers/8235363-M.jpg" />
+    <link rel="prefetch" href="covers/12474938-M.jpg" />
+    <link rel="prefetch" href="covers/12216503-M.jpg" />
+    <link rel="prefetch" href="covers/12824691-M.jpg" />
+    <link rel="prefetch" href="covers/11248037-M.jpg" />
+    <link rel="prefetch" href="covers/6907719-M.jpg" />
+    <link rel="prefetch" href="covers/12818862-M.jpg" />
+    <link rel="prefetch" href="covers/13116014-M.jpg" />
+    <link rel="prefetch" href="covers/8750241-M.jpg" />
+    <link rel="prefetch" href="covers/13322313-M.jpg" />
+    <link rel="prefetch" href="covers/8216412-M.jpg" />
+    <link rel="prefetch" href="covers/12621988-M.jpg" />
+    <link rel="prefetch" href="covers/8242253-M.jpg" />
+    <link rel="prefetch" href="covers/181493-M.jpg" />
     <link rel="preload" id="webassembly" />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
