@@ -1,7 +1,22 @@
 # Deploying ReadingTracker
 
-The target stack is fixed by [ADR-0005](adr/0005-deployment-stack.md): the three services to
-Azure Container Apps, Postgres to Neon, the WebAssembly frontend to Azure Static Web Apps.
+> **Most of this page describes the old deployment.**
+> [ADR-0012](adr/0012-self-host-on-a-raspberry-pi-behind-tailscale-funnel.md) moved the services,
+> Postgres and the broker onto a Raspberry Pi reached through Tailscale Funnel. What is deployed
+> today is `docker-compose.pi.yml` on that Pi, with secrets in an untracked `.env` beside it.
+>
+> **The frontend half of this page is still current**: it stays on Azure Static Web Apps and
+> `deploy-web.yml` still ships it on every push to master. Only `WEB_GATEWAY_BASE_ADDRESS` has
+> changed, to the Pi's `ts.net` address.
+>
+> Everything below about Container Apps, Neon and CloudAMQP is kept because it is the way back.
+> `deploy-services.yml` still works and is still configured; it simply no longer runs on a push,
+> so nothing rebuilds a deployment nobody is using. Run it by hand to return to Azure, and point
+> `WEB_GATEWAY_BASE_ADDRESS` at the Container Apps gateway again.
+
+The stack this page describes was fixed by [ADR-0005](adr/0005-deployment-stack.md): the three
+services to Azure Container Apps, Postgres to Neon, the WebAssembly frontend to Azure Static Web
+Apps.
 
 Two workflows do the deploying, both on a push to `master` and both runnable by hand from the
 Actions tab:
