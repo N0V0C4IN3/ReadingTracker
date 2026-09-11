@@ -4,17 +4,30 @@
 
 @*
     A deck of jackets seen at an angle, one held face-on at the front and the rest leaning away to
-    either side — the shape iTunes used for album art. It mostly stands still: about once a minute
-    it turns a single place, one way or the other, which reads as a thing that is alive rather than
-    a thing that is scrolling. Hovering holds it where it is, and any book you can see can be
-    clicked to bring it to the front.
+    either side — the shape iTunes used for album art. Every few seconds it turns a single place,
+    one way or the other, which reads as a thing that is alive rather than a thing that is
+    scrolling.
+
+    It can also be taken hold of: hovering holds it where it is, any book you can see can be
+    clicked to bring it to the front, and on a touch screen it can be dragged sideways with a
+    finger. Each of those stops the turning for as long as the reader is doing the steering.
 
     It lives in its own component rather than in the welcome screen because it re-renders on a
     timer, and there is no reason for the rest of that page to re-render with it.
 *@
 
 <div class="flow @(_dressed ? "flow--dressed" : null)" @onmouseenter="Hold" @onmouseleave="Release">
-    <div class="flow__stage">
+    @*
+        Dragged with a finger as well as turned by itself. The stylesheet sets touch-action: pan-y
+        on this box, which is what lets the deck answer a sideways drag while the page keeps taking
+        a vertical one — without it, either the deck never sees the gesture or the page stops
+        scrolling over the one element that fills a phone screen.
+    *@
+    <div class="flow__stage"
+         @ontouchstart="DragStart"
+         @ontouchmove="DragMove"
+         @ontouchend="DragEnd"
+         @ontouchcancel="DragEnd">
         @foreach (var (book, position) in Wall.Select((book, at) => (book, at)))
         {
             var place = Place(position);
@@ -46,11 +59,33 @@
                          src="covers/@(book.CoverId)-M.jpg"
                          alt="" />
                 </span>
+
+                @*
+                    The jacket again, upside down, as the floor sees it.
+
+                    This used to be -webkit-box-reflect, which drew the reflection without a second
+                    element — but it is a non-standard property Firefox has never implemented, and
+                    mobile browsers drop it often enough that the deck arrived on a phone standing
+                    on nothing. A flipped copy under a mask is plain CSS and works everywhere.
+
+                    The objection to drawing each jacket twice was that it meant fetching each
+                    image twice. It does not any more: the covers ship with the application, so the
+                    second <img> is the same cached file and costs a decode, not a request.
+
+                    aria-hidden, and no text worth reading: a screen reader announcing every title
+                    twice is the accessible version of a smudge on the floor.
+                *@
+                <span class="cover cover--@(position % CoverTones) cover--mirror" aria-hidden="true">
+                    <span class="cover__title">@book.Title</span>
+                    <span class="cover__rule"></span>
+                    <span class="cover__author">@book.Author</span>
+                    <img class="cover__art" src="covers/@(book.CoverId)-M.jpg" alt="" />
+                </span>
             </button>
         }
     </div>
 
-    <p class="flow__caption">
+    <p class="flow__caption" @key="Front.Title">
         <strong>@Front.Title</strong>
         <span>@Front.Author</span>
     </p>
@@ -58,11 +93,18 @@
 
 @code {
     /// <summary>
-    /// How long a book stays at the front. Long, deliberately: a deck that turns every few seconds
-    /// is a thing being scrolled at you, and the eye never settles on any of it. At half a minute
-    /// the movement is still a surprise rather than a rhythm.
+    /// How long a book stays at the front. Long enough that the deck reads as something alive
+    /// rather than something being scrolled at you, short enough that a reader who stops to look
+    /// at it sees it move rather than having to wait for it.
     /// </summary>
-    private static readonly TimeSpan Dwell = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Dwell = TimeSpan.FromSeconds(7);
+
+    /// <summary>
+    /// How far a finger travels before the deck turns one place. A little under half a jacket:
+    /// far enough that a tap with a wobble in it is still a tap, close enough that a flick moves
+    /// several books rather than politely turning one.
+    /// </summary>
+    private const double SwipeStepPx = 48;
 
     /// <summary>How many jacket designs the stylesheet draws.</summary>
     private const int CoverTones = 6;
@@ -134,6 +176,9 @@
     private bool _dressed;
     private System.Timers.Timer? _turn;
 
+    /// <summary>Where the finger currently dragging the deck was last accounted for, if any.</summary>
+    private double? _dragFrom;
+
     private (string Title, string Author, int CoverId) Front => Wall[_at];
 
     protected override async Task OnAfterRenderAsync(bool first)
@@ -172,7 +217,7 @@
             // picking a side makes the deck look like it is being idly leafed through.
             var way = Random.Shared.Next(2) == 0 ? 1 : -1;
 
-            _at = (_at + way + Wall.Length) % Wall.Length;
+            Turn(way);
             await InvokeAsync(StateHasChanged);
         };
         _turn.Start();
@@ -187,6 +232,77 @@
     private void Hold() => _turn?.Stop();
 
     private void Release() => _turn?.Start();
+
+    /// <summary>
+    /// A finger has landed. The deck stops turning on its own for as long as it is being held —
+    /// the same courtesy the cursor gets, and for the same reason: a jacket that turns away while
+    /// it is being dragged at is a jacket nobody gets to choose.
+    /// </summary>
+    private void DragStart(TouchEventArgs touch)
+    {
+        if (touch.Touches.Length == 0)
+        {
+            return;
+        }
+
+        _turn?.Stop();
+        _dragFrom = touch.Touches[0].ClientX;
+    }
+
+    /// <summary>
+    /// Turns as the finger travels rather than waiting for it to lift, so the deck comes with the
+    /// hand instead of catching up with it afterwards. Each whole step consumed moves the origin
+    /// along with it, which is what lets one long drag walk through several books.
+    /// </summary>
+    private void DragMove(TouchEventArgs touch)
+    {
+        if (_dragFrom is not { } from || touch.Touches.Length == 0)
+        {
+            return;
+        }
+
+        var travelled = touch.Touches[0].ClientX - from;
+        var steps = (int)(travelled / SwipeStepPx);
+
+        if (steps == 0)
+        {
+            return;
+        }
+
+        // Dragging right brings the book on the left to the front, the way dragging a physical
+        // stack of records would — the deck follows the hand, it is not pushed away by it.
+        Turn(-steps);
+        _dragFrom = from + steps * SwipeStepPx;
+
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// The finger has lifted. The wait starts again from here rather than resuming whatever was
+    /// left of the last one, so a reader who has just chosen a book gets a full turn with it.
+    /// </summary>
+    private void DragEnd(TouchEventArgs touch)
+    {
+        _dragFrom = null;
+
+        if (_turn is { } turning)
+        {
+            turning.Stop();
+            turning.Start();
+        }
+    }
+
+    /// <summary>
+    /// Moves the deck by <paramref name="places"/>, wrapping either way round. Does not render:
+    /// the timer has to marshal that onto the renderer's thread and the touch handlers are already
+    /// on it, so whoever calls this says how.
+    /// </summary>
+    private void Turn(int places)
+    {
+        var length = Wall.Length;
+
+        _at = ((_at + places) % length + length) % length;
+    }
 
     /// <summary>
     /// Brings a book to the front, the way clicking one in the deck should. The wait starts again

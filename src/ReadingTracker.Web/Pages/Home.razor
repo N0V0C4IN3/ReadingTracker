@@ -18,11 +18,7 @@
         that asks them to sign in.
     *@
     <Authorizing>
-        <div class="settling">
-            <div class="splash__books" aria-hidden="true">
-                <span></span><span></span><span></span><span></span>
-            </div>
-        </div>
+        <Settling />
     </Authorizing>
     <Authorized>
         <section class="shelf">
@@ -296,7 +292,7 @@
             instead of one replacing the other: there is nothing to swap in at the end, only
             something to take away.
         *@
-        <div class="welcome">
+        <div class="welcome @(_welcomeDressed ? "welcome--shown" : null)">
             <div class="welcome__curtain @(_welcomeDressed ? "welcome__curtain--lifted" : null)"
                  aria-hidden="@_welcomeDressed">
                 <Settling />
