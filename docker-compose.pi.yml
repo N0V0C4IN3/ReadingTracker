@@ -1,0 +1,144 @@
+# The deployed stack, for the Raspberry Pi (ADR-0012).
+#
+# Deliberately a whole file rather than an override of docker-compose.yml. That one exists to
+# give a developer a database and a broker to run against: fixed throwaway passwords, host ports
+# published for tooling to reach, Development everywhere. Every one of those is wrong here, and
+# a compose override cannot take a published port back off again -- lists merge, they do not
+# subtract -- so the two are kept apart and each says plainly what it is for.
+#
+# Everything secret comes from .env beside this file, which is untracked and lives only on the
+# Pi. The `:?` suffixes mean a missing value fails `docker compose up` by name, rather than
+# starting a stack that is quietly wrong.
+#
+#   docker compose -f docker-compose.pi.yml up -d --build
+name: readingtracker
+
+services:
+  # Both services share this instance and keep to their own schema (ADR-0004), so there is one
+  # database here, not two. No published port: nothing outside this network has any business
+  # reaching it, and the Pi sits on a home LAN shared with whatever else is on it.
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: readingtracker
+      POSTGRES_USER: readingtracker
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U readingtracker -d readingtracker"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ADR-0011 put the broker on a managed instance because it had nowhere else to live. ADR-0012
+  # gives it somewhere. The management plugin is dropped: it exists to be browsed, and nothing
+  # here publishes a port to browse it from.
+  rabbitmq:
+    image: rabbitmq:3.13-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: readingtracker
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  catalog:
+    build:
+      context: .
+      dockerfile: src/ReadingTracker.Catalog/Dockerfile
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # Gss Encryption Mode=Disable for the same reason as in docker-compose.yml: Npgsql tries
+      # GSSAPI first, and the runtime images have shipped without Kerberos since .NET 8, so
+      # leaving it on puts a scary and harmless error in the logs of every single boot.
+      ConnectionStrings__CatalogDb: "Host=postgres;Port=5432;Database=readingtracker;Username=readingtracker;Password=${POSTGRES_PASSWORD};Gss Encryption Mode=Disable"
+      RabbitMq__ConnectionString: "amqp://readingtracker:${RABBITMQ_PASSWORD}@rabbitmq:5672/"
+      GOOGLE_BOOKS_API_KEY: ${GOOGLE_BOOKS_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  library:
+    build:
+      context: .
+      dockerfile: src/ReadingTracker.Library/Dockerfile
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__LibraryDb: "Host=postgres;Port=5432;Database=readingtracker;Username=readingtracker;Password=${POSTGRES_PASSWORD};Gss Encryption Mode=Disable"
+      RabbitMq__ConnectionString: "amqp://readingtracker:${RABBITMQ_PASSWORD}@rabbitmq:5672/"
+      # A container name on this network, not a public address: Library reaches Catalog directly
+      # and never through the Gateway. This is the hop that used to cross two clouds.
+      Catalog__BaseAddress: "http://catalog:8080/"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      catalog:
+        condition: service_started
+
+  gateway:
+    build:
+      context: .
+      dockerfile: src/ReadingTracker.Gateway/Dockerfile
+    restart: unless-stopped
+    environment:
+      # Production, so dev sign-in cannot be turned on by any means (ADR-0008). The Gateway
+      # refuses to start without a Google client id or an allowed origin, which is the behaviour
+      # we want: a misconfigured gateway should fail loudly rather than serve nothing useful.
+      ASPNETCORE_ENVIRONMENT: Production
+      Google__ClientId: ${GOOGLE_CLIENT_ID:?set GOOGLE_CLIENT_ID in .env}
+      # The frontend origin. The frontend stays on Azure Static Web Apps (ADR-0012), so this is
+      # the one address in the deployed system that is still somewhere else.
+      AllowedOrigins__0: ${ALLOWED_ORIGIN:?set ALLOWED_ORIGIN in .env}
+      ReverseProxy__Clusters__catalog__Destinations__primary__Address: "http://catalog:8080/"
+      ReverseProxy__Clusters__library__Destinations__primary__Address: "http://library:8080/"
+    # Loopback only. The internet reaches the Gateway through the tailscale sidecar below, never
+    # through a published port; this one exists so a human on the Pi can curl /health.
+    ports:
+      - "127.0.0.1:5100:8080"
+    depends_on:
+      catalog:
+        condition: service_started
+      library:
+        condition: service_started
+
+  # The node that puts the Gateway on the public internet. It joins the tailnet as its own device
+  # named `readingtracker`, which is what gives it its own hostname and its own :443 -- the Pi
+  # host tailscaled already serves another project on the host node :443, and Funnel allows only
+  # 443, 8443 and 10000. A second node is cleaner than sharing a port, and the Personal plan
+  # includes unlimited devices.
+  #
+  # Userspace networking (the image default) is enough for serve and funnel, so this needs
+  # neither NET_ADMIN nor /dev/net/tun.
+  tailscale:
+    image: tailscale/tailscale:latest
+    hostname: readingtracker
+    restart: unless-stopped
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:?set TS_AUTHKEY in .env}
+      TS_HOSTNAME: readingtracker
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+      - ./deploy/pi/tailscale-serve.json:/config/serve.json:ro
+    depends_on:
+      gateway:
+        condition: service_started
+
+volumes:
+  postgres-data:
+  rabbitmq-data:
+  tailscale-state:
