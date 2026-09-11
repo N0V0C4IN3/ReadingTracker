@@ -549,6 +549,22 @@ button.danger:hover:not(:disabled) {
 */
 .flow {
     --cover-w: clamp(7rem, min(16vw, 23vh), 13rem);
+
+    /* How much bigger a jacket gets under the cursor. Read again by --headroom, below. */
+    --pickup: 1.09;
+
+    /*
+        Room above the deck, worked out from the pickup rather than guessed at.
+
+        A slot is a jacket with its own reflection hanging under it, so the slot's middle — the
+        point everything is scaled about — sits exactly on the waterline where the two meet. That
+        is deliberate: it is what keeps every jacket standing on the same surface however far back
+        it has receded. It also means a jacket under the cursor grows *entirely upwards*, by the
+        pickup's share of its full height, and the stage's mask clips anything that does not fit.
+        A jacket is one and a half times its own width tall, hence the 1.5; the 0.03 is air.
+    */
+    --headroom: calc(var(--cover-w) * (1.5 * (var(--pickup) - 1) + 0.03));
+
     position: relative;
     padding-bottom: clamp(2.75rem, 5vw, 4.25rem);
 }
@@ -556,12 +572,15 @@ button.danger:hover:not(:disabled) {
 .flow__stage {
     position: relative;
     /*
-        The jacket is one and a half times its own width. The rest is room: a little above, so a
-        jacket that grows under the cursor has somewhere to grow into, and rather more below for
-        the reflection. The mask below clips to this box — mask-clip is border-box and there is no
-        value for "do not clip" — so anything that needs to be seen has to fit inside it.
+        The jacket is one and a half times its own width. The rest is room: enough above for a
+        jacket to grow into under the cursor, and rather more below for the reflection. The mask
+        below clips to this box — mask-clip is border-box and there is no value for "do not clip" —
+        so anything that needs to be seen has to fit inside it.
+
+        The room above is --headroom rather than a number of its own, so that the two places the
+        stage has to be tall enough for cannot drift apart.
     */
-    height: calc(var(--cover-w) * 2.3);
+    height: calc(var(--cover-w) * 2.22 + var(--headroom));
     perspective: 1400px;
     perspective-origin: 50% 38%;
     /*
@@ -595,7 +614,7 @@ button.danger:hover:not(:disabled) {
 
 .flow__slot {
     position: absolute;
-    top: calc(var(--cover-w) * 0.08);
+    top: var(--headroom);
     left: 50%;
     width: var(--cover-w);
     /* A jacket, not a button: none of the chrome the rest of the app's buttons carry, and none of
@@ -630,9 +649,10 @@ button.danger:hover:not(:disabled) {
     opacity: var(--fade);
 }
 
-/* Enough of a step forward to feel picked up, not enough to shove its neighbours. */
+/* Enough of a step forward to feel picked up, not enough to shove its neighbours. The stage
+   keeps room above the deck for exactly this much, so the two are set from one number. */
 .flow__slot--lit:hover {
-    --lift: 1.09;
+    --lift: var(--pickup);
 }
 
 .flow__slot--lit:active {
