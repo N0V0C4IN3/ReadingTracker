@@ -52,6 +52,41 @@
 
     <script type="importmap"></script>
 
+    <!--
+        Answers the silent sign-in probe when the answer is "nobody is signed in".
+
+        Every top-level page load asks Google, in a hidden iframe, whether this browser already
+        has a session — that is how a reader who signed in yesterday is still signed in today.
+        Microsoft's AuthenticationService.js does it unconditionally in getUser(), and the whole
+        application waits on the answer: <Authorizing> in App.razor is on screen until it comes.
+
+        For a signed-out reader it never comes. Google redirects the iframe straight back with
+        `error=interaction_required`, and oidc-client *validates* that response before it tells
+        the parent window anything — validation throws, so the parent is never told at all and
+        sits out its full ten-second timeout instead. Measured on the deployed site: the iframe
+        came back in 330ms and the welcome screen appeared 10,005ms later.
+
+        The parent is waiting for one thing: a message from this frame whose text is a URL on
+        this origin. That is the entire protocol (IFrameWindow._message). So we send it, before
+        AuthenticationService.js has loaded and without involving it. oidc-client then reads the
+        error out of the URL and fails the probe in the ordinary way, which is a case the caller
+        already handles — trySilentSignIn catches it and carries on as a signed-out reader.
+
+        Only the failing case is short-circuited. A successful probe is left entirely alone: that
+        path already works, it is nobody's ten seconds, and racing it risks the token.
+
+        If a future package changes that protocol this stops matching and the wait comes back —
+        slower, not broken.
+    -->
+    <script>
+        if (window.frameElement && window.parent !== window && !window.opener
+            && /[#&]error=/.test(window.location.hash)
+            && window.location.pathname === "/authentication/login-callback") {
+            window.parent.postMessage(
+                window.location.href, window.location.protocol + "//" + window.location.host);
+        }
+    </script>
+
     <!-- Inline rather than a file of its own: it is three lines, and a separate script would cost
          a request on every page load to answer one question asked once. The welcome screen's deck
          of covers turns by itself, which is exactly the kind of movement someone asks the platform
