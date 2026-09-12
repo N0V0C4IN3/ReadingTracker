@@ -1456,4 +1456,56 @@ button.danger:hover:not(:disabled) {
     .field label {
         min-width: 5rem;
     }
+
+    /*
+        Below this width the shelf stops being a page with rows on it and becomes a column, and
+        anything that wraps by itself wraps badly: flex fills the line and leaves the remainder
+        stranded on the next one. Every group here is given an explicit shape instead, so each row
+        is either one full-width thing or two equal halves, and the left and right edges line up
+        all the way down. Measured at 390px, which is where the ragged versions were found.
+    */
+
+    /* Was [158, 158] then [228, 88]: the search button ended up a stub beside a long ISBN box.
+       Title and author keep their pair; the ISBN and the action each take a line of their own. */
+    .search__inputs input {
+        flex: 1 1 45%;
+    }
+
+    .search__inputs input:nth-of-type(3),
+    .search__inputs button {
+        flex: 1 1 100%;
+    }
+
+    /* Was cover + 97px of title + button, all on one line, with the title taking whatever was
+       left. The button drops to its own full-width line and gives the title the rest. */
+    .result {
+        flex-wrap: wrap;
+    }
+
+    .result__body {
+        flex: 1 1 8rem;
+    }
+
+    .result button {
+        flex: 1 1 100%;
+    }
+
+    /* Was [101, 64, 69] then [69] hanging alone. Two by two, so the four read as one block. */
+    .entry__actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.15rem;
+        justify-items: start;
+    }
+
+    /* Was 43, 78, 78, 99 -- four different widths across one line. Equal shares instead. */
+    .filters {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    .filters .chip {
+        padding-inline: 0.35rem;
+        text-align: center;
+    }
 }
