@@ -4,9 +4,9 @@
 
 @*
     A deck of jackets seen at an angle, one held face-on at the front and the rest leaning away to
-    either side — the shape iTunes used for album art. Every few seconds it turns a single place,
-    one way or the other, which reads as a thing that is alive rather than a thing that is
-    scrolling.
+    either side — the shape iTunes used for album art. Every few seconds it turns a single place
+    to the right, always the same way, which reads as a thing that is alive rather than a thing
+    that is scrolling.
 
     It can also be taken hold of: hovering holds it where it is, any book you can see can be
     clicked to bring it to the front, and on a touch screen it can be dragged sideways with a
@@ -213,11 +213,14 @@
         _turn = new System.Timers.Timer(Dwell.TotalMilliseconds);
         _turn.Elapsed += async (_, _) =>
         {
-            // One place, either way. Always turning the same way makes a queue of books going past;
-            // picking a side makes the deck look like it is being idly leafed through.
-            var way = Random.Shared.Next(2) == 0 ? 1 : -1;
-
-            Turn(way);
+            // One place, always the same way: rightwards, so the deck reads as one procession
+            // going past rather than something that keeps changing its mind. It used to pick a
+            // side at random, which looked like idle leafing when you caught a single turn and
+            // like indecision when you watched two.
+            //
+            // Negative because the deck moves opposite to the index: see Turn, and the drag
+            // handler above, which turns the same way for a rightward swipe.
+            Turn(-1);
             await InvokeAsync(StateHasChanged);
         };
         _turn.Start();
