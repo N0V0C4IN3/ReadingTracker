@@ -25,7 +25,7 @@ public sealed class RemoveFromLibraryTests(LibraryApiFixture fixture)
         fixture.CatalogHasBook(bookId, 300);
         var client = fixture.ClientFor("restarting-reader");
         var entryId = await AddAsync(client, bookId);
-        await LogAsync(client, entryId, 1, 150);
+        await LogAsync(client, entryId, 150);
         await client.PutAsJsonAsync($"/api/library/{entryId}/status", new { status = "OnHold" });
 
         await client.DeleteAsync($"/api/library/{entryId}");
@@ -45,7 +45,7 @@ public sealed class RemoveFromLibraryTests(LibraryApiFixture fixture)
     {
         var client = fixture.ClientFor("orphan-check-reader");
         var entryId = await fixture.AddBookAsync(client, 300);
-        await LogAsync(client, entryId, 1, 150);
+        await LogAsync(client, entryId, 150);
 
         await client.DeleteAsync($"/api/library/{entryId}");
 
@@ -92,19 +92,15 @@ public sealed class RemoveFromLibraryTests(LibraryApiFixture fixture)
         Assert.Single((await owner.GetFromJsonAsync<IReadOnlyList<Entry>>("/api/library"))!);
     }
 
-    private static Task<HttpResponseMessage> LogAsync(HttpClient client, Guid entryId, decimal start, decimal end) =>
-        client.PostAsJsonAsync($"/api/library/{entryId}/sessions", new
-        {
-            startPosition = start,
-            endPosition = end,
-        });
+    private static Task<HttpResponseMessage> LogAsync(HttpClient client, Guid entryId, decimal amount) =>
+        client.PostAsJsonAsync($"/api/library/{entryId}/sessions", new { amount });
 
     private static async Task<Guid> AddAsync(HttpClient client, Guid bookId) =>
         (await (await client.PostAsJsonAsync("/api/library", new { bookId })).Content.ReadFromJsonAsync<Entry>())!.Id;
 
     private sealed record Entry(Guid Id, Guid BookId, string Status, Progress? Progress);
 
-    private sealed record Progress(decimal Position, string Unit, int? PercentComplete);
+    private sealed record Progress(decimal? AmountRead, string? Unit, int? PercentComplete);
 
     private sealed record Session(Guid Id);
 }

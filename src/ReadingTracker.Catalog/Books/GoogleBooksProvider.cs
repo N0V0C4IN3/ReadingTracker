@@ -10,11 +10,12 @@ public sealed class GoogleBooksProvider(HttpClient httpClient, IOptions<GoogleBo
     public Task<IReadOnlyList<BookSearchResult>> SearchByIsbnAsync(
         string isbn,
         CancellationToken cancellationToken) =>
-        SearchAsync($"isbn:{isbn}", isbn, cancellationToken);
+        SearchAsync($"isbn:{isbn}", isbn, SearchWindow.First, cancellationToken);
 
     public Task<IReadOnlyList<BookSearchResult>> SearchByTitleAndAuthorAsync(
         string? title,
         string? author,
+        SearchWindow window,
         CancellationToken cancellationToken)
     {
         var terms = new List<string>(2);
@@ -31,15 +32,18 @@ public sealed class GoogleBooksProvider(HttpClient httpClient, IOptions<GoogleBo
 
         return terms.Count == 0
             ? Task.FromResult<IReadOnlyList<BookSearchResult>>([])
-            : SearchAsync(string.Join(' ', terms), searchedIsbn: null, cancellationToken);
+            : SearchAsync(string.Join(' ', terms), searchedIsbn: null, window, cancellationToken);
     }
 
     private async Task<IReadOnlyList<BookSearchResult>> SearchAsync(
         string searchTerms,
         string? searchedIsbn,
+        SearchWindow window,
         CancellationToken cancellationToken)
     {
-        var query = $"volumes?q={Uri.EscapeDataString(searchTerms)}";
+        // Google pages by offset rather than by page number, which is why SearchWindow exposes one.
+        var query = $"volumes?q={Uri.EscapeDataString(searchTerms)}"
+            + $"&startIndex={window.Offset}&maxResults={window.PageSize}";
 
         if (!string.IsNullOrWhiteSpace(_options.ApiKey))
         {

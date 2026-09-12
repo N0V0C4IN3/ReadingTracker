@@ -35,19 +35,20 @@ public sealed class BookCatalog(
 
     /// <summary>
     /// Unlike an ISBN, a title/author query is fuzzy: there is no reliable way to tell that
-    /// the cache already holds everything it would match, so providers are always asked.
-    /// What they return is still cached.
+    /// the cache already holds everything it would match, so providers are always asked for
+    /// the <paramref name="window"/> wanted. What they return is still cached.
     /// </summary>
     public async Task<CatalogSearch> SearchByTitleAndAuthorAsync(
         string? title,
         string? author,
+        SearchWindow window,
         CancellationToken cancellationToken)
     {
-        var search = await providers.SearchByTitleAndAuthorAsync(title, author, cancellationToken);
+        var search = await providers.SearchByTitleAndAuthorAsync(title, author, window, cancellationToken);
 
         return search.Status is SearchStatus.ProvidersUnavailable
             ? CatalogSearch.Unavailable
-            : CatalogSearch.Completed(await StoreAsync(search.Results, cancellationToken));
+            : CatalogSearch.Completed(await StoreAsync(search.Results, cancellationToken), search.HasMore);
     }
 
     /// <summary>

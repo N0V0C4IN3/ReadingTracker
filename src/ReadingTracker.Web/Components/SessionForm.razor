@@ -1,0 +1,106 @@
+@using ReadingTracker.Web.Services
+
+@*
+    "I read this much." Used both to log a new stretch of reading and to correct one already
+    recorded — the shape is identical, and Library takes the same body for both.
+
+    A reader knows how much they got through; asking them which page they stopped on makes them
+    go and look. So the amount is what is asked for, in whatever method they track this book by
+    (ADR-0010). Library validates it properly — some reading, and not more than the whole book in
+    one sitting — and the caller shows what it says; this form only stops obviously empty input
+    from making the trip.
+*@
+
+<div class="panel">
+    <div class="session-form">
+        <div class="field">
+            <label for="@($"read-{_id}")">Read</label>
+            <input id="@($"read-{_id}")" type="number" step="any" min="0" @bind="_amount" />
+            <span class="unit">@UnitLabel</span>
+        </div>
+
+        <div class="field">
+            <label for="@($"on-{_id}")">On</label>
+            <input id="@($"on-{_id}")" type="date" @bind="_occurredOn" />
+        </div>
+
+        <div class="field">
+            <label for="@($"mins-{_id}")">For</label>
+            <input id="@($"mins-{_id}")" type="number" min="1" @bind="_minutes" placeholder="optional" />
+            <span class="unit">minutes</span>
+        </div>
+    </div>
+
+    @if (_complaint is { } complaint)
+    {
+        <p class="entry__reasons" role="alert">@complaint</p>
+    }
+
+    <div class="session-form__actions">
+        <button type="button" @onclick="SubmitAsync">@SubmitLabel</button>
+        <button type="button" class="link-button" @onclick="OnCancel">Cancel</button>
+    </div>
+</div>
+
+@code {
+    /// <summary>The reader's TrackingMethod for this book, which is what the amount is entered in.</summary>
+    [Parameter, EditorRequired]
+    public required string Unit { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string SubmitLabel { get; set; }
+
+    /// <summary>The session being corrected, or null when logging a new one.</summary>
+    [Parameter]
+    public ReadingSessionView? Existing { get; set; }
+
+    [Parameter]
+    public EventCallback<NewSession> OnSubmit { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    private readonly string _id = Guid.NewGuid().ToString("N")[..8];
+
+    private decimal? _amount;
+    private DateTime? _occurredOn = DateTime.Today;
+    private int? _minutes;
+    private string? _complaint;
+
+    private string UnitLabel => Unit == "Percentage" ? "%" : "pages";
+
+    protected override void OnParametersSet()
+    {
+        if (Existing is not { } session)
+        {
+            return;
+        }
+
+        // What is on the record, in the reader's current method — which is the method a
+        // correction is stated in. Library leaves Displayed out when the session was logged in
+        // the other unit and no page count exists to convert it, and there is no honest number
+        // to prefill then: the reader says afresh how much they read.
+        _amount ??= session.Displayed?.Amount;
+        _occurredOn ??= session.OccurredAt.LocalDateTime.Date;
+        _minutes ??= session.DurationMinutes;
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_amount is not { } amount)
+        {
+            _complaint = "Say how much you read.";
+            return;
+        }
+
+        _complaint = null;
+
+        // Sent as a local-midnight instant with its offset, so "Tuesday" stays Tuesday rather
+        // than sliding a day for readers west of UTC.
+        var occurredAt = _occurredOn is { } on
+            ? new DateTimeOffset(on.Date, TimeZoneInfo.Local.GetUtcOffset(on.Date))
+            : (DateTimeOffset?)null;
+
+        await OnSubmit.InvokeAsync(new NewSession(amount, occurredAt, _minutes));
+    }
+}

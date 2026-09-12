@@ -1,10 +1,73 @@
 @inherits LayoutComponentBase
+@implements IDisposable
+@inject NavigationManager Navigation
 
-<header>
-    <a href="">ReadingTracker</a>
-    <LoginDisplay />
-</header>
+@*
+    The welcome screen goes without the bar across the top. It already says the application's name
+    in type you cannot miss and offers the same way in, so the header there is the same two things
+    said twice, in a strip of card colour laid over a poster.
+
+    Every other page keeps it, signed in or not — including the one you land on after mistyping a
+    URL, where the way home is the only thing on offer.
+*@
+@if (!Bare)
+{
+    <header>
+        <a href="">ReadingTracker</a>
+        <LoginDisplay />
+    </header>
+}
 
 <main>
     @Body
 </main>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool _signedIn;
+    private bool _atRoot;
+
+    /// <summary>
+    /// The welcome screen, and only that: the root of the site with nobody signed in. While the
+    /// answer to "is anyone signed in" is still coming, this is true — the boot screen has no more
+    /// use for a header than the welcome screen it becomes.
+    /// </summary>
+    private bool Bare => _atRoot && !_signedIn;
+
+    protected override void OnInitialized()
+    {
+        _atRoot = AtRoot();
+        Navigation.LocationChanged += Moved;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AuthState is not { } pending)
+        {
+            return;
+        }
+
+        var state = await pending;
+
+        _signedIn = state.User.Identity?.IsAuthenticated ?? false;
+    }
+
+    private bool AtRoot() =>
+        Navigation.ToBaseRelativePath(Navigation.Uri).TrimStart('/').Split('?')[0].Length == 0;
+
+    private void Moved(object? sender, LocationChangedEventArgs e)
+    {
+        var wasAtRoot = _atRoot;
+
+        _atRoot = AtRoot();
+
+        if (wasAtRoot != _atRoot)
+        {
+            StateHasChanged();
+        }
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= Moved;
+}

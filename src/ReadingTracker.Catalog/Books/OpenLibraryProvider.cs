@@ -49,9 +49,15 @@ public sealed class OpenLibraryProvider(HttpClient httpClient) : IBookProvider
     public async Task<IReadOnlyList<BookSearchResult>> SearchByTitleAndAuthorAsync(
         string? title,
         string? author,
+        SearchWindow window,
         CancellationToken cancellationToken)
     {
-        var terms = new List<string>(3) { "fields=key,title,author_name,isbn,number_of_pages_median,cover_i", "limit=10" };
+        var terms = new List<string>(4)
+        {
+            "fields=key,title,author_name,isbn,number_of_pages_median,cover_i",
+            $"limit={window.PageSize}",
+            $"offset={window.Offset}",
+        };
 
         if (!string.IsNullOrWhiteSpace(title))
         {
@@ -63,7 +69,8 @@ public sealed class OpenLibraryProvider(HttpClient httpClient) : IBookProvider
             terms.Add($"author={Uri.EscapeDataString(author.Trim())}");
         }
 
-        if (terms.Count == 2)
+        // Nothing but the fields and the window: no title and no author is nothing to search for.
+        if (terms.Count == 3)
         {
             return [];
         }

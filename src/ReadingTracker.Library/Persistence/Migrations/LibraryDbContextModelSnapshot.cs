@@ -64,11 +64,11 @@ namespace ReadingTracker.Library.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric");
+
                     b.Property<int?>("DurationMinutes")
                         .HasColumnType("integer");
-
-                    b.Property<decimal>("EndPosition")
-                        .HasColumnType("numeric");
 
                     b.Property<Guid>("LibraryEntryId")
                         .HasColumnType("uuid");
@@ -78,9 +78,6 @@ namespace ReadingTracker.Library.Persistence.Migrations
 
                     b.Property<DateTimeOffset>("OccurredAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<decimal>("StartPosition")
-                        .HasColumnType("numeric");
 
                     b.Property<string>("Unit")
                         .IsRequired()

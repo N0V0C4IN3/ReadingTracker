@@ -6,16 +6,137 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ReadingTracker</title>
     <base href="/" />
+
+    <!--
+        The same jackets Components/CoverFlow.razor draws, fetched now rather than when the deck
+        first renders. Starting the runtime takes several seconds during which the connection is
+        doing nothing, so the deck is usually already dressed by the time it appears.
+
+        They are served from wwwroot/covers, so there is no third party to preconnect to any more.
+        They used to come from Open Library, which answers most ids with a redirect to archive.org
+        and an image pulled out of a zip -- about two seconds each, seventeen times, on the screen
+        a signed-out reader sees first.
+
+        prefetch rather than preload on purpose: preload warns in the console for anything not used
+        within seconds, and a reader who is already signed in never sees this deck. Low priority is
+        no loss here, because nothing else wants the connection while the runtime is starting.
+
+        KEEP IN STEP with the Wall list in Components/CoverFlow.razor. An id that falls out of step
+        costs a jacket its head start; it does not break anything.
+    -->
+    <link rel="prefetch" href="covers/12356249-M.jpg" />
+    <link rel="prefetch" href="covers/252882-M.jpg" />
+    <link rel="prefetch" href="covers/10544254-M.jpg" />
+    <link rel="prefetch" href="covers/8235363-M.jpg" />
+    <link rel="prefetch" href="covers/12474938-M.jpg" />
+    <link rel="prefetch" href="covers/12216503-M.jpg" />
+    <link rel="prefetch" href="covers/12824691-M.jpg" />
+    <link rel="prefetch" href="covers/11248037-M.jpg" />
+    <link rel="prefetch" href="covers/6907719-M.jpg" />
+    <link rel="prefetch" href="covers/12818862-M.jpg" />
+    <link rel="prefetch" href="covers/13116014-M.jpg" />
+    <link rel="prefetch" href="covers/8750241-M.jpg" />
+    <link rel="prefetch" href="covers/13322313-M.jpg" />
+    <link rel="prefetch" href="covers/8216412-M.jpg" />
+    <link rel="prefetch" href="covers/12621988-M.jpg" />
+    <link rel="prefetch" href="covers/8242253-M.jpg" />
+    <link rel="prefetch" href="covers/181493-M.jpg" />
     <link rel="preload" id="webassembly" />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
-    <link href="ReadingTracker.Web.styles.css" rel="stylesheet" />
+    <!-- No link to ReadingTracker.Web.styles.css: that bundle is only built when a component
+         has scoped styles in a .razor.css file, and none do — everything is in css/app.css. The
+         project template links it unconditionally, which meant a 404 in the console on every
+         single page load, and console noise is what a real error has to be spotted among. Add
+         the link back alongside the first .razor.css. -->
+
     <script type="importmap"></script>
+
+    <!--
+        Answers the silent sign-in probe when the answer is "nobody is signed in".
+
+        Every top-level page load asks Google, in a hidden iframe, whether this browser already
+        has a session — that is how a reader who signed in yesterday is still signed in today.
+        Microsoft's AuthenticationService.js does it unconditionally in getUser(), and the whole
+        application waits on the answer: <Authorizing> in App.razor is on screen until it comes.
+
+        For a signed-out reader it never comes. Google redirects the iframe straight back with
+        `error=interaction_required`, and oidc-client *validates* that response before it tells
+        the parent window anything — validation throws, so the parent is never told at all and
+        sits out its full ten-second timeout instead. Measured on the deployed site: the iframe
+        came back in 330ms and the welcome screen appeared 10,005ms later.
+
+        The parent is waiting for one thing: a message from this frame whose text is a URL on
+        this origin. That is the entire protocol (IFrameWindow._message). So we send it, before
+        AuthenticationService.js has loaded and without involving it. oidc-client then reads the
+        error out of the URL and fails the probe in the ordinary way, which is a case the caller
+        already handles — trySilentSignIn catches it and carries on as a signed-out reader.
+
+        Only the failing case is short-circuited. A successful probe is left entirely alone: that
+        path already works, it is nobody's ten seconds, and racing it risks the token.
+
+        If a future package changes that protocol this stops matching and the wait comes back —
+        slower, not broken.
+    -->
+    <script>
+        if (window.frameElement && window.parent !== window && !window.opener
+            && /[#&]error=/.test(window.location.hash)
+            && window.location.pathname === "/authentication/login-callback") {
+            window.parent.postMessage(
+                window.location.href, window.location.protocol + "//" + window.location.host);
+        }
+    </script>
+
+    <!-- Inline rather than a file of its own: it is three lines, and a separate script would cost
+         a request on every page load to answer one question asked once. The welcome screen's deck
+         of covers turns by itself, which is exactly the kind of movement someone asks the platform
+         to stop; CSS can only reach the transitions, not the timer driving them. -->
+    <script>
+        window.readingTracker = {
+            prefersStillness: () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+
+            // Resolves once every jacket in the deck has settled — arrived, or given up — so they
+            // can be shown as one picture instead of appearing in whatever order the network
+            // happens to deliver them. The drawn jackets underneath hold the shape meanwhile.
+            //
+            // Capped, because "all of them" cannot be waited on indefinitely: one cover stuck
+            // behind a slow redirect must not keep the other sixteen hidden.
+            coversSettled: (selector, capMs) => {
+                const arriving = Array.from(document.querySelectorAll(selector))
+                    .filter(img => !img.complete)
+                    .map(img => new Promise(settled => {
+                        img.addEventListener("load", settled, { once: true });
+                        img.addEventListener("error", settled, { once: true });
+                    }));
+
+                if (arriving.length === 0) {
+                    return Promise.resolve();
+                }
+
+                return Promise.race([
+                    Promise.all(arriving),
+                    new Promise(giveUp => setTimeout(giveUp, capMs))
+                ]);
+            }
+        };
+    </script>
 </head>
 
 <body>
+    <!-- Replaced wholesale the moment the root component renders, so nothing here needs taking
+         down afterwards. The bar is driven by --blazor-load-percentage, which the runtime sets on
+         the document as it pulls the framework down: a real measure of the wait, not a spinner
+         going round to look busy. -->
     <div id="app">
-        <p style="padding: 1.5rem; font-family: system-ui, sans-serif;">Loading ReadingTracker…</p>
+        <div class="splash">
+            <div class="splash__books" aria-hidden="true">
+                <span></span><span></span><span></span><span></span>
+            </div>
+            <p class="splash__title">ReadingTracker</p>
+            <div class="splash__track" role="progressbar" aria-label="Loading ReadingTracker">
+                <div class="splash__fill"></div>
+            </div>
+        </div>
     </div>
 
     <div id="blazor-error-ui">

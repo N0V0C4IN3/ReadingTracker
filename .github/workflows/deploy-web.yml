@@ -1,0 +1,104 @@
+name: Deploy frontend
+
+# The Blazor WebAssembly app to Azure Static Web Apps (ADR-0005).
+#
+# The important step is the one that writes appsettings.Production.json. A WebAssembly app is
+# static files running in someone else's browser: it has no environment variables to read at
+# start-up, so every deployment-specific value has to be baked into a file that ships with it.
+# Without this, the published app carries the localhost gateway address from appsettings.json
+# and a deployed frontend loads perfectly and then cannot reach anything.
+#
+# Nothing secret goes in that file, because nothing there can be: it is served to every visitor
+# and readable with view-source. The Google client id is public by design — it identifies the
+# application, it does not authenticate it — which is why it is a variable rather than a secret.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the deployment is configured
+        env:
+          GATEWAY: ${{ vars.WEB_GATEWAY_BASE_ADDRESS }}
+          TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+        run: |
+          [ -n "$GATEWAY" ] || { echo "::error::Set the WEB_GATEWAY_BASE_ADDRESS variable — see docs/deployment.md"; exit 1; }
+          [ -n "$TOKEN" ] || { echo "::error::Set the AZURE_STATIC_WEB_APPS_API_TOKEN secret — see docs/deployment.md"; exit 1; }
+
+          case "$GATEWAY" in
+            https://*) ;;
+            *) echo "::error::WEB_GATEWAY_BASE_ADDRESS must be https — a page served over https cannot call http"; exit 1 ;;
+          esac
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      # Written before the publish so it is picked up as ordinary content and compressed along
+      # with everything else. jq builds it rather than a heredoc, so a value containing a quote
+      # produces valid JSON instead of a file the app fails to parse at start-up.
+      #
+      # A trailing slash is forced because HttpClient.BaseAddress silently drops the last path
+      # segment without one — "https://host/api" + "books" becomes "https://host/books".
+      - name: Write appsettings.Production.json
+        env:
+          GATEWAY: ${{ vars.WEB_GATEWAY_BASE_ADDRESS }}
+          CLIENT_ID: ${{ vars.WEB_GOOGLE_CLIENT_ID }}
+        run: |
+          case "$GATEWAY" in
+            */) ;;
+            *) GATEWAY="$GATEWAY/" ;;
+          esac
+
+          settings=$(jq -n --arg gateway "$GATEWAY" '{ Gateway: { BaseAddress: $gateway } }')
+
+          # Optional: only needed when production uses a different Google OAuth client from the
+          # one in appsettings.json. Usually it does not — the same client with the production
+          # origin added to its redirect URIs.
+          if [ -n "$CLIENT_ID" ]; then
+            settings=$(printf '%s' "$settings" | jq --arg id "$CLIENT_ID" '.Google = { ClientId: $id }')
+          fi
+
+          printf '%s\n' "$settings" > src/ReadingTracker.Web/wwwroot/appsettings.Production.json
+          echo "Shipping:"; cat src/ReadingTracker.Web/wwwroot/appsettings.Production.json
+
+      - name: Publish
+        run: dotnet publish src/ReadingTracker.Web/ReadingTracker.Web.csproj --configuration Release --output published
+
+      # A deployed frontend that still points at localhost is the failure this whole workflow
+      # exists to prevent, so it is checked rather than assumed — after the publish, in the
+      # output that is actually about to be uploaded.
+      - name: Check the published app is not pointing at localhost
+        run: |
+          if grep -q 'localhost' published/wwwroot/appsettings.Production.json; then
+            echo "::error::appsettings.Production.json still names localhost"
+            exit 1
+          fi
+          test -f published/wwwroot/appsettings.Production.json
+
+      - name: Deploy to Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: upload
+          # Already built above: this action would otherwise try to work out how to build the
+          # repository itself, and guess wrong about a .NET solution with four projects in it.
+          skip_app_build: true
+          skip_api_build: true
+          app_location: published/wwwroot
+          api_location: ""
+          output_location: ""

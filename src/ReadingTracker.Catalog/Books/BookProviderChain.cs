@@ -11,11 +11,18 @@ public enum SearchStatus
     ProvidersUnavailable,
 }
 
-public sealed record ProviderSearch(SearchStatus Status, IReadOnlyList<BookSearchResult> Results)
+/// <summary>
+/// What a provider said. <paramref name="HasMore"/> means the provider filled the window it was
+/// given, so there is very likely another page behind this one — it is answered from what the
+/// provider returned rather than from what was eventually stored, because de-duplication can
+/// shrink a full page and must not be mistaken for the end of the results.
+/// </summary>
+public sealed record ProviderSearch(SearchStatus Status, IReadOnlyList<BookSearchResult> Results, bool HasMore)
 {
-    public static ProviderSearch Completed(IReadOnlyList<BookSearchResult> results) => new(SearchStatus.Completed, results);
+    public static ProviderSearch Completed(IReadOnlyList<BookSearchResult> results, bool hasMore = false) =>
+        new(SearchStatus.Completed, results, hasMore);
 
-    public static ProviderSearch Unavailable { get; } = new(SearchStatus.ProvidersUnavailable, []);
+    public static ProviderSearch Unavailable { get; } = new(SearchStatus.ProvidersUnavailable, [], false);
 }
 
 /// <summary>
@@ -25,24 +32,34 @@ public sealed record ProviderSearch(SearchStatus Status, IReadOnlyList<BookSearc
 /// </summary>
 public sealed class BookProviderChain(IEnumerable<IBookProvider> providers, ILogger<BookProviderChain> logger)
 {
+    /// <summary>An ISBN names one edition, so there is never a second page of it to ask for.</summary>
     public Task<ProviderSearch> SearchByIsbnAsync(string isbn, CancellationToken cancellationToken) =>
         AskEachAsync(
             provider => provider.SearchByIsbnAsync(isbn, cancellationToken),
             isbn,
+            window: null,
             cancellationToken);
 
     public Task<ProviderSearch> SearchByTitleAndAuthorAsync(
         string? title,
         string? author,
+        SearchWindow window,
         CancellationToken cancellationToken) =>
         AskEachAsync(
-            provider => provider.SearchByTitleAndAuthorAsync(title, author, cancellationToken),
+            provider => provider.SearchByTitleAndAuthorAsync(title, author, window, cancellationToken),
             $"{title} / {author}",
+            window,
             cancellationToken);
 
+    /// <summary>
+    /// Each provider is asked for the same window, and the first with anything to say answers.
+    /// A search whose later page falls through to the next provider gets that provider's window
+    /// of the same query — a real answer, if not a continuation of the one before it.
+    /// </summary>
     private async Task<ProviderSearch> AskEachAsync(
         Func<IBookProvider, Task<IReadOnlyList<BookSearchResult>>> ask,
         string searchedFor,
+        SearchWindow? window,
         CancellationToken cancellationToken)
     {
         var someProviderAnswered = false;
@@ -56,7 +73,7 @@ public sealed class BookProviderChain(IEnumerable<IBookProvider> providers, ILog
 
                 if (results.Count > 0)
                 {
-                    return ProviderSearch.Completed(results);
+                    return ProviderSearch.Completed(results, window is { } asked && results.Count >= asked.PageSize);
                 }
             }
             catch (Exception exception) when (IsProviderFailure(exception, cancellationToken))

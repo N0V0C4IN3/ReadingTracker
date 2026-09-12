@@ -1,0 +1,45 @@
+@using Microsoft.Extensions.Options
+@using ReadingTracker.Web.Services
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IOptions<DevSignInOptions> DevSignIn
+
+@*
+    Asks the Gateway to mint a token for whichever reader id is typed in (ADR-0009), so a developer
+    can be one reader and then another without holding a real Google account for either. Rendered
+    only where dev sign-in is enabled — the caller checks, because this control has nothing
+    sensible to show when it is not.
+*@
+
+<input @bind="_readerId" aria-label="Reader id" placeholder="Reader id" />
+<button @onclick="SignInAsync">Sign in (dev)</button>
+
+@if (_failed)
+{
+    <span role="alert">
+        The Gateway would not mint a token. Check it is running in Development with
+        DevSignIn:Enabled set.
+    </span>
+}
+
+@code {
+    private string _readerId = "";
+    private bool _failed;
+
+    protected override void OnInitialized() =>
+        _readerId = DevSignIn.Value.DefaultReaderId;
+
+    private async Task SignInAsync()
+    {
+        // Registered only when dev sign-in is enabled, which is exactly when this renders.
+        if (AuthenticationStateProvider is not DevAuthenticationStateProvider dev)
+        {
+            return;
+        }
+
+        var readerId = string.IsNullOrWhiteSpace(_readerId)
+            ? DevSignIn.Value.DefaultReaderId
+            : _readerId.Trim();
+
+        _failed = !await dev.SignInAsync(readerId);
+    }
+}
