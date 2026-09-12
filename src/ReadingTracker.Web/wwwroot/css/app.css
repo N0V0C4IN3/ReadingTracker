@@ -31,6 +31,9 @@
     --page: #f3f2ee;
     --card: #ffffff;
     --card-translucent: rgb(255 255 255 / 70%);
+    /* Sheerer than a card, for the search panel: it is a place to type rather than
+       something to read, so it can let more of the page through than the shelf does. */
+    --card-sheer: rgb(255 255 255 / 50%);
     --card-raised: rgb(253 253 251 / 72%);
     --line: rgb(0 0 0 / 7%);
     --line-strong: rgb(0 0 0 / 14%);
@@ -67,6 +70,7 @@
         --page: #111314;
         --card: #1c1f21;
         --card-translucent: rgb(35 39 41 / 66%);
+        --card-sheer: rgb(35 39 41 / 42%);
         --card-raised: rgb(28 31 33 / 72%);
         --line: rgb(255 255 255 / 8%);
         --line-strong: rgb(255 255 255 / 16%);
@@ -1259,6 +1263,20 @@ button.danger:hover:not(:disabled) {
     background: var(--fill-hover);
 }
 
+/*
+    Results arrive rather than appear. A search replaces the whole list at once, and a block of
+    rows switched on in one frame reads as the page having jumped; coming in a beat apart reads as
+    the answer being laid out. Home.razor keys each row by its book, so a fresh search builds new
+    elements and this plays again, and hands down its position as --at.
+
+    Capped at the eighth row: a full page is forty books, and the fortieth arriving two seconds
+    after the first is not a flourish, it is a wait. Past the cap they come in together.
+*/
+.result {
+    animation: rise 420ms var(--ease) both;
+    animation-delay: calc(min(var(--at, 0), 8) * 45ms);
+}
+
 .result img {
     width: 2.5rem;
     display: block;
@@ -1376,9 +1394,14 @@ button.danger:hover:not(:disabled) {
         backdrop-filter: var(--blur);
     }
 
-    .entry,
-    .search {
+    .entry {
         background-color: var(--card-translucent);
+        -webkit-backdrop-filter: var(--blur);
+        backdrop-filter: var(--blur);
+    }
+
+    .search {
+        background-color: var(--card-sheer);
         -webkit-backdrop-filter: var(--blur);
         backdrop-filter: var(--blur);
     }
@@ -1432,5 +1455,57 @@ button.danger:hover:not(:disabled) {
 
     .field label {
         min-width: 5rem;
+    }
+
+    /*
+        Below this width the shelf stops being a page with rows on it and becomes a column, and
+        anything that wraps by itself wraps badly: flex fills the line and leaves the remainder
+        stranded on the next one. Every group here is given an explicit shape instead, so each row
+        is either one full-width thing or two equal halves, and the left and right edges line up
+        all the way down. Measured at 390px, which is where the ragged versions were found.
+    */
+
+    /* Was [158, 158] then [228, 88]: the search button ended up a stub beside a long ISBN box.
+       Title and author keep their pair; the ISBN and the action each take a line of their own. */
+    .search__inputs input {
+        flex: 1 1 45%;
+    }
+
+    .search__inputs input:nth-of-type(3),
+    .search__inputs button {
+        flex: 1 1 100%;
+    }
+
+    /* Was cover + 97px of title + button, all on one line, with the title taking whatever was
+       left. The button drops to its own full-width line and gives the title the rest. */
+    .result {
+        flex-wrap: wrap;
+    }
+
+    .result__body {
+        flex: 1 1 8rem;
+    }
+
+    .result button {
+        flex: 1 1 100%;
+    }
+
+    /* Was [101, 64, 69] then [69] hanging alone. Two by two, so the four read as one block. */
+    .entry__actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.15rem;
+        justify-items: start;
+    }
+
+    /* Was 43, 78, 78, 99 -- four different widths across one line. Equal shares instead. */
+    .filters {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    .filters .chip {
+        padding-inline: 0.35rem;
+        text-align: center;
     }
 }

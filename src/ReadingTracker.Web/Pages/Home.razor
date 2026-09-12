@@ -116,9 +116,15 @@
                 else
                 {
                     <ul class="results">
-                        @foreach (var book in found.Results)
+                        @*
+                            Keyed by the book so a new search builds new rows rather than
+                            rewriting the old ones in place — which is what lets the arrival
+                            animation below play again. The index rides along as --at, so each
+                            row can come in a beat after the one above it.
+                        *@
+                        @foreach (var (book, at) in found.Results.Select((book, at) => (book, at)))
                         {
-                            <li class="result">
+                            <li class="result" @key="book.Id" style="--at:@at">
                                 @if (book.CoverUrl is { } cover)
                                 {
                                     <img src="@cover" alt="" loading="lazy" />
