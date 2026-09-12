@@ -1444,6 +1444,41 @@ button.danger:hover:not(:disabled) {
         min-height: min(88vh, 36rem);
     }
 
+    /*
+        Three things across the top of a phone: the name of the site, who is signed in, and the way
+        out. space-between spreads three items evenly, which here left a hole after the brand and
+        pushed the button onto a row of its own -- a sticky header 104px tall on an 844px screen,
+        taken off every page before the reader has scrolled anything.
+
+        The brand takes up the slack instead, so the other two travel together against the right
+        edge and the whole bar stays one row.
+    */
+    header {
+        gap: 0.6rem;
+        flex-wrap: nowrap;
+        /* Lines the bar up with the page under it: the brand sat 24px in while the cards below
+           started at 16px, so the two disagreed down the whole left edge. */
+        padding: 0.7rem 1rem;
+    }
+
+    header > a {
+        margin-right: auto;
+    }
+
+    /* Shrinks and clips rather than wrapping, so a long name costs an ellipsis instead of the
+       second row this is here to get rid of. */
+    header > span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* The way out keeps its size whatever the name does to the space beside it. */
+    header > button {
+        flex: 0 0 auto;
+    }
+
     .entry {
         gap: 0.85rem;
         padding: 0.9rem;
