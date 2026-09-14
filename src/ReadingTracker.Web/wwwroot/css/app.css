@@ -1920,15 +1920,23 @@ button.danger:hover:not(:disabled) {
         display: none;
     }
 
+    /*
+        Five rows of results at a time, then it scrolls: a result row is 0.6rem of padding either
+        side of a 2.5rem-wide jacket at 2:3, so about 4.95rem, with 0.4rem between rows. More than
+        five and the dock is the screen; fewer and a page of ten is a lot of thumbing.
+    */
     .search__found {
         order: 0;
         overflow-y: auto;
         min-height: 0;
+        max-height: 26.5rem;
         overscroll-behavior: contain;
     }
 
+    /* A breath between the dock's top edge and the first result, and between the last and the box. */
     .search__found:not(:empty) {
-        margin-bottom: 0.75rem;
+        padding-top: 0.5rem;
+        margin-bottom: 0.85rem;
     }
 
     .search__inputs {
