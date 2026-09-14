@@ -28,7 +28,7 @@ public sealed class GatewayCatalogClientTests
             }
             """);
 
-        var (page, problem) = await client.SearchAsync(isbn: null, title: "Lathe of Heaven", author: null, page: 1, CancellationToken.None);
+        var (page, problem) = await client.SearchAsync("Lathe of Heaven", page: 1, CancellationToken.None);
 
         Assert.Null(problem);
         var book = Assert.Single(page!.Results);
@@ -45,7 +45,7 @@ public sealed class GatewayCatalogClientTests
         var (client, gateway) = CreateClient();
         gateway.Respond = _ => StubHttpMessageHandler.Json("""{ "results": [], "page": 1, "pageSize": 10, "hasMore": false }""");
 
-        var (page, problem) = await client.SearchAsync(isbn: null, title: "Nothing Like This Exists", author: null, page: 1, CancellationToken.None);
+        var (page, problem) = await client.SearchAsync("Nothing Like This Exists", page: 1, CancellationToken.None);
 
         Assert.Null(problem);
         Assert.Empty(page!.Results);
@@ -57,7 +57,7 @@ public sealed class GatewayCatalogClientTests
         var (client, gateway) = CreateClient();
         gateway.Respond = _ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
 
-        var (page, problem) = await client.SearchAsync(isbn: null, title: "Anything", author: null, page: 1, CancellationToken.None);
+        var (page, problem) = await client.SearchAsync("Anything", page: 1, CancellationToken.None);
 
         Assert.Null(page);
         Assert.Equal(SearchUnavailable.ProvidersUnavailable, problem);
@@ -69,7 +69,7 @@ public sealed class GatewayCatalogClientTests
         var (client, gateway) = CreateClient();
         gateway.Respond = _ => new HttpResponseMessage(HttpStatusCode.Unauthorized);
 
-        var (page, problem) = await client.SearchAsync(isbn: null, title: "Anything", author: null, page: 1, CancellationToken.None);
+        var (page, problem) = await client.SearchAsync("Anything", page: 1, CancellationToken.None);
 
         Assert.Null(page);
         Assert.Equal(SearchUnavailable.NotSignedIn, problem);
@@ -81,24 +81,26 @@ public sealed class GatewayCatalogClientTests
         var (client, gateway) = CreateClient();
         gateway.Respond = _ => throw new HttpRequestException("connection refused");
 
-        var (page, problem) = await client.SearchAsync(isbn: null, title: "Anything", author: null, page: 1, CancellationToken.None);
+        var (page, problem) = await client.SearchAsync("Anything", page: 1, CancellationToken.None);
 
         Assert.Null(page);
         Assert.Equal(SearchUnavailable.GatewayUnreachable, problem);
     }
 
     [Fact]
-    public async Task Searches_by_isbn_title_and_author_together()
+    public async Task Sends_whatever_was_typed_as_one_query_for_catalog_to_make_sense_of()
     {
         var (client, gateway) = CreateClient();
         gateway.Respond = _ => StubHttpMessageHandler.Json("""{ "results": [], "page": 1, "pageSize": 10, "hasMore": false }""");
 
-        await client.SearchAsync(isbn: "9780380014422", title: "Lathe", author: "Le Guin", page: 1, CancellationToken.None);
+        await client.SearchAsync("  lathe of heaven le guin ", page: 1, CancellationToken.None);
 
-        var query = gateway.LastRequest!.RequestUri!.Query;
-        Assert.Contains("isbn=9780380014422", query);
-        Assert.Contains("title=Lathe", query);
-        Assert.Contains("author=Le", query);
+        // Not split into fields here: Catalog is the one that knows an ISBN from a title.
+        var query = Uri.UnescapeDataString(gateway.LastRequest!.RequestUri!.Query);
+        Assert.Contains("q=lathe of heaven le guin", query);
+        Assert.DoesNotContain("title=", query);
+        Assert.DoesNotContain("author=", query);
+        Assert.DoesNotContain("isbn=", query);
     }
 
     [Fact]
@@ -107,7 +109,7 @@ public sealed class GatewayCatalogClientTests
         var (client, gateway) = CreateClient();
         gateway.Respond = _ => StubHttpMessageHandler.Json("""{ "results": [], "page": 4, "pageSize": 10, "hasMore": false }""");
 
-        await client.SearchAsync(isbn: null, title: null, author: "Le Guin", page: 4, CancellationToken.None);
+        await client.SearchAsync("Le Guin", page: 4, CancellationToken.None);
 
         Assert.Contains("page=4", gateway.LastRequest!.RequestUri!.Query);
     }
@@ -132,7 +134,7 @@ public sealed class GatewayCatalogClientTests
             }
             """);
 
-        var (page, _) = await client.SearchAsync(isbn: null, title: null, author: "Le Guin", page: 2, CancellationToken.None);
+        var (page, _) = await client.SearchAsync("Le Guin", page: 2, CancellationToken.None);
 
         Assert.Equal(2, page!.Page);
         Assert.True(page.HasMore);

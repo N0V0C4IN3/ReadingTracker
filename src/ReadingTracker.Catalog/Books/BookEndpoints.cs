@@ -43,6 +43,7 @@ public static class BookEndpoints
         .WithName("GetBooks");
 
         endpoints.MapGet("/api/books/search", async (
+            string? q,
             string? isbn,
             string? title,
             string? author,
@@ -51,14 +52,22 @@ public static class BookEndpoints
             BookCatalog catalog,
             CancellationToken cancellationToken) =>
         {
-            if (string.IsNullOrWhiteSpace(isbn)
+            if (string.IsNullOrWhiteSpace(q)
+                && string.IsNullOrWhiteSpace(isbn)
                 && string.IsNullOrWhiteSpace(title)
                 && string.IsNullOrWhiteSpace(author))
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]>
                 {
-                    ["query"] = ["Search by isbn, or by title and/or author."],
+                    ["query"] = ["Search by q, by isbn, or by title and/or author."],
                 });
+            }
+
+            // One box on the reader's side: whatever was typed into it is an ISBN if it is
+            // shaped like one, and words to search for otherwise. Named fields still work.
+            if (!string.IsNullOrWhiteSpace(q) && Isbn.TryNormalise(q, out var typedIsbn))
+            {
+                isbn = typedIsbn;
             }
 
             if (PagingErrors(page, pageSize) is { Count: > 0 } pagingErrors)
@@ -70,9 +79,11 @@ public static class BookEndpoints
 
             // An ISBN names one edition exactly, so it wins over the fuzzier fields — and there
             // is only ever one page of one edition, whatever window was asked for.
-            var search = string.IsNullOrWhiteSpace(isbn)
-                ? await catalog.SearchByTitleAndAuthorAsync(title, author, window, cancellationToken)
-                : await catalog.SearchByIsbnAsync(isbn.Trim(), cancellationToken);
+            var search = !string.IsNullOrWhiteSpace(isbn)
+                ? await catalog.SearchByIsbnAsync(isbn.Trim(), cancellationToken)
+                : !string.IsNullOrWhiteSpace(q)
+                    ? await catalog.SearchAsync(q, window, cancellationToken)
+                    : await catalog.SearchByTitleAndAuthorAsync(title, author, window, cancellationToken);
 
             return search.Status switch
             {

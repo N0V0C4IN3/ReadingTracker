@@ -51,6 +51,16 @@ public sealed class BookProviderChain(IEnumerable<IBookProvider> providers, ILog
             window,
             cancellationToken);
 
+    public Task<ProviderSearch> SearchAsync(
+        string query,
+        SearchWindow window,
+        CancellationToken cancellationToken) =>
+        AskEachAsync(
+            provider => provider.SearchAsync(query, window, cancellationToken),
+            query,
+            window,
+            cancellationToken);
+
     /// <summary>
     /// Each provider is asked for the same window, and the first with anything to say answers.
     /// A search whose later page falls through to the next provider gets that provider's window

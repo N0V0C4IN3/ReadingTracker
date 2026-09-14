@@ -55,6 +55,21 @@ public sealed class PageCountOverrideTests(LibraryApiFixture fixture)
     }
 
     [Fact]
+    public async Task Treats_a_page_count_of_zero_from_the_catalog_as_no_page_count()
+    {
+        var client = fixture.ClientFor("zero-count-reader");
+        // Google Books says 0 when it does not know. Catalog may already have stored that.
+        var entryId = await fixture.AddBookAsync(client, totalPages: 0);
+        await LogAsync(client, entryId, 100);
+
+        var progress = (await EntryAsync(client, entryId)).Progress!;
+
+        // The hundred pages stand, uncapped, and there is no percentage rather than a nonsense one.
+        Assert.Equal(100, progress.AmountRead);
+        Assert.Null(progress.PercentComplete);
+    }
+
+    [Fact]
     public async Task Uses_my_count_when_converting_between_pages_and_percentage()
     {
         var client = fixture.ClientFor("converting-count-reader");
