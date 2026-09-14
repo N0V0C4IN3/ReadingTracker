@@ -10,7 +10,7 @@
     shelf. The reader's own reading — the progress line — is the part that stays visible.
 *@
 
-<article class="entry @(_working ? "entry--working" : null)">
+<article class="entry @(_working ? "entry--working" : null)" style="--at:@At">
     <div class="entry__cover">
         @if (Entry.Book?.CoverUrl is { } cover)
         {
@@ -51,8 +51,19 @@
         </div>
 
         <div class="entry__actions">
-            <button type="button" class="link-button" @onclick="() => Toggle(Panel.Log)" disabled="@_working">
-                @(_panel == Panel.Log ? "Cancel" : "Log reading")
+            <button type="button"
+                    class="button--log @(_panel == Panel.Log ? "button--log--open" : null)"
+                    @onclick="() => Toggle(Panel.Log)"
+                    disabled="@_working">
+                @if (_panel == Panel.Log)
+                {
+                    <text>Cancel</text>
+                }
+                else
+                {
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.4 1.6l3 3L5.2 13.8 1.5 14.5l.7-3.7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" /></svg>
+                    <text>Log reading</text>
+                }
             </button>
             <button type="button" class="link-button" @onclick="ToggleHistoryAsync" disabled="@_working">
                 History
@@ -207,6 +218,10 @@
 
     [Parameter, EditorRequired]
     public required LibraryEntry Entry { get; set; }
+
+    /// <summary>Where on the shelf this card sits, so it can arrive a beat after the one above.</summary>
+    [Parameter]
+    public int At { get; set; }
 
     /// <summary>Raised when this entry changed in a way the shelf around it needs to know about.</summary>
     [Parameter]

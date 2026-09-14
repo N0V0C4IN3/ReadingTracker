@@ -31,6 +31,9 @@
     --page: #f3f2ee;
     --card: #ffffff;
     --card-translucent: rgb(255 255 255 / 70%);
+    /* The shelf's cards, a good deal sheerer than a control: they are the largest surfaces on the
+       page, and at the control's opacity a column of them reads as a wall rather than as glass. */
+    --card-shelf: rgb(255 255 255 / 45%);
     /* Sheerer than a card, for the search panel: it is a place to type rather than
        something to read, so it can let more of the page through than the shelf does. */
     --card-sheer: rgb(255 255 255 / 50%);
@@ -46,12 +49,25 @@
     --danger: #a3392b;
     --danger-soft: rgb(163 57 43 / 10%);
     --danger-fill: rgb(163 57 43 / 14%);
+    /* The page's washes: the accent and two neighbours, an amber and a blue, all as tints. Kept
+       this pale on purpose — they are what the sheer cards are sheer against, not a picture. */
+    --wash-accent: rgb(47 107 79 / 17%);
+    --wash-warm: rgb(212 160 84 / 15%);
+    --wash-cool: rgb(86 132 176 / 13%);
     --radius: 16px;
     --radius-sm: 10px;
     --blur: saturate(180%) blur(20px);
     --shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 10px 26px rgb(0 0 0 / 6%);
     --shadow-lifted: 0 1px 2px rgb(0 0 0 / 5%), 0 16px 36px rgb(0 0 0 / 10%);
+    /*
+        Two curves. --ease is symmetric and for things that change state under the cursor: a fill
+        darkening, a border colouring. --ease-out is for anything that arrives or comes to rest —
+        a card rising in, the deck turning, a bar growing — because those should leave fast and
+        settle slowly, the way a thing that has been set down does. Put the symmetric curve on an
+        arrival and the first third of it is spent getting going, which reads as hesitation.
+    */
     --ease: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
     --quick: 160ms;
 
     /* The welcome screen commits to one look in both schemes: white type on a deep wash over the
@@ -70,6 +86,7 @@
         --page: #111314;
         --card: #1c1f21;
         --card-translucent: rgb(35 39 41 / 66%);
+        --card-shelf: rgb(35 39 41 / 41%);
         --card-sheer: rgb(35 39 41 / 42%);
         --card-raised: rgb(28 31 33 / 72%);
         --line: rgb(255 255 255 / 8%);
@@ -83,6 +100,9 @@
         --danger: #e28a7c;
         --danger-soft: rgb(226 138 124 / 14%);
         --danger-fill: rgb(226 138 124 / 18%);
+        --wash-accent: rgb(142 197 164 / 17%);
+        --wash-warm: rgb(230 178 96 / 13%);
+        --wash-cool: rgb(120 160 210 / 13%);
         --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 10px 26px rgb(0 0 0 / 32%);
         --shadow-lifted: 0 1px 2px rgb(0 0 0 / 45%), 0 16px 36px rgb(0 0 0 / 42%);
     }
@@ -104,11 +124,14 @@ body {
     line-height: 1.55;
     color: var(--ink);
     background: var(--page);
-    /* Two soft washes of the accent, so the translucent surfaces above have something to be
-       translucent against. Fixed, so they do not slide about as the shelf scrolls. */
+    /* Four broad fields of colour blended into one soft mesh — green, amber, blue, green — so the
+       translucent surfaces above have something to be translucent against wherever they sit on the
+       page, not only in the top corners. Fixed, so it does not slide about as the shelf scrolls. */
     background-image:
-        radial-gradient(60rem 40rem at 10% -12%, var(--accent-soft), transparent 60%),
-        radial-gradient(50rem 36rem at 95% 4%, var(--accent-soft), transparent 55%);
+        radial-gradient(56rem 40rem at 12% 12%, var(--wash-accent), transparent 66%),
+        radial-gradient(52rem 38rem at 88% 4%, var(--wash-warm), transparent 66%),
+        radial-gradient(56rem 40rem at 76% 96%, var(--wash-cool), transparent 66%),
+        radial-gradient(48rem 34rem at 14% 100%, var(--wash-accent), transparent 66%);
     background-attachment: fixed;
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
@@ -178,7 +201,7 @@ a {
     display: grid;
     place-items: center;
     background: var(--page);
-    transition: opacity 450ms var(--ease);
+    transition: opacity 500ms var(--ease-out);
 }
 
 .welcome__curtain--lifted {
@@ -208,7 +231,7 @@ a {
 .welcome--shown .hero__actions,
 .welcome--shown .flow,
 .welcome--shown .pitch {
-    animation: rise 560ms var(--ease) both;
+    animation: rise 560ms var(--ease-out) both;
 }
 
 .welcome--shown .hero__title { animation-delay: 70ms; }
@@ -269,7 +292,11 @@ select {
     border-radius: var(--radius-sm);
     background: var(--card);
     min-width: 0;
-    transition: border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease);
+    transition:
+        border-color var(--quick) var(--ease),
+        box-shadow var(--quick) var(--ease),
+        background-color var(--quick) var(--ease),
+        color var(--quick) var(--ease);
 }
 
 input::placeholder {
@@ -391,6 +418,49 @@ button.danger:hover:not(:disabled) {
 .link-button--danger:hover:not(:disabled) {
     background: var(--danger-fill);
     color: var(--danger);
+}
+
+/*
+    The one action on a card that is the point of the card. Everything else in the row is
+    housekeeping and stays quiet; this is filled, a size up, carries a pen, and stands a little
+    apart from the rest so the row reads as one action and three afterthoughts.
+
+    Pulled back onto the title's edge: .entry__actions is shifted left by the width of a quiet
+    button's padding so *their* text lines up, and a filled button has an edge of its own to line up.
+*/
+.button--log {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.5rem 1.05rem 0.5rem 0.85rem;
+    margin: 0 0.5rem 0 0.6rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    background: var(--accent);
+    color: var(--accent-ink);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
+}
+
+.button--log svg {
+    width: 0.95em;
+    height: 0.95em;
+}
+
+.button--log:hover:not(:disabled) {
+    background: var(--accent-hover);
+}
+
+/* While the form is open the same button says Cancel, which is not an action to shout about. It
+   keeps its size so the row does not jump, and drops to a tint so the form below it is the loud thing. */
+.button--log--open {
+    background: var(--accent-soft);
+    color: var(--accent);
+    box-shadow: none;
+}
+
+.button--log--open:hover:not(:disabled) {
+    background: var(--fill-hover);
+    color: var(--ink);
 }
 
 .chip {
@@ -636,7 +706,7 @@ button.danger:hover:not(:disabled) {
         and can be dragged, and a turn that outlasts the gesture that asked for it feels like lag
         rather than weight.
     */
-    transition: transform 620ms var(--ease), opacity 620ms var(--ease);
+    transition: transform 620ms var(--ease-out), opacity 620ms var(--ease-out);
 }
 
 .flow__slot--lit {
@@ -722,7 +792,7 @@ button.danger:hover:not(:disabled) {
     already changed by then is labelling the wrong book for the length of the turn.
 */
 .flow__caption {
-    animation: rise 520ms var(--ease) both;
+    animation: rise 520ms var(--ease-out) both;
     animation-delay: 120ms;
 }
 
@@ -806,7 +876,7 @@ button.danger:hover:not(:disabled) {
 */
 .flow .cover__art {
     opacity: 0;
-    transition: opacity 420ms var(--ease);
+    transition: opacity 600ms var(--ease-out);
 }
 
 .flow--dressed .cover__art {
@@ -960,20 +1030,107 @@ button.danger:hover:not(:disabled) {
     border-radius: var(--radius);
     background: var(--card);
     box-shadow: var(--shadow);
-    transition: box-shadow var(--quick) var(--ease), transform var(--quick) var(--ease);
+    transition:
+        box-shadow 220ms var(--ease-out),
+        border-color 220ms var(--ease-out),
+        opacity 220ms var(--ease);
 }
 
-/* Picked up very slightly. Enough to answer the cursor; not enough to move the text under it. */
-.entry:hover {
-    transform: translateY(-1px);
+/*
+    Cards arrive rather than appear, a beat apart, the way search results do; ShelfEntry hands its
+    position down as --at. Filled backwards rather than both: a card that kept its final frame
+    would keep its transform with it, and the hover lift below could never move it again.
+*/
+.entries > .entry {
+    animation: rise 420ms var(--ease-out) backwards;
+    animation-delay: calc(min(var(--at, 0), 8) * 45ms);
 }
 
+/*
+    Answers the cursor with a deeper shadow and a firmer edge, and does not move. The card is a
+    pane of glass — it blurs what is behind it — and a pane that slides even a pixel is re-drawn
+    at fractional positions every frame of the slide: the text shimmers and the blur swims under
+    it. The shadow lives outside the pane and can change as much as it likes.
+*/
 .entry:hover {
+    border-color: var(--line-strong);
     box-shadow: var(--shadow-lifted);
 }
 
+/* Dimmed over a few frames, by the transition above: a card that fades is busy; one that blinks is broken. */
 .entry--working {
     opacity: 0.6;
+}
+
+/*
+    The shelf before Library has answered — see Home.razor. Each ghost is an .entry with bones
+    where the cover, title, authors and status will be, so nothing moves when the real cards take
+    their places: same padding, same gap, near enough the same height.
+
+    Held back for a beat before showing. On a warm shelf the answer is back well inside that, and
+    three ghosts that flash up and are replaced would be a stutter the wait itself never had. Past
+    the beat they rise in one after another and shimmer until the answer comes.
+*/
+.entries--pending {
+    pointer-events: none;
+}
+
+.entries > .entry--pending {
+    animation-duration: 360ms;
+    animation-delay: calc(140ms + var(--at, 0) * 70ms);
+}
+
+.bone {
+    border-radius: 6px;
+    background: linear-gradient(100deg, var(--fill) 30%, var(--fill-hover) 50%, var(--fill) 70%);
+    background-size: 250% 100%;
+    animation: shimmer 1.8s linear infinite;
+}
+
+.bone--cover {
+    aspect-ratio: 2 / 3;
+    border-radius: 8px;
+}
+
+/* The bones' boxes, margins included, add up to the rows they stand in for — title, authors, the
+   status control, the row of actions — so the ghost is the height of the card to the pixel. All the
+   spacing is on the underside: split across both sides it would collapse between neighbours. */
+.bone--title {
+    height: 1rem;
+    width: 58%;
+    margin: 0.2rem 0 0.65rem;
+}
+
+.bone--authors {
+    height: 0.75rem;
+    width: 34%;
+    margin: 0 0 1rem;
+}
+
+.bone--status {
+    height: 2rem;
+    width: 8.5rem;
+    margin: 0 0 1.1rem;
+    border-radius: var(--radius-sm);
+}
+
+.bone--actions {
+    height: 0.7rem;
+    width: 15rem;
+    max-width: 100%;
+    margin: 0 0 0.6rem;
+}
+
+/* Three identical ghosts read as a pattern; three that differ the way titles do read as books. */
+.entry--pending:nth-child(2) .bone--title { width: 44%; }
+.entry--pending:nth-child(2) .bone--authors { width: 28%; }
+.entry--pending:nth-child(3) .bone--title { width: 66%; }
+.entry--pending:nth-child(3) .bone--authors { width: 40%; }
+
+/* The highlight crosses left to right, which is the direction the eye is already reading in. */
+@keyframes shimmer {
+    from { background-position: 100% 0; }
+    to { background-position: 0% 0; }
 }
 
 .entry__cover,
@@ -1083,11 +1240,13 @@ button.danger:hover:not(:disabled) {
     overflow: hidden;
 }
 
+/* Grows to the new mark rather than snapping to it: logging a session is the one moment the bar
+   is being watched, and a bar that visibly gains ground is the reward for having read. */
 .progress__fill {
     height: 100%;
     background: var(--accent);
     border-radius: 999px;
-    transition: width var(--quick) var(--ease);
+    transition: width 560ms var(--ease-out);
 }
 
 .progress__label {
@@ -1112,6 +1271,22 @@ button.danger:hover:not(:disabled) {
 
 .panel > p:first-child {
     margin-top: 0;
+}
+
+/*
+    Panels open rather than appear. They are conditional in the markup, so opening one builds new
+    elements and this plays each time: a short drop from just above where it lands, as a thing
+    unfolding from the row of actions that asked for it. Quicker than an arrival from below — a
+    panel is answering a click, and the hand that clicked is waiting.
+*/
+@keyframes unfold {
+    from { opacity: 0; transform: translateY(-0.3rem); }
+    to { opacity: 1; transform: none; }
+}
+
+.panel,
+.entry__reasons {
+    animation: unfold 240ms var(--ease-out) backwards;
 }
 
 .field {
@@ -1273,7 +1448,7 @@ button.danger:hover:not(:disabled) {
     after the first is not a flourish, it is a wait. Past the cap they come in together.
 */
 .result {
-    animation: rise 420ms var(--ease) both;
+    animation: rise 420ms var(--ease-out) both;
     animation-delay: calc(min(var(--at, 0), 8) * 45ms);
 }
 
@@ -1369,6 +1544,13 @@ button.danger:hover:not(:disabled) {
     border-radius: var(--radius);
 }
 
+/* Both take the place of something that was just there — the ghosts, a form, a list — so they
+   come in the way the cards do rather than being switched on in the gap. */
+.notice,
+.empty {
+    animation: rise 320ms var(--ease-out) backwards;
+}
+
 #blazor-error-ui {
     display: none;
     position: fixed;
@@ -1395,7 +1577,7 @@ button.danger:hover:not(:disabled) {
     }
 
     .entry {
-        background-color: var(--card-translucent);
+        background-color: var(--card-shelf);
         -webkit-backdrop-filter: var(--blur);
         backdrop-filter: var(--blur);
     }
