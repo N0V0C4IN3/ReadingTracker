@@ -1886,7 +1886,14 @@ button.danger:hover:not(:disabled) {
     main {
         --main-pad-top: 1.25rem;
 
-        padding: var(--main-pad-top) 1rem 4rem;
+        /* Room under the last card for the + button to float over without covering it. */
+        padding: var(--main-pad-top) 1rem 5.5rem;
+    }
+
+    /* With the dock open the + is gone, and that room would sit under the dock as a bare strip
+       of page between it and the bottom edge once the shelf is scrolled to its end. */
+    main:has(.search--open) {
+        padding-bottom: 0;
     }
 
     .hero {
