@@ -59,10 +59,16 @@
                 else
                 {
                     <div class="entries">
-                        @foreach (var entry in entries)
+                        @*
+                            The index rides along as At so the cards can arrive a beat apart, the
+                            way search results do. Keyed by the entry, so a card that merely changes
+                            keeps its element and does not arrive twice.
+                        *@
+                        @foreach (var (entry, at) in entries.Select((entry, at) => (entry, at)))
                         {
                             <ShelfEntry @key="entry.Id"
                                         Entry="entry"
+                                        At="at"
                                         OnChanged="Replace"
                                         OnRemoved="@(() => RemoveAsync(entry.Id))"
                                         OnSignedOut="SignedOut" />
@@ -80,7 +86,30 @@
             }
             else
             {
-                <p class="muted">Loading your shelf…</p>
+                @*
+                    The shelf's own shape while Library is answering: three cards where the cards
+                    will be, drawn in outline. A line of text saying "loading" leaves the reader
+                    looking at an empty page that then lurches into a full one; a shelf that is
+                    already there and fills in reads as one thing happening. Hidden from assistive
+                    tech, which gets the sentence instead — the ghosts are for eyes only.
+                *@
+                <div class="entries entries--pending" aria-hidden="true">
+                    @for (var at = 0; at < 3; at++)
+                    {
+                        <div class="entry entry--pending" style="--at:@at">
+                            <div class="entry__cover">
+                                <div class="bone bone--cover"></div>
+                            </div>
+                            <div class="entry__body">
+                                <div class="bone bone--title"></div>
+                                <div class="bone bone--authors"></div>
+                                <div class="bone bone--status"></div>
+                                <div class="bone bone--actions"></div>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <p class="visually-hidden" role="status">Loading your shelf</p>
             }
         </section>
 
