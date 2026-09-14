@@ -119,46 +119,29 @@ body {
     line-height: 1.55;
     color: var(--ink);
     background: var(--page);
-    min-height: 100vh;
-    -webkit-font-smoothing: antialiased;
-}
-
-/*
-    Four broad fields of colour blended into one soft mesh — green, amber, blue, green — so the
-    translucent surfaces above have something to be translucent against wherever they sit on the
-    page, not only in the top corners. Fixed to the window, so it does not slide about as the
-    shelf scrolls.
-
-    A fixed layer of its own rather than the body's background with background-attachment: fixed.
-    Those look the same, but a fixed-attachment background is not something the browser can keep
-    on the GPU: the whole gradient is painted again on every frame the page scrolls, on top of
-    everything else that frame has to do, and a phone shows it as a scroll that catches. A fixed
-    element is painted once and moved. (Phones running Safari ignore the attachment altogether and
-    let the mesh scroll with the page; this way they do not.)
-*/
-body::before {
-    content: "";
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
     /*
-        Taller than any viewport the page can have, not the height of the one it has now. A phone's
-        browser hides its toolbar as the page is flung downwards and shows the strip of screen
-        beneath it straight away, but does not resize the viewport -- and so this layer -- until the
-        scroll has settled. Sized to the viewport, the mesh stopped short of the bottom for the
-        length of every fling and left the flat page colour showing under it as a dark band. The
-        overshoot is never seen; it is only ever behind the toolbar or off the bottom of the screen.
+        Four broad fields of colour blended into one soft mesh — green, amber, blue, green — so the
+        translucent surfaces above have something to be translucent against wherever they sit on
+        the page, not only in the top corners. Fixed, so it does not slide about as the shelf
+        scrolls.
+
+        On the body, and not on a fixed element of its own — that was tried. The body's background
+        is the canvas: it is painted under every part of the screen the browser shows the page
+        through, including the strip behind a phone browser's toolbar as it grows and shrinks. A
+        fixed element is not; Safari on iPhone clips it to the layout viewport, which is the screen
+        less the toolbar, so the mesh stopped in a hard edge at the toolbar's top and the edge rode
+        up and down with it. Safari also ignores the attachment and lets the mesh scroll with the
+        page, which is a smaller thing to live with than an edge. Chrome composites a fixed root
+        background, so it costs nothing on the scroll.
     */
-    height: calc(100vh + 8rem);
-    height: calc(100lvh + 8rem);
-    z-index: -1;
-    pointer-events: none;
     background-image:
         radial-gradient(56rem 40rem at 12% 12%, var(--wash-accent), transparent 66%),
         radial-gradient(52rem 38rem at 88% 4%, var(--wash-warm), transparent 66%),
         radial-gradient(56rem 40rem at 76% 96%, var(--wash-cool), transparent 66%),
         radial-gradient(48rem 34rem at 14% 100%, var(--wash-accent), transparent 66%);
+    background-attachment: fixed;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
 }
 
 h1 {
@@ -741,7 +724,7 @@ button.danger:hover:not(:disabled) {
     text-align: center;
     border: 1px solid var(--line);
     border-radius: var(--radius);
-    background: var(--card);
+    background: var(--card-shelf);
     box-shadow: var(--shadow);
 }
 
@@ -1159,13 +1142,22 @@ button.danger:hover:not(:disabled) {
     gap: 0.7rem;
 }
 
+/*
+    Sheer, and with no backdrop filter of any kind. Behind a card there is nothing but the mesh,
+    and a blurred soft gradient is the same soft gradient — measured at under 5/255 of difference
+    anywhere on the shelf — while the cost of the filter is anything but nothing: any backdrop
+    filter, blur or not, makes the browser re-sample what is under the card every time the card
+    moves or the screen behind it changes. The cards move as they arrive, and on a phone the
+    screen behind them changes on every frame of a scroll as the toolbar folds away. A shelf of
+    cards each doing that was the catch in the scroll.
+*/
 .entry {
     display: flex;
     gap: 1.1rem;
     padding: 1.1rem;
     border: 1px solid var(--line);
     border-radius: var(--radius);
-    background: var(--card);
+    background: var(--card-shelf);
     box-shadow: var(--shadow);
     transition:
         box-shadow 220ms var(--ease-out),
@@ -1815,30 +1807,16 @@ button.danger:hover:not(:disabled) {
 /* Translucency ------------------------------------------------------------ */
 
 /*
-    Only where the blur is actually supported. Everywhere else the surfaces keep the opaque --card
-    they are given above, because a translucent panel with nothing blurring behind it is text on
-    top of whatever happens to be underneath.
+    Only where the blur is actually supported. Everywhere else the header and the search keep the
+    opaque --card they are given above, because a translucent panel with nothing blurring behind it
+    is text on top of whatever happens to be underneath. The shelf's cards are not in here: behind
+    them is only the mesh, so they are sheer everywhere and blur nothing — see .entry.
 */
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     header {
         background: var(--card-raised);
         -webkit-backdrop-filter: var(--blur);
         backdrop-filter: var(--blur);
-    }
-
-    /*
-        The cards take the tint but only the saturate half of the blur. Behind a card there is
-        nothing but the mesh, and a blurred soft gradient is the same soft gradient — measured at
-        under 5/255 of difference anywhere on the shelf — while the cost is anything but the same:
-        a blur is re-sampled for every card on every frame it moves, and the cards move as they
-        arrive and every time the shelf scrolls. That re-sampling, times a shelf of cards, was the
-        catch in the animation on a phone.
-    */
-    .entry,
-    .hero__card {
-        background-color: var(--card-shelf);
-        -webkit-backdrop-filter: saturate(180%);
-        backdrop-filter: saturate(180%);
     }
 
     .search {
