@@ -587,13 +587,29 @@ button.danger:hover:not(:disabled) {
     min-height: min(86vh, 40rem);
     display: grid;
     grid-template-rows: 1fr auto;
+    isolation: isolate;
+}
+
+/*
+    The poster's paint, on a layer of its own so it can be faded out underneath the deck without
+    fading the deck. It thins to nothing over its last quarter and lets the page show through —
+    whatever the page happens to be painted with. It used to fade to the page's flat colour
+    instead, which was the same thing until the page gained its washes: then the poster ended on
+    a band of flat colour meeting a tinted page in one pixel, a ruled line right under the title
+    of the book on show.
+*/
+.hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
     background:
-        /* Settles onto the page's own colour rather than stopping at it. Without this the poster
-           ends on a ruled line — deep green meeting the page in one pixel, right under the title
-           of the book on show — and the section below reads as something pasted on. */
-        linear-gradient(to bottom, transparent 74%, var(--page)),
         radial-gradient(80% 70% at 15% 20%, #23624a, transparent 70%),
         linear-gradient(170deg, #1b4636, var(--hero-deep));
+    /* Eased, not straight: a linear fade that stops at the edge still draws a line there, because
+       the eye sees the change of slope. Several stops bend it so it arrives at nothing flat. */
+    -webkit-mask-image: linear-gradient(to bottom, black 66%, rgb(0 0 0 / 72%) 77%, rgb(0 0 0 / 40%) 86%, rgb(0 0 0 / 14%) 94%, transparent);
+    mask-image: linear-gradient(to bottom, black 66%, rgb(0 0 0 / 72%) 77%, rgb(0 0 0 / 40%) 86%, rgb(0 0 0 / 14%) 94%, transparent);
 }
 
 /*
