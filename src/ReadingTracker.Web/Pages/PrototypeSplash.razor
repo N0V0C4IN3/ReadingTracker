@@ -1,0 +1,127 @@
+@page "/prototype/splash"
+@inject NavigationManager Nav
+@using Microsoft.AspNetCore.Components.WebAssembly.Hosting
+@inject IWebAssemblyHostEnvironment Env
+
+@*
+    PROTOTYPE — throwaway, not linked from anywhere, renders nothing outside Development.
+
+    Five variants of the loading figure — the thing that sits above "ReadingTracker" on the boot
+    screen (wwwroot/index.html) and on Settling.razor — switchable via ?variant=A..E on this route,
+    with today's four bars as ?variant=0 for reference. Each variant is a different figure, not a
+    recolour: a pile being stacked, a page turning, pages being thumbed, a shelf being browsed, a
+    page being read. The splash is drawn exactly as Settling draws it, over the real page, so the
+    figure is judged where it will live. Styles are in wwwroot/css/prototype-splash.css and go with
+    this file when it goes.
+*@
+
+@if (Env.IsDevelopment())
+{
+    <link rel="stylesheet" href="css/prototype-splash.css" />
+
+    <div class="splash splash--settling proto" tabindex="0" @ref="_root" @onkeydown="OnKey">
+        @switch (Current.Key)
+        {
+            case "0":
+                <div class="splash__books" aria-hidden="true">
+                    <span></span><span></span><span></span><span></span>
+                </div>
+                break;
+            case "A":
+                <div class="proto-stack" aria-hidden="true">
+                    <span></span><span></span><span></span><span></span>
+                </div>
+                break;
+            case "B":
+                <div class="proto-book" aria-hidden="true">
+                    <div class="proto-book__page proto-book__page--left"></div>
+                    <div class="proto-book__page proto-book__page--right"></div>
+                    <div class="proto-book__leaf"></div>
+                </div>
+                break;
+            case "C":
+                <div class="proto-book proto-riffle" aria-hidden="true">
+                    <div class="proto-book__page proto-book__page--left"></div>
+                    <div class="proto-book__page proto-book__page--right"></div>
+                    <div class="proto-book__leaf"></div>
+                    <div class="proto-book__leaf"></div>
+                    <div class="proto-book__leaf"></div>
+                    <div class="proto-book__leaf"></div>
+                    <div class="proto-book__leaf"></div>
+                    <div class="proto-book__leaf"></div>
+                </div>
+                break;
+            case "D":
+                <div class="proto-shelf" aria-hidden="true">
+                    <span></span><span></span><span></span><span></span><span></span>
+                    <i></i>
+                </div>
+                break;
+            case "E":
+                <div class="proto-lines" aria-hidden="true">
+                    <span></span><span></span><span></span><span></span>
+                </div>
+                break;
+        }
+
+        <p class="splash__title">ReadingTracker</p>
+        <div class="splash__track" role="progressbar" aria-label="Loading ReadingTracker">
+            <div class="splash__fill splash__fill--settled"></div>
+        </div>
+        <span class="visually-hidden" role="status">Loading</span>
+    </div>
+
+    <div class="proto-bar" role="toolbar" aria-label="Prototype variants">
+        <button type="button" @onclick="() => Step(-1)" aria-label="Previous variant">←</button>
+        <span><strong>@Current.Key</strong> · @Current.Name <em>@(Index + 1)/@Variants.Length</em></span>
+        <button type="button" @onclick="() => Step(1)" aria-label="Next variant">→</button>
+    </div>
+}
+
+@code {
+    private static readonly (string Key, string Name)[] Variants =
+    [
+        ("0", "Today: four bars shelved"),
+        ("A", "A pile being stacked"),
+        ("B", "A page turning"),
+        ("C", "Pages being thumbed"),
+        ("D", "A shelf being browsed"),
+        ("E", "A page being read"),
+    ];
+
+    [SupplyParameterFromQuery(Name = "variant")]
+    public string? Variant { get; set; }
+
+    private ElementReference _root;
+
+    private int Index
+    {
+        get
+        {
+            var i = Array.FindIndex(Variants, v => string.Equals(v.Key, Variant, StringComparison.OrdinalIgnoreCase));
+            return i < 0 ? 1 : i;
+        }
+    }
+
+    private (string Key, string Name) Current => Variants[Index];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && Env.IsDevelopment())
+        {
+            await _root.FocusAsync();
+        }
+    }
+
+    private void Step(int by)
+    {
+        var next = (Index + by + Variants.Length) % Variants.Length;
+        Nav.NavigateTo(Nav.GetUriWithQueryParameter("variant", Variants[next].Key), replace: true);
+    }
+
+    private void OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "ArrowLeft") Step(-1);
+        else if (e.Key == "ArrowRight") Step(1);
+    }
+}
