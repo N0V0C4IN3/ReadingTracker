@@ -775,6 +775,9 @@ button.danger:hover:not(:disabled) {
     --headroom: calc(var(--cover-w) * (1.5 * (var(--pickup) - 1) + 0.03));
 
     position: relative;
+    /* A breath between the card and the tops of the jackets, over and above the headroom the
+       pickup needs: with only that, the deck sat on the card's shadow. */
+    margin-top: clamp(1.25rem, 3vw, 2rem);
     padding-bottom: clamp(2.75rem, 5vw, 4.25rem);
 }
 
