@@ -144,7 +144,19 @@ body {
 body::before {
     content: "";
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    /*
+        Taller than any viewport the page can have, not the height of the one it has now. A phone's
+        browser hides its toolbar as the page is flung downwards and shows the strip of screen
+        beneath it straight away, but does not resize the viewport -- and so this layer -- until the
+        scroll has settled. Sized to the viewport, the mesh stopped short of the bottom for the
+        length of every fling and left the flat page colour showing under it as a dark band. The
+        overshoot is never seen; it is only ever behind the toolbar or off the bottom of the screen.
+    */
+    height: calc(100vh + 8rem);
+    height: calc(100lvh + 8rem);
     z-index: -1;
     pointer-events: none;
     background-image:
