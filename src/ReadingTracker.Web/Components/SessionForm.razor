@@ -25,8 +25,10 @@
         </div>
 
         <div class="field">
-            <label for="@($"mins-{_id}")">For</label>
-            <input id="@($"mins-{_id}")" type="number" min="1" @bind="_minutes" placeholder="optional" />
+            @* Optional, and said in the label rather than as a placeholder: on a phone the box is
+               half a card wide and a placeholder ran into the unit beside it. *@
+            <label for="@($"mins-{_id}")">For <span class="field__note">(optional)</span></label>
+            <input id="@($"mins-{_id}")" type="number" min="1" @bind="_minutes" />
             <span class="unit">minutes</span>
         </div>
     </div>
