@@ -144,7 +144,19 @@ body {
 body::before {
     content: "";
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    /*
+        Taller than any viewport the page can have, not the height of the one it has now. A phone's
+        browser hides its toolbar as the page is flung downwards and shows the strip of screen
+        beneath it straight away, but does not resize the viewport -- and so this layer -- until the
+        scroll has settled. Sized to the viewport, the mesh stopped short of the bottom for the
+        length of every fling and left the flat page colour showing under it as a dark band. The
+        overshoot is never seen; it is only ever behind the toolbar or off the bottom of the screen.
+    */
+    height: calc(100vh + 8rem);
+    height: calc(100lvh + 8rem);
     z-index: -1;
     pointer-events: none;
     background-image:
@@ -1520,6 +1532,11 @@ button.danger:hover:not(:disabled) {
     color: var(--ink-faint);
 }
 
+.field__note {
+    color: var(--ink-faint);
+    font-weight: 400;
+}
+
 .hint {
     flex-basis: 100%;
     margin: 0.25rem 0 0;
@@ -2009,6 +2026,94 @@ button.danger:hover:not(:disabled) {
         content: "·";
         margin-right: 0.45rem;
         color: var(--ink-faint);
+    }
+
+    /*
+        With its form open the big button is the way back out, and says so quietly: an outline in
+        place of the fill, so the form beneath is the one thing on the card in the accent.
+    */
+    .entry__actions .button--log--open {
+        background: transparent;
+        box-shadow: inset 0 0 0 1px var(--line-strong);
+        color: var(--ink-soft);
+    }
+
+    /*
+        The session form as a small, even grid rather than three ragged rows. Read and For share
+        the first row, the date has the second to itself, and every label sits above its box in
+        the same small capitals as the figure on the card, so the form reads in the card's voice.
+        Units are set inside the box's right end instead of trailing it, which is what let the
+        rows line up.
+    */
+    .session-form {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.7rem 0.6rem;
+    }
+
+    .session-form .field {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.3rem;
+    }
+
+    .session-form .field:nth-child(1) { grid-column: 1; grid-row: 1; }
+    .session-form .field:nth-child(3) { grid-column: 2; grid-row: 1; }
+    .session-form .field:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+
+    .session-form .field label {
+        font-size: 0.68rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+    }
+
+    .session-form .field input,
+    .session-form .field input[type="number"] {
+        width: 100%;
+        padding: 0.65rem 0.8rem;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .session-form .field:has(.unit) input {
+        padding-right: 3.6rem;
+    }
+
+    .session-form .unit {
+        position: absolute;
+        right: 0.8rem;
+        bottom: 0.72rem;
+        pointer-events: none;
+    }
+
+    /*
+        One action, full width and in the accent, the same shape as the Log reading button it
+        unfolded from. Logging a session needs no Cancel of its own -- the button above already is
+        one -- but the same form correcting a session inside History has no such button, and
+        keeps its link.
+    */
+    .session-form__actions {
+        margin-top: 0.9rem;
+    }
+
+    .session-form__actions button:first-child {
+        flex: 1 1 auto;
+        padding: 0.7rem 1rem;
+        border-radius: 12px;
+        font-size: 1.02rem;
+        font-weight: 600;
+        background: var(--accent);
+        color: var(--accent-ink);
+    }
+
+    .session-form__actions button:first-child:hover:not(:disabled) {
+        background: var(--accent-hover);
+    }
+
+    .entry__body > .panel > .session-form__actions .link-button {
+        display: none;
     }
 
     /*
