@@ -256,12 +256,94 @@ header {
     background: var(--card);
 }
 
+/*
+    The brand is an eyebrow, not a headline: small capitals, spaced, in the faint ink. The page's
+    own heading is the loud thing on the screen, and a wordmark set at the same weight was
+    competing with it from a bar that is on every page.
+*/
 header > a {
-    font-weight: 700;
-    font-size: 1.02rem;
+    font-size: 0.72rem;
+    font-weight: 650;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
     text-decoration: none;
-    color: inherit;
-    letter-spacing: -0.02em;
+    color: var(--ink-faint);
+    transition: color var(--quick) var(--ease);
+}
+
+header > a:hover {
+    color: var(--ink);
+}
+
+/* The reader, as one round initial at the end of the bar. */
+.account {
+    position: relative;
+    display: flex;
+    flex: 0 0 auto;
+}
+
+.account__monogram {
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 0.9rem;
+    font-weight: 700;
+    display: inline-grid;
+    place-items: center;
+}
+
+.account__monogram:hover:not(:disabled),
+.account__monogram[aria-expanded="true"] {
+    background: var(--accent);
+    color: var(--accent-ink);
+}
+
+/* Catches the tap that closes the menu. Below the menu, above everything else. */
+.account__scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    cursor: default;
+}
+
+.account__scrim:hover:not(:disabled) {
+    background: transparent;
+}
+
+.account__menu {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    z-index: 2;
+    min-width: 13rem;
+    padding: 0.85rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--card);
+    box-shadow: var(--shadow-lifted);
+    animation: unfold 240ms var(--ease-out) backwards;
+}
+
+.account__who {
+    margin: 0 0 0.75rem;
+    font-size: 0.88rem;
+    color: var(--ink-soft);
+    overflow-wrap: anywhere;
+}
+
+.account__who strong {
+    color: var(--ink);
+    font-weight: 600;
+}
+
+.account__menu button {
+    width: 100%;
 }
 
 header input {
@@ -1772,13 +1854,9 @@ button.danger:hover:not(:disabled) {
     }
 
     /*
-        Three things across the top of a phone: the name of the site, who is signed in, and the way
-        out. space-between spreads three items evenly, which here left a hole after the brand and
-        pushed the button onto a row of its own -- a sticky header 104px tall on an 844px screen,
-        taken off every page before the reader has scrolled anything.
-
-        The brand takes up the slack instead, so the other two travel together against the right
-        edge and the whole bar stays one row.
+        One row, always: the brand takes up the slack and whatever is at the other end -- the
+        monogram, or the sign-in control when nobody is -- travels against the right edge. The bar
+        wrapping onto a second row cost 104px of an 844px screen once.
     */
     header {
         gap: 0.6rem;
@@ -1792,16 +1870,7 @@ button.danger:hover:not(:disabled) {
         margin-right: auto;
     }
 
-    /* Shrinks and clips rather than wrapping, so a long name costs an ellipsis instead of the
-       second row this is here to get rid of. */
-    header > span {
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    /* The way out keeps its size whatever the name does to the space beside it. */
+    /* The way in keeps its size whatever the space beside it does. */
     header > button {
         flex: 0 0 auto;
     }

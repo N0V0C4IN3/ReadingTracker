@@ -7,6 +7,11 @@
 @*
     Who is signed in, and the way in or out.
 
+    Signed in, that is one round initial at the end of the bar. Tapping it opens the name in full
+    and the Sign out button beneath it. The bar used to carry "Signed in as <name>" and a filled
+    button all the time, which on a phone was four things on one line, two of them a sentence the
+    reader had no need to re-read on every page.
+
     Signing out is local only: it forgets the token this application is holding. Google has no
     end-session endpoint — its discovery document does not publish one — so there is no way for
     a site to end a Google session on the reader's behalf, and pretending otherwise would leave
@@ -18,8 +23,22 @@
 
 <AuthorizeView>
     <Authorized>
-        <span>Signed in as <strong>@context.User.Identity?.Name</strong></span>
-        <button @onclick="SignOut">Sign out</button>
+        <div class="account" @onkeydown="CloseOnEscape">
+            <button type="button" class="account__monogram"
+                    aria-haspopup="menu" aria-expanded="@(_open ? "true" : "false")"
+                    aria-label="@($"Account: {context.User.Identity?.Name}")"
+                    @onclick="Toggle">@Initial(context.User.Identity?.Name)</button>
+
+            @if (_open)
+            {
+                @* A tap anywhere else closes the menu; the scrim is what catches that tap. *@
+                <button type="button" class="account__scrim" tabindex="-1" aria-hidden="true" @onclick="Close"></button>
+                <div class="account__menu" role="menu">
+                    <p class="account__who">Signed in as <strong>@context.User.Identity?.Name</strong></p>
+                    <button type="button" role="menuitem" @onclick="SignOut">Sign out</button>
+                </div>
+            }
+        </div>
     </Authorized>
     <NotAuthorized>
         @if (DevSignIn.Value.Enabled)
@@ -34,6 +53,27 @@
 </AuthorizeView>
 
 @code {
+    private bool _open;
+
+    private void Toggle() => _open = !_open;
+
+    private void Close() => _open = false;
+
+    private void CloseOnEscape(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            Close();
+        }
+    }
+
+    /// <summary>
+    /// The first letter of the name, for the monogram. A name from Google has one; a dev reader
+    /// id might be anything, and an empty one gets a placeholder rather than an empty circle.
+    /// </summary>
+    private static string Initial(string? name) =>
+        string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[..1].ToUpperInvariant();
+
     private void SignIn() =>
         Navigation.NavigateToLogin("authentication/login");
 
