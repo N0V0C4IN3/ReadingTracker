@@ -69,11 +69,6 @@
     --ease: cubic-bezier(0.4, 0, 0.2, 1);
     --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
     --quick: 160ms;
-
-    /* The welcome screen commits to one look in both schemes: white type on a deep wash over the
-       drifting spines. A palette that flipped with the system would flip the text to unreadable. */
-    --hero-ink: #ffffff;
-    --hero-deep: #14291f;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -242,10 +237,10 @@ a {
 
 /*
     The welcome arrives in order — greeting, title, pitch, the way in, then the deck — instead of
-    the whole poster appearing at once behind a curtain that has just lifted. Each is a few frames
+    the whole page appearing at once behind a curtain that has just lifted. Each is a few frames
     behind the one above it, which is enough to read as a sequence without anybody waiting on it.
 
-    It is keyed to the curtain lifting rather than to the component mounting, because the poster is
+    It is keyed to the curtain lifting rather than to the component mounting, because the page is
     built and painted long before it is shown: run on mount, the whole thing would play behind the
     curtain and be over before anyone saw it.
 */
@@ -723,54 +718,31 @@ button.danger:hover:not(:disabled) {
 /* Welcome ----------------------------------------------------------------- */
 
 /*
-    Full width of the window, not of the reading column: this is the one screen that is a poster
-    rather than a page, and a poster inset in a 52rem column is a picture of a poster.
+    Full width of the window for the deck's sake: its jackets fan out well past the reading column
+    on a wide screen, and clipped at the column's edge the deck would look cut out of a photograph.
+    The card inside keeps to the column, like everything else the app reads in.
 */
 .hero {
     position: relative;
     overflow: hidden;
     width: 100vw;
-    margin: calc(var(--main-pad-top) * -1) calc(50% - 50vw) 0;
-    min-height: min(86vh, 40rem);
-    display: grid;
-    grid-template-rows: 1fr auto;
-    isolation: isolate;
+    margin: 0 calc(50% - 50vw);
 }
 
 /*
-    The poster's paint, on a layer of its own so it can be faded out underneath the deck without
-    fading the deck. It thins to nothing over its last quarter and lets the page show through —
-    whatever the page happens to be painted with. It used to fade to the page's flat colour
-    instead, which was the same thing until the page gained its washes: then the poster ended on
-    a band of flat colour meeting a tinted page in one pixel, a ruled line right under the title
-    of the book on show.
+    The way in, as a card: the shelf's own glass, edge and shadow, so the welcome is a shelf with
+    one card on it. Centred inside, because the deck below is centred: text ranged left over a deck
+    ranged centre reads as two things that happened to land on the same page.
 */
-.hero::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    background:
-        radial-gradient(80% 70% at 15% 20%, #23624a, transparent 70%),
-        linear-gradient(170deg, #1b4636, var(--hero-deep));
-    /* Eased, not straight: a linear fade that stops at the edge still draws a line there, because
-       the eye sees the change of slope. Several stops bend it so it arrives at nothing flat. */
-    -webkit-mask-image: linear-gradient(to bottom, black 66%, rgb(0 0 0 / 72%) 77%, rgb(0 0 0 / 40%) 86%, rgb(0 0 0 / 14%) 94%, transparent);
-    mask-image: linear-gradient(to bottom, black 66%, rgb(0 0 0 / 72%) 77%, rgb(0 0 0 / 40%) 86%, rgb(0 0 0 / 14%) 94%, transparent);
-}
-
-/*
-    Full-bleed behind, but the words still line up with the column the rest of the app reads in.
-    Centred, because the deck below is centred: text ranged left over a deck ranged centre reads as
-    two things that happened to land on the same page.
-*/
-.hero__content {
-    align-self: center;
-    width: min(52rem, 100%);
-    margin-inline: auto;
-    padding: clamp(1.25rem, 2.5vw, 2rem) 1.25rem;
+.hero__card {
+    width: min(49.5rem, 100% - 2.5rem);
+    margin: 0 auto;
+    padding: clamp(1.6rem, 3vw, 2.4rem) 1.25rem clamp(1.5rem, 3vw, 2.2rem);
     text-align: center;
-    color: var(--hero-ink);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--card);
+    box-shadow: var(--shadow);
 }
 
 /* Cover flow --------------------------------------------------------------- */
@@ -938,7 +910,6 @@ button.danger:hover:not(:disabled) {
 .flow__caption {
     position: absolute;
     inset-inline: 0;
-    /* Clear of the bottom of the poster, not sat on the line where it ends. */
     bottom: clamp(1.25rem, 2.5vw, 2rem);
     margin: 0;
     display: flex;
@@ -946,7 +917,7 @@ button.danger:hover:not(:disabled) {
     align-items: center;
     gap: 0.2rem;
     text-align: center;
-    color: var(--hero-ink);
+    color: var(--ink);
 }
 
 /*
@@ -970,7 +941,7 @@ button.danger:hover:not(:disabled) {
     font-size: 0.7rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    opacity: 0.65;
+    color: var(--ink-faint);
 }
 
 /*
@@ -1061,6 +1032,8 @@ button.danger:hover:not(:disabled) {
 .cover--mirror {
     margin-top: 1px;
     transform: scaleY(-1);
+    /* A reflection in a page, not in a black floor: fainter, or it reads as a second jacket. */
+    opacity: 0.55;
     mask-image: linear-gradient(transparent 62%, rgb(0 0 0 / 26%) 84%, rgb(0 0 0 / 78%));
     -webkit-mask-image: linear-gradient(transparent 62%, rgb(0 0 0 / 26%) 84%, rgb(0 0 0 / 78%));
     /* A reflection is not a thing you can pick up. */
@@ -1084,13 +1057,14 @@ button.danger:hover:not(:disabled) {
 .cover--4 { background: #d9b8b1; color: #402724; }
 .cover--5 { background: #cfc8a6; color: #38341f; }
 
+/* The same small spaced capitals as the header's wordmark. */
 .hero__greeting {
-    margin: 0 0 0.5rem;
-    font-size: 0.85rem;
-    font-weight: 600;
+    margin: 0 0 0.6rem;
+    font-size: 0.72rem;
+    font-weight: 650;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    opacity: 0.75;
+    color: var(--ink-faint);
 }
 
 .hero__title {
@@ -1106,7 +1080,7 @@ button.danger:hover:not(:disabled) {
     font-size: clamp(1.05rem, 2.6vw, 1.35rem);
     line-height: 1.35;
     max-width: 30ch;
-    opacity: 0.92;
+    color: var(--ink-soft);
 }
 
 .hero__actions {
@@ -1118,41 +1092,38 @@ button.danger:hover:not(:disabled) {
     margin-top: 1.5rem;
 }
 
-/* On the wash, the filled action is the light one: an accent fill would sink into it. */
+/* The one filled action on the page, in the accent, the same shape as Log reading on a card. */
 .hero__actions button {
-    background: var(--hero-ink);
-    color: var(--hero-deep);
-    font-weight: 650;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
     padding: 0.7rem 1.5rem;
     font-size: 1.02rem;
+    font-weight: 600;
     border-radius: 12px;
+    background: var(--accent);
+    color: var(--accent-ink);
 }
 
 .hero__actions button:hover:not(:disabled) {
-    background: rgb(255 255 255 / 88%);
+    background: var(--accent-hover);
+}
+
+.hero__actions button svg {
+    width: 1rem;
+    height: 1rem;
+    flex: 0 0 auto;
 }
 
 .hero__actions input {
-    background: rgb(255 255 255 / 12%);
-    border-color: rgb(255 255 255 / 28%);
-    color: var(--hero-ink);
     padding: 0.7rem 0.9rem;
     border-radius: 12px;
-}
-
-.hero__actions input::placeholder {
-    color: rgb(255 255 255 / 60%);
 }
 
 .hero__actions [role="alert"] {
     flex-basis: 100%;
     font-size: 0.85rem;
-    opacity: 0.85;
-}
-
-.hero__actions button:focus-visible,
-.hero__actions input:focus-visible {
-    outline-color: var(--hero-ink);
+    color: var(--ink-soft);
 }
 
 .pitch {
@@ -1860,7 +1831,8 @@ button.danger:hover:not(:disabled) {
         arrive and every time the shelf scrolls. That re-sampling, times a shelf of cards, was the
         catch in the animation on a phone.
     */
-    .entry {
+    .entry,
+    .hero__card {
         background-color: var(--card-shelf);
         -webkit-backdrop-filter: saturate(180%);
         backdrop-filter: saturate(180%);
@@ -1913,8 +1885,9 @@ button.danger:hover:not(:disabled) {
         padding-bottom: 0;
     }
 
-    .hero {
-        min-height: min(88vh, 36rem);
+    .hero__card {
+        width: calc(100% - 2rem);
+        padding-inline: 1rem;
     }
 
     /*
