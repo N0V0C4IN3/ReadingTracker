@@ -124,17 +124,34 @@ body {
     line-height: 1.55;
     color: var(--ink);
     background: var(--page);
-    /* Four broad fields of colour blended into one soft mesh — green, amber, blue, green — so the
-       translucent surfaces above have something to be translucent against wherever they sit on the
-       page, not only in the top corners. Fixed, so it does not slide about as the shelf scrolls. */
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+}
+
+/*
+    Four broad fields of colour blended into one soft mesh — green, amber, blue, green — so the
+    translucent surfaces above have something to be translucent against wherever they sit on the
+    page, not only in the top corners. Fixed to the window, so it does not slide about as the
+    shelf scrolls.
+
+    A fixed layer of its own rather than the body's background with background-attachment: fixed.
+    Those look the same, but a fixed-attachment background is not something the browser can keep
+    on the GPU: the whole gradient is painted again on every frame the page scrolls, on top of
+    everything else that frame has to do, and a phone shows it as a scroll that catches. A fixed
+    element is painted once and moved. (Phones running Safari ignore the attachment altogether and
+    let the mesh scroll with the page; this way they do not.)
+*/
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
     background-image:
         radial-gradient(56rem 40rem at 12% 12%, var(--wash-accent), transparent 66%),
         radial-gradient(52rem 38rem at 88% 4%, var(--wash-warm), transparent 66%),
         radial-gradient(56rem 40rem at 76% 96%, var(--wash-cool), transparent 66%),
         radial-gradient(48rem 34rem at 14% 100%, var(--wash-accent), transparent 66%);
-    background-attachment: fixed;
-    min-height: 100vh;
-    -webkit-font-smoothing: antialiased;
 }
 
 h1 {
@@ -653,6 +670,10 @@ button.danger:hover:not(:disabled) {
 .splash--settling {
     position: absolute;
     inset: 0;
+    /* Over the header, which is the only other thing with a z-index this high: a loading screen
+       with a bar across its top is two screens, and the bar's Sign in button on a page in the
+       middle of signing in is worse than that. */
+    z-index: 25;
     min-height: 100vh;
     background: var(--page);
 }
@@ -1466,6 +1487,12 @@ button.danger:hover:not(:disabled) {
     animation: unfold 240ms var(--ease-out) backwards;
 }
 
+/* The phone's search dock, coming up from the foot of the screen it is docked to. */
+@keyframes dock {
+    from { opacity: 0; transform: translateY(1.5rem); }
+    to { opacity: 1; transform: none; }
+}
+
 .field {
     display: flex;
     align-items: center;
@@ -1631,6 +1658,11 @@ button.danger:hover:not(:disabled) {
 
 .search__inputs .button--primary {
     font-weight: 600;
+}
+
+/* The way into the phone's search dock. On a wider screen the panel is simply on the page. */
+.search__fab {
+    display: none;
 }
 
 .search__inputs input {
@@ -1803,10 +1835,18 @@ button.danger:hover:not(:disabled) {
         backdrop-filter: var(--blur);
     }
 
+    /*
+        The cards take the tint but only the saturate half of the blur. Behind a card there is
+        nothing but the mesh, and a blurred soft gradient is the same soft gradient — measured at
+        under 5/255 of difference anywhere on the shelf — while the cost is anything but the same:
+        a blur is re-sampled for every card on every frame it moves, and the cards move as they
+        arrive and every time the shelf scrolls. That re-sampling, times a shelf of cards, was the
+        catch in the animation on a phone.
+    */
     .entry {
         background-color: var(--card-shelf);
-        -webkit-backdrop-filter: var(--blur);
-        backdrop-filter: var(--blur);
+        -webkit-backdrop-filter: saturate(180%);
+        backdrop-filter: saturate(180%);
     }
 
     .search {
@@ -1987,6 +2027,46 @@ button.danger:hover:not(:disabled) {
 
     .search > h2 {
         display: none;
+    }
+
+    /*
+        Behind a button until it is wanted. The shelf is what a phone opens to; the dock across
+        the foot of it, always there, was a third of the screen given to a thing done now and
+        then. A round + at the bottom right, where the thumb already is, opens it and puts the
+        cursor in the box; the ✕ in the box clears the search and closes it again.
+    */
+    .search:not(.search--open) {
+        display: none;
+    }
+
+    .search--open {
+        animation: dock 320ms var(--ease-out) backwards;
+    }
+
+    .search__fab {
+        position: fixed;
+        right: 1rem;
+        bottom: calc(1rem + env(safe-area-inset-bottom));
+        z-index: 10;
+        display: grid;
+        place-items: center;
+        width: 3.4rem;
+        height: 3.4rem;
+        padding: 0;
+        border-radius: 50%;
+        background: var(--accent);
+        color: var(--accent-ink);
+        box-shadow: var(--shadow-lifted);
+        animation: rise 320ms var(--ease-out) backwards;
+    }
+
+    .search__fab:hover:not(:disabled) {
+        background: var(--accent-hover);
+    }
+
+    .search__fab svg {
+        width: 1.4rem;
+        height: 1.4rem;
     }
 
     /*

@@ -113,7 +113,12 @@
             }
         </section>
 
-        <section class="search">
+        @*
+            On a phone the search is behind the round button below until it is wanted, and this
+            section is the dock that opens; on a wider screen it is a panel under the shelf and
+            the button is not shown. Same markup either way — app.css decides which.
+        *@
+        <section class="search @(_searchOpen ? "search--open" : null)">
             <h2>Find a book</h2>
 
             @*
@@ -124,11 +129,12 @@
             <div class="search__inputs">
                 <label class="search__field">
                     <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
-                    <input @bind="_query" @bind:event="oninput" placeholder="Title, author or ISBN" aria-label="Title, author or ISBN" @onkeydown="SearchOnEnterAsync" />
-                    @if (_query.Length > 0 || _results is not null || _searchProblem is not null || _addingByHand)
+                    <input @ref="_queryBox" @bind="_query" @bind:event="oninput" placeholder="Title, author or ISBN" aria-label="Title, author or ISBN" @onkeydown="SearchOnEnterAsync" />
+                    @if (_searchOpen || _query.Length > 0 || _results is not null || _searchProblem is not null || _addingByHand)
                     {
                         @* The way out of a search: the box, the results and anything opened from
-                           them go together, and the page is a shelf again. *@
+                           them go together, and the page is a shelf again. On a phone that means
+                           the dock closes too, so it is there from the moment the dock opens. *@
                         <button type="button" class="search__clear" aria-label="Clear search" @onclick="ClearSearch">
                             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
                         </button>
@@ -327,6 +333,14 @@
             }
             </div>
         </section>
+
+        @if (!_searchOpen)
+        {
+            @* Phone only (app.css): a round + at the bottom right, where a thumb already is. *@
+            <button type="button" class="search__fab" aria-label="Find a book" @onclick="OpenSearch">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg>
+            </button>
+        }
     </Authorized>
     <NotAuthorized>
         @*
@@ -549,6 +563,31 @@
         }
     }
 
+    /// <summary>
+    /// Whether the phone's search dock is open. Only the + button sets it, and the button only
+    /// exists on a phone, so on a wider screen this stays false and the panel is simply there.
+    /// </summary>
+    private bool _searchOpen;
+    private bool _focusQuery;
+    private ElementReference _queryBox;
+
+    private void OpenSearch()
+    {
+        _searchOpen = true;
+        // The dock opens to be typed in: the cursor goes in the box, and the keyboard comes up
+        // with it, without a second tap. Done after the render, once the box exists.
+        _focusQuery = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusQuery)
+        {
+            _focusQuery = false;
+            await _queryBox.FocusAsync();
+        }
+    }
+
     private void ClearSearch()
     {
         _query = "";
@@ -556,6 +595,7 @@
         _results = null;
         _searchProblem = null;
         _addProblem = null;
+        _searchOpen = false;
         StopAddingByHand();
     }
 

@@ -7,6 +7,11 @@
     in type you cannot miss and offers the same way in, so the header there is the same two things
     said twice, in a strip of card colour laid over a poster.
 
+    So does the sign-in round trip. Each leg of it — the redirect out to Google, the return — is
+    the loading screen and nothing else, and a bar across the top of a loading screen is a header
+    over nothing: it flashed up as the trip began and again as it ended, with a Sign in button on
+    it, on a page that was in the middle of signing in.
+
     Every other page keeps it, signed in or not — including the one you land on after mistyping a
     URL, where the way home is the only thing on offer.
 *@
@@ -28,17 +33,18 @@
 
     private bool _signedIn;
     private bool _atRoot;
+    private bool _signingIn;
 
     /// <summary>
-    /// The welcome screen, and only that: the root of the site with nobody signed in. While the
-    /// answer to "is anyone signed in" is still coming, this is true — the boot screen has no more
-    /// use for a header than the welcome screen it becomes.
+    /// The welcome screen — the root of the site with nobody signed in — and the sign-in round
+    /// trip. While the answer to "is anyone signed in" is still coming, this is true — the boot
+    /// screen has no more use for a header than the welcome screen it becomes.
     /// </summary>
-    private bool Bare => _atRoot && !_signedIn;
+    private bool Bare => (_atRoot && !_signedIn) || _signingIn;
 
     protected override void OnInitialized()
     {
-        _atRoot = AtRoot();
+        Locate();
         Navigation.LocationChanged += Moved;
     }
 
@@ -54,16 +60,22 @@
         _signedIn = state.User.Identity?.IsAuthenticated ?? false;
     }
 
-    private bool AtRoot() =>
-        Navigation.ToBaseRelativePath(Navigation.Uri).TrimStart('/').Split('?')[0].Length == 0;
+    private void Locate()
+    {
+        var path = Navigation.ToBaseRelativePath(Navigation.Uri).TrimStart('/').Split('?', '#')[0];
+
+        _atRoot = path.Length == 0;
+        // The route Authentication.razor answers to: login, login-callback, logout and the rest.
+        _signingIn = path.StartsWith("authentication", StringComparison.OrdinalIgnoreCase);
+    }
 
     private void Moved(object? sender, LocationChangedEventArgs e)
     {
-        var wasAtRoot = _atRoot;
+        var wasBare = Bare;
 
-        _atRoot = AtRoot();
+        Locate();
 
-        if (wasAtRoot != _atRoot)
+        if (wasBare != Bare)
         {
             StateHasChanged();
         }
