@@ -125,6 +125,14 @@
                 <label class="search__field">
                     <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
                     <input @bind="_query" @bind:event="oninput" placeholder="Title, author or ISBN" aria-label="Title, author or ISBN" @onkeydown="SearchOnEnterAsync" />
+                    @if (_query.Length > 0 || _results is not null || _searchProblem is not null || _addingByHand)
+                    {
+                        @* The way out of a search: the box, the results and anything opened from
+                           them go together, and the page is a shelf again. *@
+                        <button type="button" class="search__clear" aria-label="Clear search" @onclick="ClearSearch">
+                            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
+                        </button>
+                    }
                 </label>
                 <button type="button" class="button--primary" @onclick="SearchAsync" disabled="@_searching">
                     @(_searching ? "Searching…" : "Search")
@@ -539,6 +547,16 @@
         {
             await SearchAsync();
         }
+    }
+
+    private void ClearSearch()
+    {
+        _query = "";
+        _searched = null;
+        _results = null;
+        _searchProblem = null;
+        _addProblem = null;
+        StopAddingByHand();
     }
 
     private async Task SearchAsync()
