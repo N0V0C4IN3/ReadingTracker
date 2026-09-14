@@ -47,7 +47,10 @@ public sealed class LibraryEntry
 
     /// <summary>
     /// The page count everything else is worked out from: this reader's own where they set one,
-    /// otherwise whatever Catalog knows — which may still be nothing at all.
+    /// otherwise whatever Catalog knows — which may still be nothing at all. A zero from Catalog
+    /// is nothing at all: providers send 0 for "we don't know", and taken as a length it would
+    /// cap every session at zero pages and call the book read.
     /// </summary>
-    public int? EffectivePageCount(int? catalogPageCount) => PageCountOverride ?? catalogPageCount;
+    public int? EffectivePageCount(int? catalogPageCount) =>
+        PageCountOverride ?? (catalogPageCount is > 0 ? catalogPageCount : null);
 }

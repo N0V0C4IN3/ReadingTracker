@@ -116,15 +116,32 @@
         <section class="search">
             <h2>Find a book</h2>
 
+            @*
+                One box. Whatever goes in it — a title, an author, an ISBN, a bit of each — is sent
+                as it is, and Catalog decides what it was: three boxes made the reader do that
+                sorting first, and the answer was usually "I don't know, I just want the book".
+            *@
             <div class="search__inputs">
-                <input @bind="_titleQuery" @bind:event="oninput" placeholder="Title" aria-label="Title" @onkeydown="SearchOnEnterAsync" />
-                <input @bind="_authorQuery" @bind:event="oninput" placeholder="Author (optional)" aria-label="Author" @onkeydown="SearchOnEnterAsync" />
-                <input @bind="_isbnQuery" @bind:event="oninput" placeholder="ISBN" aria-label="ISBN" @onkeydown="SearchOnEnterAsync" />
-                <button type="button" @onclick="SearchAsync" disabled="@_searching">
+                <label class="search__field">
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+                    <input @bind="_query" @bind:event="oninput" placeholder="Title, author or ISBN" aria-label="Title, author or ISBN" @onkeydown="SearchOnEnterAsync" />
+                    @if (_query.Length > 0 || _results is not null || _searchProblem is not null || _addingByHand)
+                    {
+                        @* The way out of a search: the box, the results and anything opened from
+                           them go together, and the page is a shelf again. *@
+                        <button type="button" class="search__clear" aria-label="Clear search" @onclick="ClearSearch">
+                            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
+                        </button>
+                    }
+                </label>
+                <button type="button" class="button--primary" @onclick="SearchAsync" disabled="@_searching">
                     @(_searching ? "Searching…" : "Search")
                 </button>
             </div>
 
+            @* Everything the search has to say, in one box: on a phone the field is docked to the
+               bottom of the screen and this scrolls above it. *@
+            <div class="search__found">
             @if (_results is { } found)
             {
                 @if (found.Results.Count == 0)
@@ -175,7 +192,7 @@
                                         class="button--primary"
                                         @onclick="() => AddToLibraryAsync(book.Id)"
                                         disabled="@(_adding == book.Id)">
-                                    @(_adding == book.Id ? "Adding…" : "Add to my library")
+                                    @(_adding == book.Id ? "Adding…" : "Add to shelf")
                                 </button>
                             </li>
                         }
@@ -287,7 +304,7 @@
 
                     <div class="session-form__actions">
                         <button type="button" class="button--primary" @onclick="AddByHandAsync" disabled="@_creating">
-                            @(_creating ? "Adding…" : "Add to my library")
+                            @(_creating ? "Adding…" : "Add to shelf")
                         </button>
                         <button type="button" class="link-button" @onclick="StopAddingByHand" disabled="@_creating">
                             Cancel
@@ -308,6 +325,7 @@
             {
                 <p class="notice">ReadingTracker could not be reached just now. Try again shortly.</p>
             }
+            </div>
         </section>
     </Authorized>
     <NotAuthorized>
@@ -404,16 +422,14 @@
     private LibraryUnavailable? _problem;
     private string? _filter;
 
-    private string _titleQuery = "";
-    private string _authorQuery = "";
-    private string _isbnQuery = "";
+    private string _query = "";
 
     /// <summary>
-    /// What was actually searched for, which is not the same thing as what is in the boxes now.
+    /// What was actually searched for, which is not the same thing as what is in the box now.
     /// Paging re-runs this rather than whatever the reader has since typed, so pressing Next
     /// never quietly changes the query underneath them.
     /// </summary>
-    private (string Isbn, string Title, string Author)? _searched;
+    private string? _searched;
 
     private BookSearchPage? _results;
     private SearchUnavailable? _searchProblem;
@@ -533,18 +549,26 @@
         }
     }
 
+    private void ClearSearch()
+    {
+        _query = "";
+        _searched = null;
+        _results = null;
+        _searchProblem = null;
+        _addProblem = null;
+        StopAddingByHand();
+    }
+
     private async Task SearchAsync()
     {
         // Nothing typed in means nothing to ask Catalog: sending the request anyway would just
         // come back as a 400, which is not a state this page needs to show.
-        if (string.IsNullOrWhiteSpace(_isbnQuery) &&
-            string.IsNullOrWhiteSpace(_titleQuery) &&
-            string.IsNullOrWhiteSpace(_authorQuery))
+        if (string.IsNullOrWhiteSpace(_query))
         {
             return;
         }
 
-        _searched = (_isbnQuery, _titleQuery, _authorQuery);
+        _searched = _query.Trim();
 
         // A new search is a new question, so it is asked from the first page — and any form
         // opened for the last one's dead end no longer belongs to it.
@@ -565,8 +589,7 @@
 
         try
         {
-            (_results, _searchProblem) =
-                await Catalog.SearchAsync(query.Isbn, query.Title, query.Author, page, CancellationToken.None);
+            (_results, _searchProblem) = await Catalog.SearchAsync(query, page, CancellationToken.None);
         }
         finally
         {
@@ -586,9 +609,16 @@
         _creation = null;
         _addProblem = null;
 
-        _newTitle = _searched?.Title ?? "";
-        _newAuthors = _searched?.Author ?? "";
-        _newIsbn = _searched?.Isbn ?? "";
+        // The one box does not say which it held, so the same shape test Catalog applies is
+        // applied here: digits in the shape of an ISBN go in the ISBN box, anything else was words.
+        var typed = _searched ?? "";
+        var looksLikeIsbn = typed.Replace("-", "").Replace(" ", "") is { Length: 10 or 13 } bare
+            && bare[..^1].All(char.IsAsciiDigit)
+            && (char.IsAsciiDigit(bare[^1]) || bare.Length == 10 && char.ToUpperInvariant(bare[^1]) == 'X');
+
+        _newTitle = looksLikeIsbn ? "" : typed;
+        _newAuthors = "";
+        _newIsbn = looksLikeIsbn ? typed.Replace("-", "").Replace(" ", "") : "";
         _newCoverUrl = "";
         _newTotalPages = null;
     }

@@ -52,6 +52,22 @@ public sealed class BookCatalog(
     }
 
     /// <summary>
+    /// Words with no field named — as fuzzy as a title/author query, and treated the same way:
+    /// providers are always asked, and what they return is cached.
+    /// </summary>
+    public async Task<CatalogSearch> SearchAsync(
+        string query,
+        SearchWindow window,
+        CancellationToken cancellationToken)
+    {
+        var search = await providers.SearchAsync(query, window, cancellationToken);
+
+        return search.Status is SearchStatus.ProvidersUnavailable
+            ? CatalogSearch.Unavailable
+            : CatalogSearch.Completed(await StoreAsync(search.Results, cancellationToken), search.HasMore);
+    }
+
+    /// <summary>
     /// Records a Book nobody could find, for the times a reader owns something no provider
     /// has heard of. Returns null when its ISBN is already taken, since there is one Book
     /// per ISBN and the caller should be told rather than silently given a duplicate.

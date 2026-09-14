@@ -17,4 +17,14 @@ public interface IBookProvider
         string? author,
         SearchWindow window,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Finds candidates for words the reader typed without saying what they were — a title, an
+    /// author, some of each. Each provider has a search of its own that reads every field, and
+    /// this hands the words to it as they are.
+    /// </summary>
+    Task<IReadOnlyList<BookSearchResult>> SearchAsync(
+        string query,
+        SearchWindow window,
+        CancellationToken cancellationToken);
 }

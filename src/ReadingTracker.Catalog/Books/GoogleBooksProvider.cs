@@ -35,6 +35,13 @@ public sealed class GoogleBooksProvider(HttpClient httpClient, IOptions<GoogleBo
             : SearchAsync(string.Join(' ', terms), searchedIsbn: null, window, cancellationToken);
     }
 
+    /// <summary>Unqualified words: Google's own search reads them across title, author and the rest.</summary>
+    public Task<IReadOnlyList<BookSearchResult>> SearchAsync(
+        string query,
+        SearchWindow window,
+        CancellationToken cancellationToken) =>
+        SearchAsync(query.Trim(), searchedIsbn: null, window, cancellationToken);
+
     private async Task<IReadOnlyList<BookSearchResult>> SearchAsync(
         string searchTerms,
         string? searchedIsbn,
@@ -65,7 +72,8 @@ public sealed class GoogleBooksProvider(HttpClient httpClient, IOptions<GoogleBo
             Authors: info?.Authors ?? [],
             Isbn: PreferredIsbn(info?.IndustryIdentifiers) ?? searchedIsbn,
             CoverUrl: info?.ImageLinks?.Thumbnail ?? info?.ImageLinks?.SmallThumbnail,
-            TotalPages: info?.PageCount,
+            // Google says 0 when it does not know; that is no page count, not a short book.
+            TotalPages: info?.PageCount is > 0 and var pages ? pages : null,
             Source: BookSource.GoogleBooks,
             ExternalId: item.Id);
     }

@@ -75,6 +75,27 @@ public sealed class OpenLibraryProvider(HttpClient httpClient) : IBookProvider
             return [];
         }
 
+        return await SearchAsync(terms, cancellationToken);
+    }
+
+    /// <summary>Unqualified words go to Open Library's general query, which reads every field.</summary>
+    public Task<IReadOnlyList<BookSearchResult>> SearchAsync(
+        string query,
+        SearchWindow window,
+        CancellationToken cancellationToken) =>
+        SearchAsync(
+            [
+                "fields=key,title,author_name,isbn,number_of_pages_median,cover_i",
+                $"limit={window.PageSize}",
+                $"offset={window.Offset}",
+                $"q={Uri.EscapeDataString(query.Trim())}",
+            ],
+            cancellationToken);
+
+    private async Task<IReadOnlyList<BookSearchResult>> SearchAsync(
+        IReadOnlyList<string> terms,
+        CancellationToken cancellationToken)
+    {
         var payload = await httpClient
             .GetFromJsonAsync<OpenLibrarySearch>($"search.json?{string.Join('&', terms)}", cancellationToken);
 
@@ -87,7 +108,7 @@ public sealed class OpenLibraryProvider(HttpClient httpClient) : IBookProvider
         // Open Library lists every edition's ISBN; prefer a 13-digit one.
         Isbn: doc.Isbn?.FirstOrDefault(isbn => isbn.Length == 13) ?? doc.Isbn?.FirstOrDefault(),
         CoverUrl: doc.CoverId is null ? null : $"https://covers.openlibrary.org/b/id/{doc.CoverId}-L.jpg",
-        TotalPages: doc.NumberOfPagesMedian,
+        TotalPages: doc.NumberOfPagesMedian is > 0 and var pages ? pages : null,
         Source: BookSource.OpenLibrary,
         ExternalId: doc.Key);
 

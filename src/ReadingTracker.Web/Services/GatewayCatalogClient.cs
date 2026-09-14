@@ -95,10 +95,12 @@ public sealed record BookCreation(
 /// </summary>
 public sealed class GatewayCatalogClient(HttpClient httpClient)
 {
+    /// <summary>
+    /// One box's worth of words — a title, an author, an ISBN, some of each. Catalog works out
+    /// which; this just hands them over.
+    /// </summary>
     public async Task<(BookSearchPage? Page, SearchUnavailable? Problem)> SearchAsync(
-        string? isbn,
-        string? title,
-        string? author,
+        string query,
         int page,
         CancellationToken cancellationToken)
     {
@@ -107,7 +109,7 @@ public sealed class GatewayCatalogClient(HttpClient httpClient)
         try
         {
             response = await httpClient.GetAsync(
-                $"api/books/search{BuildQuery(isbn, title, author, page)}",
+                $"api/books/search?q={Uri.EscapeDataString(query.Trim())}&page={page}",
                 cancellationToken);
         }
         catch (HttpRequestException)
@@ -199,28 +201,6 @@ public sealed class GatewayCatalogClient(HttpClient httpClient)
             // A refusal we cannot read is still a refusal; the caller says so in general terms.
             return new Dictionary<string, string[]>();
         }
-    }
-
-    private static string BuildQuery(string? isbn, string? title, string? author, int page)
-    {
-        var parameters = new List<string> { $"page={page}" };
-
-        if (!string.IsNullOrWhiteSpace(isbn))
-        {
-            parameters.Add($"isbn={Uri.EscapeDataString(isbn)}");
-        }
-
-        if (!string.IsNullOrWhiteSpace(title))
-        {
-            parameters.Add($"title={Uri.EscapeDataString(title)}");
-        }
-
-        if (!string.IsNullOrWhiteSpace(author))
-        {
-            parameters.Add($"author={Uri.EscapeDataString(author)}");
-        }
-
-        return parameters.Count == 0 ? "" : $"?{string.Join("&", parameters)}";
     }
 
     private sealed record SearchResponseBody(IReadOnlyList<BookSearchResult> Results, int Page, bool HasMore);

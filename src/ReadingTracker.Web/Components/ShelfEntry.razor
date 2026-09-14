@@ -24,13 +24,25 @@
         }
     </div>
 
+    @*
+        A grid: the title and authors on the left of the first row and the progress figure on
+        its right, the bar across the second, and everything after that full width. The figure
+        is the card's headline number and sits where a headline number goes, not down among the
+        controls — see ProgressBar.razor.
+    *@
     <div class="entry__body">
-        <h3 class="entry__title">@(Entry.Book?.Title ?? "(catalog unreachable)")</h3>
+        <div class="entry__head">
+            <h3 class="entry__title">@(Entry.Book?.Title ?? "(catalog unreachable)")</h3>
 
-        @if (Entry.Book is { Authors.Count: > 0 } book)
-        {
-            <p class="entry__authors">@string.Join(", ", book.Authors)</p>
-        }
+            @if (Entry.Book is { Authors.Count: > 0 } book)
+            {
+                <p class="entry__authors">@string.Join(", ", book.Authors)</p>
+            }
+        </div>
+
+        <ProgressBar Progress="Entry.Progress"
+                     TrackingMethod="@Entry.TrackingMethod"
+                     EffectivePageCount="Entry.EffectivePageCount" />
 
         <div class="entry__status">
             <label class="visually-hidden" for="@($"status-{Entry.Id}")">Reading status</label>
@@ -44,10 +56,6 @@
                     <option value="@status.Key" selected="@(status.Key == Entry.Status)">@status.Value</option>
                 }
             </select>
-
-            <ProgressBar Progress="Entry.Progress"
-                         TrackingMethod="@Entry.TrackingMethod"
-                         EffectivePageCount="Entry.EffectivePageCount" />
         </div>
 
         <div class="entry__actions">
