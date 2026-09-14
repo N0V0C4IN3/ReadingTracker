@@ -503,30 +503,62 @@ button.danger:hover:not(:disabled) {
     padding: 2rem;
 }
 
-/* Four books being shelved, one after another. */
-.splash__books {
-    display: flex;
-    align-items: flex-end;
-    gap: 0.3rem;
+/*
+    A book being read: two pale pages, a spine, and one leaf lifting off the right-hand page,
+    turning over, and settling on the left. The leaf fades into the left page once it has landed
+    rather than snapping back to start again, so the loop has no seam; the next leaf fades in on
+    the right. Seen from above, on a short perspective, so the turn has some depth to it.
+*/
+.splash__book {
+    position: relative;
+    width: 3.8rem;
     height: 2.5rem;
+    perspective: 14rem;
 }
 
-.splash__books span {
-    width: 0.6rem;
-    height: 100%;
-    border-radius: 2px 2px 1px 1px;
+/* The spine: a hairline of page colour between the two halves. */
+.splash__book::before {
+    content: "";
+    position: absolute;
+    left: calc(50% - 1px);
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--page);
+    z-index: 1;
+}
+
+.splash__page {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 50%;
     background: var(--accent);
-    opacity: 0.25;
-    transform-origin: bottom center;
-    animation: shelve 1.4s var(--ease) infinite;
+    opacity: 0.3;
 }
 
-.splash__books span:nth-child(2) { animation-delay: 0.15s; height: 82%; }
-.splash__books span:nth-child(3) { animation-delay: 0.3s; height: 94%; }
-.splash__books span:nth-child(4) { animation-delay: 0.45s; height: 76%; }
+.splash__page--left { left: 0; border-radius: 3px 1px 1px 3px; }
+.splash__page--right { right: 0; border-radius: 1px 3px 3px 1px; }
 
-@keyframes shelve {
-    0%, 100% { opacity: 0.25; transform: scaleY(0.85); }
+.splash__leaf {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 50%;
+    border-radius: 1px 3px 3px 1px;
+    background: var(--accent);
+    transform-origin: left center;
+    animation: turn 2s var(--ease) infinite;
+}
+
+@keyframes turn {
+    0%        { transform: rotateY(0deg); opacity: 0; }
+    10%       { transform: rotateY(0deg); opacity: 1; }
+    55%       { transform: rotateY(-180deg); opacity: 1; }
+    70%       { transform: rotateY(-180deg); opacity: 1; }
+    88%, 100% { transform: rotateY(-180deg); opacity: 0; }
+}
     40% { opacity: 1; transform: scaleY(1); }
 }
 
