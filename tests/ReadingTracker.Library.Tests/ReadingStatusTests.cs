@@ -38,6 +38,25 @@ public sealed class ReadingStatusTests(LibraryApiFixture fixture)
     }
 
     [Fact]
+    public async Task Says_where_the_book_stands_when_i_move_it()
+    {
+        var client = fixture.ClientFor("answers-reader");
+        var entryId = await fixture.AddBookAsync(client, totalPages: 300);
+        await client.PostAsJsonAsync($"/api/library/{entryId}/sessions", new { amount = 150 });
+
+        var response = await client.PutAsJsonAsync($"/api/library/{entryId}/status", new { status = "OnHold" });
+
+        // The whole entry, as the shelf would describe it: a reader who has just changed
+        // something is looking at the book, and should not have to ask for the shelf again to
+        // find out what their change did to it.
+        var entry = (await response.Content.ReadFromJsonAsync<FullEntry>())!;
+        Assert.Equal("OnHold", entry.Status);
+        Assert.Equal("A Book", entry.Book!.Title);
+        Assert.Equal(150, entry.Progress!.AmountRead);
+        Assert.Equal(50, entry.Progress.PercentComplete);
+    }
+
+    [Fact]
     public async Task Announces_a_status_change_but_says_nothing_when_nothing_changed()
     {
         var client = fixture.ClientFor("announce-reader");
@@ -82,4 +101,10 @@ public sealed class ReadingStatusTests(LibraryApiFixture fixture)
     }
 
     private sealed record Entry(Guid Id, Guid BookId, string Status);
+
+    private sealed record FullEntry(Guid Id, string Status, Book? Book, Progress? Progress);
+
+    private sealed record Book(string Title);
+
+    private sealed record Progress(decimal? AmountRead, string? Unit, int? PercentComplete);
 }

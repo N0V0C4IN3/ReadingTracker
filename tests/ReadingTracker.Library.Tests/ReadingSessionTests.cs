@@ -25,6 +25,24 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
     }
 
     [Fact]
+    public async Task Tells_me_where_the_book_stands_as_soon_as_i_log_it()
+    {
+        var client = fixture.ClientFor("straight-answer-reader");
+        var entryId = await fixture.AddBookAsync(client, 200);
+        await LogAsync(client, entryId, 50);
+
+        var logged = await client.PostAsJsonAsync($"/api/library/{entryId}/sessions", new { amount = 30 });
+
+        // The session, and the book it was read from — total included, so nothing has to go back
+        // and read the shelf to draw the card the reader is looking at.
+        var answer = (await logged.Content.ReadFromJsonAsync<Logged>())!;
+        Assert.Equal(30, answer.Session.Amount);
+        Assert.Equal("A Book", answer.Entry.Book!.Title);
+        Assert.Equal(80, answer.Entry.Progress!.AmountRead);
+        Assert.Equal(40, answer.Entry.Progress.PercentComplete);
+    }
+
+    [Fact]
     public async Task Adds_up_everything_i_have_read_of_a_book()
     {
         var client = fixture.ClientFor("adding-up-reader");
@@ -324,4 +342,11 @@ public sealed class ReadingSessionTests(LibraryApiFixture fixture)
         string Unit,
         DateTimeOffset OccurredAt,
         int? DurationMinutes);
+
+    /// <summary>What logging a session answers with: the session, and the book it was read from.</summary>
+    private sealed record Logged(Session Session, LoggedEntry Entry);
+
+    private sealed record LoggedEntry(Guid Id, string Status, Book? Book, Progress? Progress);
+
+    private sealed record Book(string Title);
 }

@@ -154,7 +154,7 @@ public sealed class CorrectReadingSessionTests(LibraryApiFixture fixture)
             occurredAt,
         });
 
-        return (await response.Content.ReadFromJsonAsync<Session>())!.Id;
+        return (await response.Content.ReadFromJsonAsync<Logged>())!.Session.Id;
     }
 
     private static async Task<IReadOnlyList<Session>> SessionsAsync(HttpClient client, Guid entryId) =>
@@ -168,4 +168,7 @@ public sealed class CorrectReadingSessionTests(LibraryApiFixture fixture)
     private sealed record Progress(decimal? AmountRead, string? Unit, int? PercentComplete);
 
     private sealed record Session(Guid Id, decimal Amount, string Unit, int? DurationMinutes);
+
+    /// <summary>What logging or correcting a session answers with: the session, and the book.</summary>
+    private sealed record Logged(Session Session, Entry Entry);
 }

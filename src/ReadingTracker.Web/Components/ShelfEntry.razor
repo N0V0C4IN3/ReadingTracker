@@ -304,16 +304,16 @@
             return;
         }
 
-        await RunAsync(token => Library.SetStatusAsync(Entry.Id, status, token), _ => Refresh());
+        await RunAsync(token => Library.SetStatusAsync(Entry.Id, status, token), Show);
     }
 
     /// <summary>Their answer to the prompt a completed book raises, which is the same change
     /// the status control makes — the prompt only saves them going to find it.</summary>
     private async Task MarkFinishedAsync() =>
-        await RunAsync(token => Library.SetStatusAsync(Entry.Id, "Finished", token), async _ =>
+        await RunAsync(token => Library.SetStatusAsync(Entry.Id, "Finished", token), async entry =>
         {
             Close();
-            await Refresh();
+            await Show(entry);
         });
 
     private async Task TrackingMethodChangedAsync(ChangeEventArgs e)
@@ -323,51 +323,52 @@
             return;
         }
 
-        await RunAsync(token => Library.SetTrackingMethodAsync(Entry.Id, method, token), async _ =>
+        await RunAsync(token => Library.SetTrackingMethodAsync(Entry.Id, method, token), async entry =>
         {
             // The history is expressed in the reader's current method, so it is now describing
             // the same sessions in different units.
             await ReloadSessions();
-            await Refresh();
+            await Show(entry);
         });
     }
 
     private async Task SavePageCountAsync() =>
-        await RunAsync(token => Library.SetPageCountAsync(Entry.Id, _pageCount, token), async _ =>
+        await RunAsync(token => Library.SetPageCountAsync(Entry.Id, _pageCount, token), async entry =>
         {
             await ReloadSessions();
-            await Refresh();
+            await Show(entry);
         });
 
     private async Task ClearPageCountAsync() =>
-        await RunAsync(token => Library.SetPageCountAsync(Entry.Id, null, token), async _ =>
+        await RunAsync(token => Library.SetPageCountAsync(Entry.Id, null, token), async entry =>
         {
             await ReloadSessions();
-            await Refresh();
+            await Show(entry);
         });
 
     private async Task LogAsync(NewSession session) =>
-        await RunAsync(token => Library.LogSessionAsync(Entry.Id, session, token), async _ =>
+        await RunAsync(token => Library.LogSessionAsync(Entry.Id, session, token), async logged =>
         {
             Close();
+            await Show(logged.Entry);
 
             // Read from the entry Library just handed back rather than from Entry, which is
             // still the one this component was rendered with — the parent has not re-rendered us
             // yet. Only a log that took the reader to the end raises this, and only while the
             // book is not already finished, so nobody is asked twice about the same book and a
             // reader who said "not yet" is left alone until they read more.
-            if (await Refresh() is { Progress.PercentComplete: 100, Status: not "Finished" })
+            if (logged.Entry is { Progress.PercentComplete: 100, Status: not "Finished" })
             {
                 _panel = Panel.Finished;
             }
         });
 
     private async Task CorrectAsync(Guid sessionId, NewSession session) =>
-        await RunAsync(token => Library.CorrectSessionAsync(Entry.Id, sessionId, session, token), async _ =>
+        await RunAsync(token => Library.CorrectSessionAsync(Entry.Id, sessionId, session, token), async corrected =>
         {
             _editing = null;
             await ReloadSessions();
-            await Refresh();
+            await Show(corrected.Entry);
         });
 
     private async Task DeleteSessionAsync(Guid sessionId) =>
@@ -381,20 +382,20 @@
         await RunAsync(token => Library.RemoveAsync(Entry.Id, token), () => OnRemoved.InvokeAsync());
 
     /// <summary>
-    /// Re-reads this entry from the shelf, which is the only representation that carries all of
-    /// it, and hands it up.
+    /// Hands the entry Library answered a change with up to the shelf, which is what redraws
+    /// this card.
     ///
-    /// The answer to a change is deliberately not used for this. Library replies to a status,
-    /// tracking-method or page-count change with the entry alone: no book details, because it
-    /// does not re-ask Catalog for a change that cannot affect what Catalog says, and no
-    /// progress, because progress is derived from sessions when read rather than stored. Both
-    /// are reasonable, and rendering that reply directly blanks the title, the cover and the
-    /// reader's position on every change.
-    ///
-    /// Merging the previous values back in is not the fix either. Changing the tracking method
-    /// or the page count genuinely does change what progress says — that is the point of making
-    /// the change — so keeping the old value would show a number that is quietly wrong, which is
-    /// worse than showing none. Only Library can say what progress is now, so ask it.
+    /// The answer is used directly, and is enough to: Library describes an entry it has just
+    /// changed exactly as it describes one on the shelf — book details and the progress worked
+    /// out from the sessions — so nothing has to be re-read to find out what the change did.
+    /// Going back for the shelf cost a second round trip for every change, which on a phone is
+    /// most of the delay between asking for something and seeing it.
+    /// </summary>
+    private Task Show(LibraryEntry entry) => OnChanged.InvokeAsync(entry);
+
+    /// <summary>
+    /// Re-reads this entry from the shelf. Only deleting a session needs this now: it is the one
+    /// change Library answers with nothing, there being no session left to describe.
     /// </summary>
     private async Task<LibraryEntry?> Refresh()
     {

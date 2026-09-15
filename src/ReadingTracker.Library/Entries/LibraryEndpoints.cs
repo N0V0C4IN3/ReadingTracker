@@ -135,6 +135,7 @@ public static class LibraryEndpoints
             SetStatusRequest body,
             HttpRequest request,
             ReadingLibrary library,
+            CatalogClient catalog,
             CancellationToken cancellationToken) =>
         {
             if (Reader.From(request) is not { } readerId)
@@ -149,7 +150,9 @@ public static class LibraryEndpoints
 
             var entry = await library.SetStatusAsync(readerId, entryId, status, cancellationToken);
 
-            return entry is null ? Results.NotFound() : Results.Ok(LibraryEntryResponse.From(entry));
+            return entry is null
+                ? Results.NotFound()
+                : Results.Ok(await DescribeAsync(library, catalog, entry, cancellationToken));
         })
         .WithName("SetReadingStatus");
 
@@ -158,6 +161,7 @@ public static class LibraryEndpoints
             SetTrackingMethodRequest body,
             HttpRequest request,
             ReadingLibrary library,
+            CatalogClient catalog,
             CancellationToken cancellationToken) =>
         {
             if (Reader.From(request) is not { } readerId)
@@ -179,7 +183,9 @@ public static class LibraryEndpoints
 
             var entry = await library.SetTrackingMethodAsync(readerId, entryId, method, cancellationToken);
 
-            return entry is null ? Results.NotFound() : Results.Ok(LibraryEntryResponse.From(entry));
+            return entry is null
+                ? Results.NotFound()
+                : Results.Ok(await DescribeAsync(library, catalog, entry, cancellationToken));
         })
         .WithName("SetTrackingMethod");
 
@@ -215,10 +221,7 @@ public static class LibraryEndpoints
                 return Results.NotFound();
             }
 
-            var book = (await catalog.TryFindBooksAsync([entry.BookId], cancellationToken))
-                .GetValueOrDefault(entry.BookId);
-
-            return Results.Ok(LibraryEntryResponse.From(entry, book));
+            return Results.Ok(await DescribeAsync(library, catalog, entry, cancellationToken));
         })
         .WithName("SetPageCount");
 
@@ -240,7 +243,10 @@ public static class LibraryEndpoints
                 return Results.NotFound();
             }
 
-            var totalPages = await EffectivePageCountAsync(catalog, entry, cancellationToken);
+            // Catalog is asked about the book while the session is being written rather than
+            // before it: neither answer needs the other, so the reader waits for the slower of
+            // the two instead of for both in turn.
+            var bookTask = catalog.TryFindBooksAsync([entry.BookId], cancellationToken);
 
             var (session, problem) = await library.LogSessionAsync(
                 readerId,
@@ -250,11 +256,18 @@ public static class LibraryEndpoints
                 body.DurationMinutes,
                 cancellationToken);
 
+            var book = (await bookTask).GetValueOrDefault(entry.BookId);
+
             return problem is { } refused
                 ? SessionRefused(refused)
                 : Results.Created(
                     $"/api/library/{entryId}/sessions/{session!.Id}",
-                    SessionResponse.From(session, entry.TrackingMethod, totalPages));
+                    new LoggedSessionResponse(
+                        SessionResponse.From(
+                            session!,
+                            entry.TrackingMethod,
+                            entry.EffectivePageCount(book?.TotalPages)),
+                        await DescribeAsync(library, entry, book, cancellationToken)));
         })
         .WithName("LogReadingSession");
 
@@ -277,7 +290,7 @@ public static class LibraryEndpoints
                 return Results.NotFound();
             }
 
-            var totalPages = await EffectivePageCountAsync(catalog, entry, cancellationToken);
+            var bookTask = catalog.TryFindBooksAsync([entry.BookId], cancellationToken);
 
             var (session, problem) = await library.CorrectSessionAsync(
                 readerId,
@@ -289,9 +302,16 @@ public static class LibraryEndpoints
                 body.DurationMinutes,
                 cancellationToken);
 
+            var book = (await bookTask).GetValueOrDefault(entry.BookId);
+
             return problem is { } refused
                 ? SessionRefused(refused)
-                : Results.Ok(SessionResponse.From(session!, entry.TrackingMethod, totalPages));
+                : Results.Ok(new LoggedSessionResponse(
+                    SessionResponse.From(
+                        session!,
+                        entry.TrackingMethod,
+                        entry.EffectivePageCount(book?.TotalPages)),
+                    await DescribeAsync(library, entry, book, cancellationToken)));
         })
         .WithName("CorrectReadingSession");
 
@@ -346,8 +366,8 @@ public static class LibraryEndpoints
     /// <summary>
     /// How long this reader's book is: their own page count where they set one, otherwise
     /// Catalog's. Null when neither knows — including when Catalog can't be reached, which
-    /// skips the past-the-end check rather than stopping the reader recording what they read.
-    /// Losing a validation beats losing the reading.
+    /// leaves a session's amount unconverted rather than stopping the reader reading their own
+    /// history.
     /// </summary>
     private static async Task<int?> EffectivePageCountAsync(
         CatalogClient catalog,
@@ -356,6 +376,53 @@ public static class LibraryEndpoints
         entry.EffectivePageCount(
             (await catalog.TryFindBooksAsync([entry.BookId], cancellationToken))
                 .GetValueOrDefault(entry.BookId)?.TotalPages);
+
+    /// <summary>
+    /// One entry as a client has to draw it: what Library holds, the book Catalog describes, and
+    /// the progress derived from the reader's sessions — the same shape the shelf is made of.
+    ///
+    /// Every change answers with this, so a client that has just changed something already knows
+    /// where the book stands and has no reason to go back for the shelf. That second request is
+    /// what a change used to cost, and on a phone the round trip is most of the waiting; asking
+    /// for the whole shelf to find out about one book was the rest of it.
+    ///
+    /// Best-effort about Catalog, as listing is: a book that cannot be described still has a
+    /// status and a progress.
+    /// </summary>
+    private static async Task<LibraryEntryResponse> DescribeAsync(
+        ReadingLibrary library,
+        CatalogClient catalog,
+        LibraryEntry entry,
+        CancellationToken cancellationToken)
+    {
+        // Neither answer depends on the other, and the Catalog round trip is the slower.
+        var bookTask = catalog.TryFindBooksAsync([entry.BookId], cancellationToken);
+        var totalsTask = library.TotalsAsync([entry.Id], cancellationToken);
+
+        await Task.WhenAll(bookTask, totalsTask);
+
+        return Describe(entry, (await bookTask).GetValueOrDefault(entry.BookId), await totalsTask);
+    }
+
+    /// <summary>The same, for a caller that has already been to Catalog for this book.</summary>
+    private static async Task<LibraryEntryResponse> DescribeAsync(
+        ReadingLibrary library,
+        LibraryEntry entry,
+        CatalogBook? book,
+        CancellationToken cancellationToken) =>
+        Describe(entry, book, await library.TotalsAsync([entry.Id], cancellationToken));
+
+    private static LibraryEntryResponse Describe(
+        LibraryEntry entry,
+        CatalogBook? book,
+        IReadOnlyDictionary<Guid, ReadingTotals> totals) =>
+        LibraryEntryResponse.From(
+            entry,
+            book,
+            Progress.Of(
+                totals.GetValueOrDefault(entry.Id, ReadingTotals.Nothing),
+                entry.TrackingMethod,
+                entry.EffectivePageCount(book?.TotalPages)));
 
     private static IResult SessionRefused(SessionProblem problem) => problem switch
     {
@@ -462,6 +529,13 @@ public static class LibraryEndpoints
                 ? new DisplayedAmountResponse(amount, method.ToString())
                 : null;
     }
+
+    /// <summary>
+    /// What comes back for a stretch of reading: the session as it was recorded, and the book as
+    /// it now stands. Progress is derived from the sessions, so logging one moves it — and it is
+    /// the card the reader is looking at, not the session.
+    /// </summary>
+    private sealed record LoggedSessionResponse(SessionResponse Session, LibraryEntryResponse Entry);
 
     private sealed record SetTrackingMethodRequest(string? TrackingMethod);
 
