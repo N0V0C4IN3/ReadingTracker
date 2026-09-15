@@ -509,8 +509,14 @@
     private IReadOnlyList<LibraryEntry>? _entries;
     private LibraryUnavailable? _problem;
 
-    /// <summary>Which status the shelf is narrowed to; null is everything.</summary>
-    private string? _filter;
+    /// <summary>
+    /// Which status the shelf is narrowed to; null is everything. Opens on Reading — the books in
+    /// hand are what a reader comes back for — unless there are none, in which case it opens on
+    /// everything: see OnParametersSetAsync.
+    /// </summary>
+    private string? _filter = OpensOn;
+
+    private const string OpensOn = "Reading";
 
     /// <summary>Whether a search is on — anything in the box narrows the shelf and offers the library.</summary>
     private bool Searching => !string.IsNullOrWhiteSpace(_query);
@@ -643,15 +649,26 @@
         _searched = null;
         _searchProblem = null;
         _addProblem = null;
-        _filter = null;
+        _filter = OpensOn;
         StopAddingByHand();
 
         // Fetching before we know there is a reader would send the Gateway a request with no
         // token on every anonymous page load — harmless, since it just gets a 401 back, but
         // pointless network traffic for a page that has already decided not to show it.
-        if (reader is not null)
+        if (reader is null)
         {
-            await LoadShelfAsync();
+            return;
+        }
+
+        await LoadShelfAsync();
+
+        // Nothing on the go — a new reader, or one between books — and the shelf opens on
+        // everything instead. An empty Reading tab is a poor first sight of a shelf with books on
+        // it, and a worse one of a shelf with none: the "add your first book" line lives on All.
+        // The whole shelf is already here, so this is a look at it rather than a second fetch.
+        if (StatusFiltered.Count == 0)
+        {
+            _filter = null;
         }
     }
 
@@ -882,7 +899,7 @@
                 return;
             }
 
-            var (_, problem) = await Gateway.AddAsync(book.Id, CancellationToken.None);
+            var (added, problem) = await Gateway.AddAsync(book.Id, CancellationToken.None);
 
             if (problem is { } trouble)
             {
@@ -896,7 +913,7 @@
             _results = null;
             _searched = null;
 
-            await LoadShelfAsync();
+            await ShowAddedAsync(added);
         }
         finally
         {
@@ -914,7 +931,7 @@
 
         try
         {
-            var (_, problem) = await Gateway.AddAsync(bookId, CancellationToken.None);
+            var (added, problem) = await Gateway.AddAsync(bookId, CancellationToken.None);
 
             if (problem is { } trouble)
             {
@@ -922,13 +939,27 @@
                 return;
             }
 
-            // Rerun the same fetch the page loads with, rather than splicing the new entry in by
-            // hand, so the shelf always shows exactly what the Gateway says it holds.
-            await LoadShelfAsync();
+            await ShowAddedAsync(added);
         }
         finally
         {
             _adding = null;
         }
+    }
+
+    /// <summary>
+    /// A book goes on the shelf as Want to read, and under any other filter it would land out of
+    /// sight — added, and nothing to show for it. The shelf follows it to its tab. Then the same
+    /// fetch the page loads with, rather than splicing the new entry in by hand, so the shelf
+    /// always shows exactly what the Gateway says it holds.
+    /// </summary>
+    private async Task ShowAddedAsync(LibraryEntry? added)
+    {
+        if (added is { } entry && _filter is not null && _filter != entry.Status)
+        {
+            _filter = entry.Status;
+        }
+
+        await LoadShelfAsync();
     }
 }
