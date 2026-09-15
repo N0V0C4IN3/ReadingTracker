@@ -7,6 +7,7 @@
 @inject GatewayCatalogClient Catalog
 @inject IOptions<DevSignInOptions> DevSignIn
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 <PageTitle>ReadingTracker</PageTitle>
 
@@ -21,18 +22,21 @@
         <Settling />
     </Authorizing>
     <Authorized>
-        <section class="shelf">
+        <section class="shelf @(Searching ? "shelf--searching" : null)">
             <div class="shelf__heading">
                 <h1>Your shelf</h1>
 
                 @if (_entries is { Count: > 0 } || _filter is not null)
                 {
-                    <div class="filters" role="group" aria-label="Filter by reading status">
+                    @* Dimmed and out of reach while a search is on: the search spans every status,
+                       so a status filter would only fight it. Clearing the search brings them back. *@
+                    <div class="filters @(Searching ? "filters--muted" : null)" role="group" aria-label="Filter by reading status">
                         @foreach (var (value, label) in Filters)
                         {
                             <button type="button"
                                     class="chip @(value == _filter ? "chip--on" : null)"
                                     aria-pressed="@(value == _filter)"
+                                    disabled="@Searching"
                                     @onclick="() => FilterAsync(value)">
                                 @label
                             </button>
@@ -41,14 +45,49 @@
                 }
             </div>
 
+            @*
+                The quiet search row, under the tabs on a wide screen. One box does two jobs in
+                order: it narrows your own shelf as you type, and searches the library on Enter. On
+                a phone the field lives in the dock at the foot of the screen instead, and this is
+                hidden — see the .search section below.
+            *@
+            <div class="search-row">
+                <label class="search__field">
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+                    <input value="@_query" @oninput="OnQueryInput" placeholder="Find a book — on your shelf, or in the library" aria-label="Find a book" @onkeydown="SearchOnEnterAsync" />
+                    @if (_query.Length > 0)
+                    {
+                        <button type="button" class="search__clear" aria-label="Clear search" @onclick="ClearSearch">
+                            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
+                        </button>
+                    }
+                </label>
+                <button type="button" class="button--primary" @onclick="SearchAsync" disabled="@_searching">
+                    @(_searching ? "Searching…" : "Search")
+                </button>
+            </div>
+            @if (Searching)
+            {
+                <p class="hint-line">@Hint</p>
+            }
+
             @if (_entries is { } entries)
             {
-                @if (entries.Count == 0)
+                @if (Searching)
+                {
+                    <p class="group">On your shelf <span>· @VisibleEntries.Count</span></p>
+                }
+
+                @if (VisibleEntries.Count == 0)
                 {
                     <p class="empty">
-                        @if (_filter is null)
+                        @if (Searching)
                         {
-                            <text>Your shelf is empty. Search for a book below to add your first one.</text>
+                            <text>Nothing on your shelf matches “@_query.Trim()”.</text>
+                        }
+                        else if (_filter is null)
+                        {
+                            <text>Your shelf is empty. Search below to add your first book.</text>
                         }
                         else
                         {
@@ -64,7 +103,7 @@
                             way search results do. Keyed by the entry, so a card that merely changes
                             keeps its element and does not arrive twice.
                         *@
-                        @foreach (var (entry, at) in entries.Select((entry, at) => (entry, at)))
+                        @foreach (var (entry, at) in VisibleEntries.Select((entry, at) => (entry, at)))
                         {
                             <ShelfEntry @key="entry.Id"
                                         Entry="entry"
@@ -118,42 +157,28 @@
             section is the dock that opens; on a wider screen it is a panel under the shelf and
             the button is not shown. Same markup either way — app.css decides which.
         *@
-        <section class="search @(_searchOpen ? "search--open" : null)">
-            <h2>Find a book</h2>
+        @*
+            The phone's search dock, and the wide screen's library results, are the same section.
+            On a phone it is a bottom sheet: the field is its foot, the results scroll above, and
+            the grip at its top drags it between a peek, a half and nearly full (see sheet.js). On
+            a wide screen it is not a dock at all — the field under the tabs is used instead, this
+            field and the grip are hidden, and what remains is the library's answer, in place under
+            the shelf.
+        *@
+        <section class="search @(_searchOpen ? "search--open" : null)" @ref="_dockEl">
+            <button type="button" class="search__grip" aria-label="Resize search results"></button>
 
-            @*
-                One box. Whatever goes in it — a title, an author, an ISBN, a bit of each — is sent
-                as it is, and Catalog decides what it was: three boxes made the reader do that
-                sorting first, and the answer was usually "I don't know, I just want the book".
-            *@
-            <div class="search__inputs">
-                <label class="search__field">
-                    <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
-                    <input @ref="_queryBox" @bind="_query" @bind:event="oninput" placeholder="Title, author or ISBN" aria-label="Title, author or ISBN" @onkeydown="SearchOnEnterAsync" />
-                    @if (_searchOpen || _query.Length > 0 || _results is not null || _searchProblem is not null || _addingByHand)
-                    {
-                        @* The way out of a search: the box, the results and anything opened from
-                           them go together, and the page is a shelf again. On a phone that means
-                           the dock closes too, so it is there from the moment the dock opens. *@
-                        <button type="button" class="search__clear" aria-label="Clear search" @onclick="ClearSearch">
-                            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
-                        </button>
-                    }
-                </label>
-                <button type="button" class="button--primary" @onclick="SearchAsync" disabled="@_searching">
-                    @(_searching ? "Searching…" : "Search")
-                </button>
-            </div>
-
-            @* Everything the search has to say, in one box: on a phone the field is docked to the
-               bottom of the screen and this scrolls above it. *@
             <div class="search__found">
+            @if (Searching && (_results is not null || _searching))
+            {
+                <p class="group">In the library@(_results is { } lib ? $" · {(lib.HasMore ? lib.Results.Count + "+" : lib.Results.Count.ToString())}" : "")</p>
+            }
             @if (_results is { } found)
             {
                 @if (found.Results.Count == 0)
                 {
                     <p class="muted">
-                        @(found.Page > 1 ? "Nothing more on this page." : "No books matched your search.")
+                        @(found.Page > 1 ? "Nothing more on this page." : "No books in the library matched your search.")
                     </p>
 
                     @if (!_addingByHand)
@@ -167,16 +192,15 @@
                 }
                 else
                 {
-                    <ul class="results">
+                    <div class="lib-grid">
                         @*
-                            Keyed by the book so a new search builds new rows rather than
-                            rewriting the old ones in place — which is what lets the arrival
-                            animation below play again. The index rides along as --at, so each
-                            row can come in a beat after the one above it.
+                            Keyed by the book so a new search builds new cards rather than rewriting
+                            the old ones in place — which is what lets the arrival animation play
+                            again. A book already on the shelf says so where its Add button would be.
                         *@
                         @foreach (var (book, at) in found.Results.Select((book, at) => (book, at)))
                         {
-                            <li class="result" @key="book.Id" style="--at:@at">
+                            <div class="lib-card @(OnShelf(book.Id) ? "lib-card--mine" : null)" @key="book.Id" style="--at:@at">
                                 @if (book.CoverUrl is { } cover)
                                 {
                                     <img src="@cover" alt="" loading="lazy" />
@@ -186,23 +210,34 @@
                                     <div class="result__cover-placeholder" aria-hidden="true"></div>
                                 }
 
-                                <div class="result__body">
+                                <div class="lib-card__body">
                                     <strong>@book.Title</strong>
                                     @if (book.Authors.Count > 0)
                                     {
-                                        <span class="muted">@string.Join(", ", book.Authors)</span>
+                                        <span>@string.Join(", ", book.Authors)</span>
+                                    }
+                                    @if (book.TotalPages is { } pages)
+                                    {
+                                        <span class="lib-card__pages">@pages pages</span>
                                     }
                                 </div>
 
-                                <button type="button"
-                                        class="button--primary"
-                                        @onclick="() => AddToLibraryAsync(book.Id)"
-                                        disabled="@(_adding == book.Id)">
-                                    @(_adding == book.Id ? "Adding…" : "Add to shelf")
-                                </button>
-                            </li>
+                                @if (OnShelf(book.Id))
+                                {
+                                    <span class="onshelf">On your shelf</span>
+                                }
+                                else
+                                {
+                                    <button type="button"
+                                            class="button--add"
+                                            @onclick="() => AddToLibraryAsync(book.Id)"
+                                            disabled="@(_adding == book.Id)">
+                                        @(_adding == book.Id ? "Adding…" : "Add to shelf")
+                                    </button>
+                                }
+                            </div>
                         }
-                    </ul>
+                    </div>
                 }
 
                 @* Only worth showing once there is somewhere to go: a single page of results
@@ -237,6 +272,20 @@
             else if (_searchProblem == SearchUnavailable.GatewayUnreachable)
             {
                 <p class="notice">ReadingTracker could not be reached just now. Try again shortly.</p>
+            }
+            else if (Searching && !_addingByHand)
+            {
+                @* Typing has only ever narrowed the shelf; the library is a request, and this is
+                   where it is offered rather than fired on every keystroke into two providers. *@
+                <div class="library-offer">
+                    @if (VisibleEntries.Count == 0)
+                    {
+                        <p>Not on your shelf yet.</p>
+                    }
+                    <button type="button" class="button--primary button--large" @onclick="SearchAsync" disabled="@_searching">
+                        @(_searching ? "Searching…" : $"Search the library for “{_query.Trim()}”")
+                    </button>
+                </div>
             }
 
             @if (_addingByHand)
@@ -327,10 +376,28 @@
             {
                 <p class="notice">Your session has ended. <a href="authentication/login">Sign in again</a> to add books.</p>
             }
-            else if (_addProblem == AddToLibraryProblem.GatewayUnreachable)
+            @if (_addProblem == AddToLibraryProblem.GatewayUnreachable)
             {
                 <p class="notice">ReadingTracker could not be reached just now. Try again shortly.</p>
             }
+            </div>
+
+            @* The dock's foot on a phone; hidden on a wide screen, where the row under the tabs is
+               the field. Bound to the same query, so the two are one box wherever it is shown. *@
+            <div class="search__inputs">
+                <label class="search__field">
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+                    <input @ref="_queryBox" value="@_query" @oninput="OnQueryInput" placeholder="Find a book" aria-label="Find a book" @onkeydown="SearchOnEnterAsync" />
+                    @if (_query.Length > 0)
+                    {
+                        <button type="button" class="search__clear" aria-label="Clear search" @onclick="ClearSearch">
+                            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
+                        </button>
+                    }
+                </label>
+                <button type="button" class="button--primary" @onclick="SearchAsync" disabled="@_searching">
+                    @(_searching ? "Searching…" : "Search")
+                </button>
             </div>
         </section>
 
@@ -441,7 +508,91 @@
 
     private IReadOnlyList<LibraryEntry>? _entries;
     private LibraryUnavailable? _problem;
-    private string? _filter;
+
+    /// <summary>
+    /// Which status the shelf is narrowed to; null is everything. Opens on Reading — the books in
+    /// hand are what a reader comes back for — unless there are none, in which case it opens on
+    /// everything: see OnParametersSetAsync.
+    /// </summary>
+    private string? _filter = OpensOn;
+
+    private const string OpensOn = "Reading";
+
+    /// <summary>Whether a search is on — anything in the box narrows the shelf and offers the library.</summary>
+    private bool Searching => !string.IsNullOrWhiteSpace(_query);
+
+    /// <summary>The shelf under the current status tab (client-side, so switching tabs is instant).</summary>
+    private IReadOnlyList<LibraryEntry> StatusFiltered =>
+        _entries is null ? [] :
+        _filter is null ? _entries :
+        _entries.Where(entry => entry.Status == _filter).ToArray();
+
+    /// <summary>
+    /// What the shelf shows: the current tab at rest, or — while searching — every book whose
+    /// title, author or ISBN contains the query, across every status. The search is what a reader
+    /// came to do, so it wins over the tab.
+    /// </summary>
+    private IReadOnlyList<LibraryEntry> VisibleEntries
+    {
+        get
+        {
+            if (_entries is null)
+            {
+                return [];
+            }
+
+            if (!Searching)
+            {
+                return StatusFiltered;
+            }
+
+            var q = _query.Trim();
+
+            return _entries.Where(entry => MatchesQuery(entry, q)).ToArray();
+        }
+    }
+
+    private static bool MatchesQuery(LibraryEntry entry, string q)
+    {
+        if (entry.Book is not { } book)
+        {
+            return false;
+        }
+
+        if (book.Title.Contains(q, StringComparison.OrdinalIgnoreCase)
+            || book.Authors.Any(author => author.Contains(q, StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        // An ISBN typed with or without its hyphens should still find the book it belongs to.
+        var bare = q.Replace("-", "").Replace(" ", "");
+
+        return bare.Length > 0
+            && book.Isbn is { } isbn
+            && isbn.Replace("-", "").Contains(bare, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Whether a book the library found is already on the shelf, so it offers no Add.</summary>
+    private bool OnShelf(Guid bookId) => _entries?.Any(entry => entry.BookId == bookId) ?? false;
+
+    /// <summary>The line under the field while searching: what is on the shelf, and where the library stands.</summary>
+    private string Hint
+    {
+        get
+        {
+            var shelf = $"{VisibleEntries.Count} on your shelf";
+
+            if (_results is { } found)
+            {
+                var count = found.HasMore ? $"{found.Results.Count}+" : found.Results.Count.ToString();
+
+                return $"{shelf} · {count} in the library";
+            }
+
+            return $"{shelf} · press Enter to search the library";
+        }
+    }
 
     private string _query = "";
 
@@ -498,57 +649,48 @@
         _searched = null;
         _searchProblem = null;
         _addProblem = null;
-        _filter = null;
+        _filter = OpensOn;
         StopAddingByHand();
 
         // Fetching before we know there is a reader would send the Gateway a request with no
         // token on every anonymous page load — harmless, since it just gets a 401 back, but
         // pointless network traffic for a page that has already decided not to show it.
-        if (reader is not null)
+        if (reader is null)
         {
-            await LoadShelfAsync();
+            return;
+        }
+
+        await LoadShelfAsync();
+
+        // Nothing on the go — a new reader, or one between books — and the shelf opens on
+        // everything instead. An empty Reading tab is a poor first sight of a shelf with books on
+        // it, and a worse one of a shelf with none: the "add your first book" line lives on All.
+        // The whole shelf is already here, so this is a look at it rather than a second fetch.
+        if (StatusFiltered.Count == 0)
+        {
+            _filter = null;
         }
     }
 
     private async Task LoadShelfAsync() =>
-        (_entries, _problem) = await Gateway.GetEntriesAsync(_filter, CancellationToken.None);
-
-    private async Task FilterAsync(string? status)
-    {
-        if (_filter == status)
-        {
-            return;
-        }
-
-        _filter = status;
-        _entries = null;
-
-        await LoadShelfAsync();
-    }
+        (_entries, _problem) = await Gateway.GetEntriesAsync(null, CancellationToken.None);
 
     /// <summary>
-    /// Swap in the entry as Library now describes it, rather than reloading the whole shelf for
-    /// one card's change. A status change under an active filter can move a book off the shelf
-    /// entirely, though, and leaving it sitting there would misreport what the filter says.
+    /// Switching tabs no longer fetches: the whole shelf is already here, so the status filter is
+    /// applied where the cards are read (StatusFiltered). Instant, and off-limits while searching.
     /// </summary>
-    private async Task Replace(LibraryEntry updated)
-    {
-        if (_filter is { } filter && updated.Status != filter)
-        {
-            await LoadShelfAsync();
-            return;
-        }
+    private void FilterAsync(string? status) => _filter = status;
 
+    /// <summary>
+    /// Swap in the entry as Library now describes it, rather than reloading the whole shelf for one
+    /// card's change. The status filter is applied where the cards are read, so a card that changed
+    /// status simply falls under a different tab on the next render — nothing to reload.
+    /// </summary>
+    private void Replace(LibraryEntry updated) =>
         _entries = _entries?.Select(entry => entry.Id == updated.Id ? updated : entry).ToArray();
-    }
 
-    private async Task RemoveAsync(Guid entryId)
-    {
+    private void RemoveAsync(Guid entryId) =>
         _entries = _entries?.Where(entry => entry.Id != entryId).ToArray();
-
-        // The card has already gone; this keeps anything derived from the shelf honest.
-        await LoadShelfAsync();
-    }
 
     private void SignedOut()
     {
@@ -576,7 +718,10 @@
     /// </summary>
     private bool _searchOpen;
     private bool _focusQuery;
+    private bool _sheetAttached;
     private ElementReference _queryBox;
+    private ElementReference _dockEl;
+    private IJSObjectReference? _sheet;
 
     private void OpenSearch()
     {
@@ -593,9 +738,21 @@
             _focusQuery = false;
             await _queryBox.FocusAsync();
         }
+
+        // The dock is a draggable bottom sheet on a phone; sheet.js owns its height while it is
+        // open. A no-op on a wide screen (no handle, no pointer drag), so it is safe to attach
+        // whenever the dock opens and detach when it closes.
+        if (_searchOpen && !_sheetAttached)
+        {
+            _sheet ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/sheet.js");
+            // Opened at its peek: the dock is a field to type in until there is something to
+            // show, and half a screen of empty sheet is not that. It grows when the library answers.
+            await _sheet.InvokeVoidAsync("attach", _dockEl, "peek");
+            _sheetAttached = true;
+        }
     }
 
-    private void ClearSearch()
+    private async Task ClearSearch()
     {
         _query = "";
         _searched = null;
@@ -604,6 +761,29 @@
         _addProblem = null;
         _searchOpen = false;
         StopAddingByHand();
+
+        if (_sheetAttached && _sheet is not null)
+        {
+            await _sheet.InvokeVoidAsync("detach", _dockEl);
+            _sheetAttached = false;
+        }
+    }
+
+    /// <summary>
+    /// Every keystroke narrows the shelf (VisibleEntries reads the box directly). Editing the query
+    /// after a library search leaves the old results labelling the wrong words, so they are dropped
+    /// until the next Enter.
+    /// </summary>
+    private void OnQueryInput(ChangeEventArgs e)
+    {
+        _query = e.Value?.ToString() ?? "";
+
+        if (_searched is not null && !string.Equals(_searched, _query.Trim(), StringComparison.Ordinal))
+        {
+            _results = null;
+            _searchProblem = null;
+            _searched = null;
+        }
     }
 
     private async Task SearchAsync()
@@ -641,6 +821,13 @@
         finally
         {
             _searching = false;
+        }
+
+        // The phone's dock has been a field at the foot of the screen until now; with an answer to
+        // show it comes up to half the screen, which the reader can then drag either way.
+        if (_sheetAttached && _sheet is not null)
+        {
+            await _sheet.InvokeVoidAsync("snap", _dockEl, "default");
         }
     }
 
@@ -712,7 +899,7 @@
                 return;
             }
 
-            var (_, problem) = await Gateway.AddAsync(book.Id, CancellationToken.None);
+            var (added, problem) = await Gateway.AddAsync(book.Id, CancellationToken.None);
 
             if (problem is { } trouble)
             {
@@ -726,7 +913,7 @@
             _results = null;
             _searched = null;
 
-            await LoadShelfAsync();
+            await ShowAddedAsync(added);
         }
         finally
         {
@@ -744,7 +931,7 @@
 
         try
         {
-            var (_, problem) = await Gateway.AddAsync(bookId, CancellationToken.None);
+            var (added, problem) = await Gateway.AddAsync(bookId, CancellationToken.None);
 
             if (problem is { } trouble)
             {
@@ -752,13 +939,27 @@
                 return;
             }
 
-            // Rerun the same fetch the page loads with, rather than splicing the new entry in by
-            // hand, so the shelf always shows exactly what the Gateway says it holds.
-            await LoadShelfAsync();
+            await ShowAddedAsync(added);
         }
         finally
         {
             _adding = null;
         }
+    }
+
+    /// <summary>
+    /// A book goes on the shelf as Want to read, and under any other filter it would land out of
+    /// sight — added, and nothing to show for it. The shelf follows it to its tab. Then the same
+    /// fetch the page loads with, rather than splicing the new entry in by hand, so the shelf
+    /// always shows exactly what the Gateway says it holds.
+    /// </summary>
+    private async Task ShowAddedAsync(LibraryEntry? added)
+    {
+        if (added is { } entry && _filter is not null && _filter != entry.Status)
+        {
+            _filter = entry.Status;
+        }
+
+        await LoadShelfAsync();
     }
 }

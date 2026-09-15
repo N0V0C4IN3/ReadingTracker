@@ -1192,6 +1192,24 @@ button.danger:hover:not(:disabled) {
 }
 
 /*
+    A book set aside — on hold, or dropped — in black and white. The jacket is desaturated and the
+    accent is turned to grey for everything on the card that used it: the figure, the bar, the
+    Log reading button. Done by re-pointing the tokens rather than filtering the whole card, so
+    the type stays crisp ink and the card costs the browser nothing it did not already.
+*/
+.entry--parked {
+    --accent: var(--ink-soft);
+    --accent-hover: var(--ink);
+    --accent-soft: var(--fill);
+    --accent-ink: var(--card);
+}
+
+.entry--parked .entry__cover {
+    filter: grayscale(1);
+    opacity: 0.8;
+}
+
+/*
     The shelf before Library has answered — see Home.razor. Each ghost is an .entry with bones
     where the cover, title, authors and status will be, so nothing moves when the real cards take
     their places: same padding, same gap, near enough the same height.
@@ -1575,21 +1593,193 @@ button.danger:hover:not(:disabled) {
 
 /* Search ------------------------------------------------------------------ */
 
-/* Its own surface rather than a rule across the page: finding a book is a different job from
-   reading the shelf, and it stops the two running together into one column of cards. */
+/*
+    On a wide screen the search is two quiet things: a field in a row under the tabs (.search-row),
+    and — below the shelf — whatever the library found (.search). Neither is a card; a search is a
+    different job from reading the shelf, but it does not need a surface of its own to say so. On a
+    phone the whole lot becomes a bottom sheet; see the media query below.
+*/
 .search {
-    margin-top: 2.25rem;
-    padding: 1.25rem;
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    background: var(--card);
-    box-shadow: var(--shadow);
+    margin-top: 0.5rem;
+}
+
+/* The drag handle and the dock's own field belong to the phone sheet; a wide screen shows neither. */
+.search__grip {
+    display: none;
 }
 
 .search__inputs {
+    display: none;
+    gap: 0.5rem;
+}
+
+/* The field under the tabs, on a wide screen. */
+.search-row {
     display: flex;
     gap: 0.5rem;
-    margin-bottom: 1rem;
+    margin: 1.25rem 0 1.15rem;
+}
+
+.search-row .button--primary {
+    flex: 0 0 auto;
+    padding-inline: 1.25rem;
+    font-weight: 600;
+}
+
+/* A group's heading — "On your shelf", "In the library" — with its count in a lighter voice. */
+.group {
+    margin: 1.5rem 0 0.7rem;
+    font-size: 0.72rem;
+    font-weight: 650;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+}
+
+.group:first-child {
+    margin-top: 0;
+}
+
+.group span {
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+}
+
+/* The line under the field while searching: what the shelf holds, and where the library stands. */
+/* Tucked under the field it belongs to, rather than adding a line of its own to the gap below. */
+.hint-line {
+    margin: -0.7rem 0.2rem 1.15rem;
+    font-size: 0.88rem;
+    color: var(--ink-soft);
+}
+
+/* Out of the search's way, and out of reach: the search spans every status. */
+.filters--muted {
+    opacity: 0.4;
+}
+
+/*
+    The library's answer: compact cards, two to a row, so a page of ten is one glance rather than
+    a long scroll. Jacket, then title over author over page count, then the way onto the shelf —
+    or, for a book already there, a quiet note that it is.
+*/
+.lib-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+}
+
+.lib-card {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    min-width: 0;
+    padding: 0.7rem 0.8rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--card-shelf);
+    animation: rise 420ms var(--ease-out) both;
+    animation-delay: calc(min(var(--at, 0), 8) * 45ms);
+}
+
+.lib-card img,
+.lib-card .result__cover-placeholder {
+    width: 2.4rem;
+    flex: 0 0 auto;
+    border-radius: 6px;
+}
+
+.lib-card__body {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.05rem;
+}
+
+.lib-card__body strong {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.lib-card__body span {
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.lib-card__pages {
+    font-size: 0.78rem !important;
+    color: var(--ink-faint) !important;
+}
+
+/* Already on the shelf: dimmed, and offering nothing to add. */
+.lib-card--mine {
+    opacity: 0.6;
+}
+
+/* Not a page-level action but a row's: an outline, because the library is offering, not shouting. */
+.button--add {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    flex: 0 0 auto;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.85rem;
+    line-height: 1.35;
+    font-weight: 550;
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--line-strong);
+    color: var(--ink);
+    white-space: nowrap;
+}
+
+.button--add svg {
+    width: 0.85em;
+    height: 0.85em;
+}
+
+.button--add:hover:not(:disabled) {
+    background: var(--accent);
+    color: var(--accent-ink);
+    box-shadow: none;
+}
+
+/* The same size and shape of thing as the Add button it stands in for — same type, same padding,
+   so a column of results keeps one baseline whether a book is owned or not. Only the fill differs. */
+.onshelf {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    padding: 0.4rem 0.75rem;
+    border-radius: var(--radius-sm);
+    background: var(--fill);
+    font-size: 0.85rem;
+    line-height: 1.35;
+    font-weight: 550;
+    color: var(--ink-soft);
+    white-space: nowrap;
+}
+
+/* Shown when the shelf has nothing and the library has not been asked yet: the one thing to do. */
+.library-offer {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.7rem;
+    padding: 0.5rem 0 0.75rem;
+    color: var(--ink-soft);
+}
+
+.library-offer p {
+    margin: 0;
 }
 
 /* One field with a magnifier drawn into its left end. The label is the hit area for the icon. */
@@ -1815,12 +2005,6 @@ button.danger:hover:not(:disabled) {
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     header {
         background: var(--card-raised);
-        -webkit-backdrop-filter: var(--blur);
-        backdrop-filter: var(--blur);
-    }
-
-    .search {
-        background-color: var(--card-sheer);
         -webkit-backdrop-filter: var(--blur);
         backdrop-filter: var(--blur);
     }
@@ -2077,22 +2261,53 @@ button.danger:hover:not(:disabled) {
         heading goes; the placeholder says what the box is for.
     */
     .search {
-        position: sticky;
+        position: fixed;
+        left: 0;
+        right: 0;
         bottom: 0;
         z-index: 10;
         display: flex;
         flex-direction: column;
-        max-height: 72vh;
-        margin: 1.5rem -1rem 0;
-        padding: 0.75rem 1rem calc(0.9rem + env(safe-area-inset-bottom));
+        /* The first height before sheet.js takes over; after that the drag owns it. overflow is
+           hidden so a peeked sheet clips its results rather than spilling them up the screen. */
+        height: 55vh;
+        overflow: hidden;
+        padding: 0 1rem calc(0.9rem + env(safe-area-inset-bottom));
         border-width: 1px 0 0;
         border-radius: 22px 22px 0 0;
         background-color: var(--card-raised);
+        /* The dock is the one surface that still blurs what is behind it: the shelf scrolls under
+           it. Browsers without the filter keep the tint alone, which is enough to read on. */
+        -webkit-backdrop-filter: var(--blur);
+        backdrop-filter: var(--blur);
         box-shadow: 0 -10px 30px rgb(0 0 0 / 12%);
+        transition: height 260ms var(--ease-out);
     }
 
-    .search > h2 {
-        display: none;
+    /* The handle you drag the sheet by: a short bar at its top, and the only surface that resizes
+       it, so a drag begun on the results scrolls them instead. */
+    .search__grip {
+        display: block;
+        flex: 0 0 auto;
+        align-self: center;
+        width: 2.5rem;
+        height: 1.5rem;
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        border-radius: 0;
+        cursor: grab;
+        touch-action: none;
+    }
+
+    .search__grip::before {
+        content: "";
+        display: block;
+        width: 2.5rem;
+        height: 4px;
+        margin: 0.6rem auto 0;
+        border-radius: 999px;
+        background: var(--line-strong);
     }
 
     /*
@@ -2142,9 +2357,9 @@ button.danger:hover:not(:disabled) {
     */
     .search__found {
         order: 0;
+        flex: 1 1 auto;
         overflow-y: auto;
         min-height: 0;
-        max-height: 26.5rem;
         overscroll-behavior: contain;
     }
 
@@ -2154,9 +2369,20 @@ button.danger:hover:not(:disabled) {
         margin-bottom: 0.85rem;
     }
 
+    .search-row {
+        display: none;
+    }
+
     .search__inputs {
+        display: flex;
         order: 1;
+        flex: 0 0 auto;
         margin: 0;
+    }
+
+    /* Two-up is one-up in a dock this narrow. */
+    .lib-grid {
+        grid-template-columns: 1fr;
     }
 
     /* One row per result: a small jacket, a title that ellipsises, and a short button. */
