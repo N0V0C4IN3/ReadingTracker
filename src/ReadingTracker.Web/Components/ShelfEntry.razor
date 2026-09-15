@@ -10,7 +10,12 @@
     shelf. The reader's own reading — the progress line — is the part that stays visible.
 *@
 
-<article class="entry @(_working ? "entry--working" : null)" style="--at:@At">
+@*
+    A book on hold or dropped is set aside, and looks it: the card goes to black and white — the
+    jacket desaturated, the accent turned to grey — so on a shelf of everything the books actually
+    in hand are the ones in colour.
+*@
+<article class="entry @(_working ? "entry--working" : null) @(Parked ? "entry--parked" : null)" style="--at:@At">
     <div class="entry__cover">
         @if (Entry.Book?.CoverUrl is { } cover)
         {
@@ -230,6 +235,8 @@
     /// <summary>Where on the shelf this card sits, so it can arrive a beat after the one above.</summary>
     [Parameter]
     public int At { get; set; }
+
+    private bool Parked => Entry.Status is "OnHold" or "Dropped";
 
     /// <summary>Raised when this entry changed in a way the shelf around it needs to know about.</summary>
     [Parameter]

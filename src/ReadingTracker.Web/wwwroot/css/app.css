@@ -1192,6 +1192,24 @@ button.danger:hover:not(:disabled) {
 }
 
 /*
+    A book set aside — on hold, or dropped — in black and white. The jacket is desaturated and the
+    accent is turned to grey for everything on the card that used it: the figure, the bar, the
+    Log reading button. Done by re-pointing the tokens rather than filtering the whole card, so
+    the type stays crisp ink and the card costs the browser nothing it did not already.
+*/
+.entry--parked {
+    --accent: var(--ink-soft);
+    --accent-hover: var(--ink);
+    --accent-soft: var(--fill);
+    --accent-ink: var(--card);
+}
+
+.entry--parked .entry__cover {
+    filter: grayscale(1);
+    opacity: 0.8;
+}
+
+/*
     The shelf before Library has answered — see Home.razor. Each ghost is an .entry with bones
     where the cover, title, authors and status will be, so nothing moves when the real cards take
     their places: same padding, same gap, near enough the same height.
