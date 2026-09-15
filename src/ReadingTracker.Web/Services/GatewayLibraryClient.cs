@@ -47,6 +47,13 @@ public sealed record ReadingSessionView(
 public sealed record DisplayedAmount(decimal Amount, string Unit);
 
 /// <summary>
+/// The answer to logging or correcting a stretch of reading: what was recorded, and the entry as
+/// it now stands. The second half is the useful one — progress is worked out from the sessions,
+/// so recording one moves it — and it arrives with the first rather than costing a second trip.
+/// </summary>
+public sealed record LoggedSession(ReadingSessionView Session, LibraryEntry Entry);
+
+/// <summary>
 /// A stretch of reading, as the reader describes it when logging or correcting one:
 /// <paramref name="Amount"/> is how much they read, in the method they track this book by.
 /// </summary>
@@ -244,20 +251,20 @@ public sealed class GatewayLibraryClient(HttpClient httpClient)
             client => client.GetAsync($"api/library/{entryId}/sessions", cancellationToken),
             cancellationToken);
 
-    public Task<LibraryChange<ReadingSessionView>> LogSessionAsync(
+    public Task<LibraryChange<LoggedSession>> LogSessionAsync(
         Guid entryId,
         NewSession session,
         CancellationToken cancellationToken) =>
-        ChangeAsync<ReadingSessionView>(
+        ChangeAsync<LoggedSession>(
             client => client.PostAsJsonAsync($"api/library/{entryId}/sessions", session, cancellationToken),
             cancellationToken);
 
-    public Task<LibraryChange<ReadingSessionView>> CorrectSessionAsync(
+    public Task<LibraryChange<LoggedSession>> CorrectSessionAsync(
         Guid entryId,
         Guid sessionId,
         NewSession session,
         CancellationToken cancellationToken) =>
-        ChangeAsync<ReadingSessionView>(
+        ChangeAsync<LoggedSession>(
             client => client.PutAsJsonAsync(
                 $"api/library/{entryId}/sessions/{sessionId}",
                 session,

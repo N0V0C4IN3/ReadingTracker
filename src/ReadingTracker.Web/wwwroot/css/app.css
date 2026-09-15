@@ -401,7 +401,6 @@ input::placeholder {
 input[type="date"] {
     -webkit-appearance: none;
     appearance: none;
-    width: 100%;
     max-width: 100%;
     text-align: left;
 }
@@ -1206,8 +1205,15 @@ button.danger:hover:not(:disabled) {
 }
 
 /* Dimmed over a few frames, by the transition above: a card that fades is busy; one that blinks is broken. */
+/*
+    A card with a change in flight. The fade waits before it starts: a change that is answered
+    promptly never shows it at all, and a card that dims and comes back inside a third of a second
+    reads as a stutter rather than as work. Coming back is immediate -- .entry's own transition --
+    so the answer lands the moment it arrives.
+*/
 .entry--working {
     opacity: 0.6;
+    transition: opacity 160ms var(--ease) 260ms;
 }
 
 /*
