@@ -1,0 +1,124 @@
+// The phone's search dock as a bottom sheet you can drag between three heights: a peek (just the
+// field and its handle), a default half, and nearly full. Blazor owns whether the dock is open;
+// this owns only how tall it is while it is, so a drag never round-trips to .NET — the height is
+// written straight to the element on every pointer move and snapped on release.
+//
+// Everything here is a no-op where it cannot apply: called on a wide screen, or where pointer
+// events are missing, it attaches nothing and the dock keeps whatever height the stylesheet gave
+// it. The sheet is only ever this on a phone.
+
+const SNAP = { peek: 0, default: 0.55, full: 0.92 };
+const controllers = new WeakMap();
+
+function heights() {
+    const h = window.innerHeight;
+    // Peek is the field plus its handle, not a fraction of the screen: it has to be exactly tall
+    // enough to type in, whatever the screen.
+    return { peek: 132, default: Math.round(h * SNAP.default), full: Math.round(h * SNAP.full) };
+}
+
+function nearest(value) {
+    const h = heights();
+    return Object.entries(h).reduce((best, [name, px]) =>
+        Math.abs(px - value) < Math.abs(h[best] - value) ? name : best, 'default');
+}
+
+export function attach(el, startState = 'default') {
+    if (!el || controllers.has(el) || !window.PointerEvent) {
+        return;
+    }
+
+    const grip = el.querySelector('.search__grip');
+    const scroll = el.querySelector('.search__found');
+    if (!grip) {
+        return;
+    }
+
+    const setState = name => {
+        el.dataset.sheet = name;
+        el.style.height = heights()[name] + 'px';
+    };
+
+    let dragging = false, startY = 0, startH = 0, moved = false;
+
+    const down = e => {
+        dragging = true;
+        moved = false;
+        startY = e.clientY;
+        startH = el.getBoundingClientRect().height;
+        el.style.transition = 'none';
+        grip.setPointerCapture(e.pointerId);
+    };
+
+    const move = e => {
+        if (!dragging) {
+            return;
+        }
+        const h = heights();
+        const next = Math.min(h.full, Math.max(h.peek, startH + (startY - e.clientY)));
+        if (Math.abs(next - startH) > 3) {
+            moved = true;
+        }
+        el.style.height = next + 'px';
+    };
+
+    const up = () => {
+        if (!dragging) {
+            return;
+        }
+        dragging = false;
+        el.style.transition = '';
+        // A tap on the handle with no drag toggles between peek and default, so the sheet can be
+        // got out of the way and back without a deliberate drag.
+        const state = moved
+            ? nearest(el.getBoundingClientRect().height)
+            : (el.dataset.sheet === 'peek' ? 'default' : 'peek');
+        setState(state);
+    };
+
+    grip.addEventListener('pointerdown', down);
+    grip.addEventListener('pointermove', move);
+    grip.addEventListener('pointerup', up);
+    grip.addEventListener('pointercancel', up);
+
+    // The scroll area and the drag must not fight: a drag that starts on the results should scroll
+    // them, not resize the sheet, so the handle is the only drag surface and this is left alone.
+    const onResize = () => {
+        if (el.dataset.sheet) {
+            el.style.height = heights()[el.dataset.sheet] + 'px';
+        }
+    };
+    window.addEventListener('resize', onResize);
+
+    controllers.set(el, { grip, down, move, up, onResize, scroll });
+    setState(startState);
+}
+
+/**
+ * Move the sheet to one of its heights from outside a drag — the page grows it from its peek to
+ * the half once a search has something to show. Silent where the sheet was never attached.
+ */
+export function snap(el, name) {
+    if (!el || !controllers.has(el)) {
+        return;
+    }
+
+    el.dataset.sheet = name;
+    el.style.height = heights()[name] + 'px';
+}
+
+export function detach(el) {
+    const c = el && controllers.get(el);
+    if (!c) {
+        return;
+    }
+    c.grip.removeEventListener('pointerdown', c.down);
+    c.grip.removeEventListener('pointermove', c.move);
+    c.grip.removeEventListener('pointerup', c.up);
+    c.grip.removeEventListener('pointercancel', c.up);
+    window.removeEventListener('resize', c.onResize);
+    el.style.height = '';
+    el.style.transition = '';
+    delete el.dataset.sheet;
+    controllers.delete(el);
+}
