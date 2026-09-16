@@ -1628,6 +1628,11 @@ button.danger:hover:not(:disabled) {
     margin-top: 0.5rem;
 }
 
+/* Where a page turn brings the page back to: the results' top, clear of the sticky header. */
+.search__found {
+    scroll-margin-top: 4.5rem;
+}
+
 /* The drag handle and the dock's own field belong to the phone sheet; a wide screen shows neither. */
 .search__grip {
     display: none;

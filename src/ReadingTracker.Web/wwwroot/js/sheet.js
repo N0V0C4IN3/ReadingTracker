@@ -111,8 +111,8 @@ export function attach(el, startState = 'default') {
 }
 
 /**
- * Move the sheet to one of its heights from outside a drag — the page grows it from its peek to
- * the half once a search has something to show. Silent where the sheet was never attached.
+ * Move the sheet to one of its heights from outside a drag. Silent where the sheet was never
+ * attached.
  */
 export function snap(el, name) {
     if (!el || !controllers.has(el)) {
@@ -121,6 +121,40 @@ export function snap(el, name) {
 
     el.dataset.sheet = name;
     el.style.height = heights(el)[name] + 'px';
+}
+
+/**
+ * The search has something to show: a sheet that was only a field to type in comes up to the
+ * half so it can be seen. A sheet the reader has already sized — dragged to full, or left at the
+ * half — is theirs, and stays where they put it; a page turn is not a reason to take it back.
+ */
+export function grow(el) {
+    if (el?.dataset.sheet === 'peek') {
+        snap(el, 'default');
+    }
+}
+
+/**
+ * Start a new page of results from its first result. On a phone the results scroll inside the
+ * sheet, so that is what goes back to the top; on a wide screen they are part of the page, and
+ * the page is brought back to them only if it has been scrolled past them — results that are
+ * already in view are left alone rather than nudged.
+ */
+export function showTop(el) {
+    const found = el?.querySelector('.search__found');
+    if (!found) {
+        return;
+    }
+
+    if (controllers.has(el)) {
+        found.scrollTop = 0;
+        return;
+    }
+
+    const header = document.querySelector('header')?.getBoundingClientRect().bottom ?? 0;
+    if (found.getBoundingClientRect().top < header) {
+        found.scrollIntoView({ block: 'start' });
+    }
 }
 
 export function detach(el) {

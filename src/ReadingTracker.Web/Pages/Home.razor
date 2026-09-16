@@ -718,6 +718,13 @@
     /// </summary>
     private bool _searchOpen;
     private bool _focusQuery;
+
+    /// <summary>
+    /// Set when a page of results has just come back, so the render that shows it is followed by
+    /// a scroll to its top. A page read from part-way down is a page the reader has to scroll
+    /// up through to find the start of.
+    /// </summary>
+    private bool _showResultsTop;
     private bool _sheetAttached;
     private ElementReference _queryBox;
     private ElementReference _dockEl;
@@ -745,6 +752,12 @@
         {
             _focusQuery = false;
             await _queryBox.FocusAsync();
+        }
+
+        if (_showResultsTop && _sheet is not null)
+        {
+            _showResultsTop = false;
+            await _sheet.InvokeVoidAsync("showTop", _dockEl);
         }
 
         // The dock is a draggable bottom sheet on a phone; sheet.js owns its height while it is
@@ -832,11 +845,17 @@
             _searching = false;
         }
 
+        // A page that came back is read from its first result. A problem is not a page: there
+        // is nothing to start from the top of, and the notice sits where the reader already is.
+        _showResultsTop = _searchProblem is null;
+
         // The phone's dock has been a field at the foot of the screen until now; with an answer to
-        // show it comes up to half the screen, which the reader can then drag either way.
+        // show — results, or a notice saying why there are none — it comes up to half the screen,
+        // which the reader can then drag either way. Only from the peek: a sheet the reader has
+        // already sized is left as they left it, page after page.
         if (_sheetAttached && _sheet is not null)
         {
-            await _sheet.InvokeVoidAsync("snap", _dockEl, "default");
+            await _sheet.InvokeVoidAsync("grow", _dockEl);
         }
     }
 
