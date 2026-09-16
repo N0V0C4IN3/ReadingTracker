@@ -1628,6 +1628,11 @@ button.danger:hover:not(:disabled) {
     margin-top: 0.5rem;
 }
 
+/* Where a page turn brings the page back to: the results' top, clear of the sticky header. */
+.search__found {
+    scroll-margin-top: 4.5rem;
+}
+
 /* The drag handle and the dock's own field belong to the phone sheet; a wide screen shows neither. */
 .search__grip {
     display: none;
@@ -2290,6 +2295,10 @@ button.danger:hover:not(:disabled) {
         heading goes; the placeholder says what the box is for.
     */
     .search {
+        /* The peek: the grip and the field, and nothing else — exactly tall enough to type in,
+           whatever the screen. sheet.js reads this rather than carrying its own copy. */
+        --sheet-peek: 132px;
+
         position: fixed;
         left: 0;
         right: 0;
@@ -2297,9 +2306,12 @@ button.danger:hover:not(:disabled) {
         z-index: 10;
         display: flex;
         flex-direction: column;
-        /* The first height before sheet.js takes over; after that the drag owns it. overflow is
-           hidden so a peeked sheet clips its results rather than spilling them up the screen. */
-        height: 55vh;
+        /* The dock opens at its peek, and it is the stylesheet that puts it there: the sheet
+           script sets the same height a beat later, so the first paint and the first frame the
+           script owns are the same frame. (It used to open at half and drop to the peek once the
+           script arrived.) overflow is hidden so a peeked sheet clips its results rather than
+           spilling them up the screen. */
+        height: var(--sheet-peek);
         overflow: hidden;
         padding: 0 1rem calc(0.9rem + env(safe-area-inset-bottom));
         border-width: 1px 0 0;
@@ -2310,7 +2322,10 @@ button.danger:hover:not(:disabled) {
         -webkit-backdrop-filter: var(--blur);
         backdrop-filter: var(--blur);
         box-shadow: 0 -10px 30px rgb(0 0 0 / 12%);
-        transition: height 260ms var(--ease-out);
+        /* bottom is how far the keyboard has lifted it (sheet.js); it eases the way height does. */
+        transition:
+            height 260ms var(--ease-out),
+            bottom 260ms var(--ease-out);
     }
 
     /* The handle you drag the sheet by: a short bar at its top, and the only surface that resizes
@@ -2324,9 +2339,28 @@ button.danger:hover:not(:disabled) {
         margin: 0;
         padding: 0;
         background: transparent;
-        border-radius: 0;
+        /* Only the keyboard focus ring ever draws this box, and a pill wants a round one. */
+        border-radius: 999px;
         cursor: grab;
         touch-action: none;
+        transition: none;
+    }
+
+    /*
+        It is a button, so every rule written for buttons reaches it: the hover fill, the pressed
+        squash, the fill a touch screen leaves behind after a tap. All of them turn the pill into
+        a lozenge the moment a finger lands on it. The pill is the whole of what a reader sees
+        of this control, so under a finger it looks exactly as it does at rest. The focus ring
+        stays, for whoever reaches it by keyboard: focus-visible is not set by a tap.
+    */
+    .search__grip:hover:not(:disabled),
+    .search__grip:active:not(:disabled) {
+        background: transparent;
+        transform: none;
+    }
+
+    .search__grip:active:not(:disabled) {
+        cursor: grabbing;
     }
 
     .search__grip::before {

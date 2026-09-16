@@ -1,24 +1,36 @@
 // The phone's search dock as a bottom sheet you can drag between three heights: a peek (just the
 // field and its handle), a default half, and nearly full. Blazor owns whether the dock is open;
 // this owns only how tall it is while it is, so a drag never round-trips to .NET — the height is
-// written straight to the element on every pointer move and snapped on release.
+// written straight to the element on every frame of a drag and snapped on release.
 //
 // Everything here is a no-op where it cannot apply: called on a wide screen, or where pointer
 // events are missing, it attaches nothing and the dock keeps whatever height the stylesheet gave
 // it. The sheet is only ever this on a phone.
 
-const SNAP = { peek: 0, default: 0.55, full: 0.92 };
+const SNAP = { default: 0.55, full: 0.92 };
 const controllers = new WeakMap();
 
-function heights() {
-    const h = window.innerHeight;
-    // Peek is the field plus its handle, not a fraction of the screen: it has to be exactly tall
-    // enough to type in, whatever the screen.
-    return { peek: 132, default: Math.round(h * SNAP.default), full: Math.round(h * SNAP.full) };
+/** How much of the screen can actually be seen: with the keyboard up, that is not the window. */
+function visible() {
+    return window.visualViewport?.height ?? window.innerHeight;
 }
 
-function nearest(value) {
-    const h = heights();
+function heights(el) {
+    const h = visible();
+    // The peek is the stylesheet's: it is also the height the dock first paints at, before this
+    // script has said anything, and the two must agree or the dock jumps on opening.
+    const peek = parseFloat(getComputedStyle(el).getPropertyValue('--sheet-peek')) || 132;
+    // Fractions of what is visible, never less than the peek: a keyboard can take more than half
+    // the screen, and the half of what is left may be shorter than the field itself.
+    return {
+        peek,
+        default: Math.max(peek, Math.round(h * SNAP.default)),
+        full: Math.max(peek, Math.round(h * SNAP.full)),
+    };
+}
+
+function nearest(el, value) {
+    const h = heights(el);
     return Object.entries(h).reduce((best, [name, px]) =>
         Math.abs(px - value) < Math.abs(h[best] - value) ? name : best, 'default');
 }
@@ -29,17 +41,25 @@ export function attach(el, startState = 'default') {
     }
 
     const grip = el.querySelector('.search__grip');
-    const scroll = el.querySelector('.search__found');
     if (!grip) {
         return;
     }
 
     const setState = name => {
         el.dataset.sheet = name;
-        el.style.height = heights()[name] + 'px';
+        el.style.height = heights(el)[name] + 'px';
     };
 
     let dragging = false, startY = 0, startH = 0, moved = false;
+    // The height the last pointer move asked for, and the frame that will write it. Pointer
+    // events can arrive faster than the screen repaints; writing the height on each one is
+    // layout work nobody sees. One write per frame is what tracks a finger.
+    let wanted = 0, frame = 0;
+
+    const write = () => {
+        frame = 0;
+        el.style.height = wanted + 'px';
+    };
 
     const down = e => {
         dragging = true;
@@ -47,6 +67,9 @@ export function attach(el, startState = 'default') {
         startY = e.clientY;
         startH = el.getBoundingClientRect().height;
         el.style.transition = 'none';
+        // The dock arrives with a short slide; a drag begun inside it would be fighting that
+        // slide for the same element. The finger wins.
+        el.style.animation = 'none';
         grip.setPointerCapture(e.pointerId);
     };
 
@@ -54,12 +77,12 @@ export function attach(el, startState = 'default') {
         if (!dragging) {
             return;
         }
-        const h = heights();
-        const next = Math.min(h.full, Math.max(h.peek, startH + (startY - e.clientY)));
-        if (Math.abs(next - startH) > 3) {
+        const h = heights(el);
+        wanted = Math.min(h.full, Math.max(h.peek, startH + (startY - e.clientY)));
+        if (Math.abs(wanted - startH) > 3) {
             moved = true;
         }
-        el.style.height = next + 'px';
+        frame ||= requestAnimationFrame(write);
     };
 
     const up = () => {
@@ -67,11 +90,15 @@ export function attach(el, startState = 'default') {
             return;
         }
         dragging = false;
+        if (frame) {
+            cancelAnimationFrame(frame);
+            write();
+        }
         el.style.transition = '';
         // A tap on the handle with no drag toggles between peek and default, so the sheet can be
         // got out of the way and back without a deliberate drag.
         const state = moved
-            ? nearest(el.getBoundingClientRect().height)
+            ? nearest(el, el.getBoundingClientRect().height)
             : (el.dataset.sheet === 'peek' ? 'default' : 'peek');
         setState(state);
     };
@@ -85,18 +112,40 @@ export function attach(el, startState = 'default') {
     // them, not resize the sheet, so the handle is the only drag surface and this is left alone.
     const onResize = () => {
         if (el.dataset.sheet) {
-            el.style.height = heights()[el.dataset.sheet] + 'px';
+            el.style.height = heights(el)[el.dataset.sheet] + 'px';
         }
     };
     window.addEventListener('resize', onResize);
 
-    controllers.set(el, { grip, down, move, up, onResize, scroll });
+    // The dock is pinned to the foot of the layout viewport, and on iOS the keyboard comes up
+    // over that viewport without shrinking it — so a dock pinned to its foot is pinned under
+    // the keyboard, field and all. The visual viewport is the part that can be seen; the dock
+    // is lifted by however much of the layout viewport lies below it, and its heights are
+    // worked out again from what is left. On Android the page asks the keyboard to shrink the
+    // layout viewport instead (interactive-widget in index.html), so the lift there is zero and
+    // the ordinary resize above does the work.
+    const vv = window.visualViewport;
+    const follow = () => {
+        const lift = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+        el.style.bottom = lift + 'px';
+        onResize();
+    };
+    vv?.addEventListener('resize', follow);
+    vv?.addEventListener('scroll', follow);
+
+    controllers.set(el, { grip, down, move, up, onResize, follow });
+    // The keyboard may already be up by the time this runs — the + raises it inside the tap,
+    // and the sheet is attached after the render that follows — so the lift is taken now rather
+    // than waited for.
+    if (vv) {
+        follow();
+    }
     setState(startState);
 }
 
 /**
- * Move the sheet to one of its heights from outside a drag — the page grows it from its peek to
- * the half once a search has something to show. Silent where the sheet was never attached.
+ * Move the sheet to one of its heights from outside a drag. Silent where the sheet was never
+ * attached.
  */
 export function snap(el, name) {
     if (!el || !controllers.has(el)) {
@@ -104,7 +153,41 @@ export function snap(el, name) {
     }
 
     el.dataset.sheet = name;
-    el.style.height = heights()[name] + 'px';
+    el.style.height = heights(el)[name] + 'px';
+}
+
+/**
+ * The search has something to show: a sheet that was only a field to type in comes up to the
+ * half so it can be seen. A sheet the reader has already sized — dragged to full, or left at the
+ * half — is theirs, and stays where they put it; a page turn is not a reason to take it back.
+ */
+export function grow(el) {
+    if (el?.dataset.sheet === 'peek') {
+        snap(el, 'default');
+    }
+}
+
+/**
+ * Start a new page of results from its first result. On a phone the results scroll inside the
+ * sheet, so that is what goes back to the top; on a wide screen they are part of the page, and
+ * the page is brought back to them only if it has been scrolled past them — results that are
+ * already in view are left alone rather than nudged.
+ */
+export function showTop(el) {
+    const found = el?.querySelector('.search__found');
+    if (!found) {
+        return;
+    }
+
+    if (controllers.has(el)) {
+        found.scrollTop = 0;
+        return;
+    }
+
+    const header = document.querySelector('header')?.getBoundingClientRect().bottom ?? 0;
+    if (found.getBoundingClientRect().top < header) {
+        found.scrollIntoView({ block: 'start' });
+    }
 }
 
 export function detach(el) {
@@ -117,8 +200,43 @@ export function detach(el) {
     c.grip.removeEventListener('pointerup', c.up);
     c.grip.removeEventListener('pointercancel', c.up);
     window.removeEventListener('resize', c.onResize);
+    window.visualViewport?.removeEventListener('resize', c.follow);
+    window.visualViewport?.removeEventListener('scroll', c.follow);
     el.style.height = '';
+    el.style.bottom = '';
     el.style.transition = '';
+    el.style.animation = '';
     delete el.dataset.sheet;
     controllers.delete(el);
+}
+
+const armed = new WeakSet();
+
+/**
+ * Makes a tap on the + open the dock with the keyboard already up.
+ *
+ * A phone raises its keyboard for a focus() only when the call is made inside the tap that
+ * asked for it. Blazor's own click handling reaches .NET asynchronously, so by the time the
+ * dock has rendered open and Home asks for focus, the tap is over and iOS declines: the dock
+ * opens, the keyboard does not, and the reader taps the field a second time. This listener sits
+ * on the button itself, ahead of Blazor's, and does the two things that have to happen inside
+ * the tap: shows the dock (the field cannot take focus while it is display: none) and focuses
+ * the field. Blazor's handler then renders the very state it finds, and nothing moves.
+ *
+ * Says whether the button is armed, so the caller can stop asking until there is a new one.
+ */
+export function armOpener(fab, el) {
+    if (!(fab instanceof Element) || !(el instanceof Element)) {
+        return false;
+    }
+
+    if (!armed.has(fab)) {
+        armed.add(fab);
+        fab.addEventListener('click', () => {
+            el.classList.add('search--open');
+            el.querySelector('.search__inputs input')?.focus({ preventScroll: true });
+        });
+    }
+
+    return true;
 }

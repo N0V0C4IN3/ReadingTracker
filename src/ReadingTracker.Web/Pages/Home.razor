@@ -403,8 +403,10 @@
 
         @if (!_searchOpen)
         {
-            @* Phone only (app.css): a round + at the bottom right, where a thumb already is. *@
-            <button type="button" class="search__fab" aria-label="Find a book" @onclick="OpenSearch">
+            @* Phone only (app.css): a round + at the bottom right, where a thumb already is. The
+               keyboard is raised by sheet.js inside the tap itself — see armOpener — and this
+               handler records that the dock is open. *@
+            <button type="button" class="search__fab" aria-label="Find a book" @ref="_fabEl" @onclick="OpenSearch">
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg>
             </button>
         }
@@ -718,35 +720,70 @@
     /// </summary>
     private bool _searchOpen;
     private bool _focusQuery;
+
+    /// <summary>
+    /// Set when a page of results has just come back, so the render that shows it is followed by
+    /// a scroll to its top. A page read from part-way down is a page the reader has to scroll
+    /// up through to find the start of.
+    /// </summary>
+    private bool _showResultsTop;
     private bool _sheetAttached;
     private ElementReference _queryBox;
     private ElementReference _dockEl;
+    private ElementReference _fabEl;
+
+    /// <summary>Whether the + now on screen has its in-tap opener (sheet.js armOpener) attached.</summary>
+    private bool _fabArmed;
     private IJSObjectReference? _sheet;
 
     private void OpenSearch()
     {
         _searchOpen = true;
-        // The dock opens to be typed in: the cursor goes in the box, and the keyboard comes up
-        // with it, without a second tap. Done after the render, once the box exists.
+        // The dock opens to be typed in: the cursor goes in the box. On a phone sheet.js has
+        // already put it there, inside the tap, which is the only place a phone will raise its
+        // keyboard from; this is for everywhere else, done after the render, once the box exists.
         _focusQuery = true;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        // Fetched now, while nothing is waiting on it, rather than at the first tap on +. Loaded
+        // on demand it arrived a beat after the dock had already been painted, and the dock spent
+        // that beat at whatever height it had before the script took it over.
+        if (firstRender)
+        {
+            _sheet = await JS.InvokeAsync<IJSObjectReference>("import", "./js/sheet.js");
+        }
+
         if (_focusQuery)
         {
             _focusQuery = false;
             await _queryBox.FocusAsync();
         }
 
+        // Whenever the + is on screen it is armed to open the dock inside the tap. It is a fresh
+        // element each time the dock closes, so this is asked again after each close — and until
+        // the button is actually in the page, since the first renders may be the sign-in screen.
+        if (!_searchOpen && !_fabArmed && _sheet is not null)
+        {
+            _fabArmed = await _sheet.InvokeAsync<bool>("armOpener", _fabEl, _dockEl);
+        }
+
+        if (_showResultsTop && _sheet is not null)
+        {
+            _showResultsTop = false;
+            await _sheet.InvokeVoidAsync("showTop", _dockEl);
+        }
+
         // The dock is a draggable bottom sheet on a phone; sheet.js owns its height while it is
         // open. A no-op on a wide screen (no handle, no pointer drag), so it is safe to attach
         // whenever the dock opens and detach when it closes.
-        if (_searchOpen && !_sheetAttached)
+        if (_searchOpen && !_sheetAttached && _sheet is not null)
         {
-            _sheet ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/sheet.js");
             // Opened at its peek: the dock is a field to type in until there is something to
-            // show, and half a screen of empty sheet is not that. It grows when the library answers.
+            // show, and half a screen of empty sheet is not that. It grows when the library
+            // answers. The stylesheet has already painted it at the peek, so this is the script
+            // agreeing with what is on screen rather than changing it.
             await _sheet.InvokeVoidAsync("attach", _dockEl, "peek");
             _sheetAttached = true;
         }
@@ -760,6 +797,7 @@
         _searchProblem = null;
         _addProblem = null;
         _searchOpen = false;
+        _fabArmed = false;
         StopAddingByHand();
 
         if (_sheetAttached && _sheet is not null)
@@ -823,11 +861,17 @@
             _searching = false;
         }
 
+        // A page that came back is read from its first result. A problem is not a page: there
+        // is nothing to start from the top of, and the notice sits where the reader already is.
+        _showResultsTop = _searchProblem is null;
+
         // The phone's dock has been a field at the foot of the screen until now; with an answer to
-        // show it comes up to half the screen, which the reader can then drag either way.
+        // show — results, or a notice saying why there are none — it comes up to half the screen,
+        // which the reader can then drag either way. Only from the peek: a sheet the reader has
+        // already sized is left as they left it, page after page.
         if (_sheetAttached && _sheet is not null)
         {
-            await _sheet.InvokeVoidAsync("snap", _dockEl, "default");
+            await _sheet.InvokeVoidAsync("grow", _dockEl);
         }
     }
 
