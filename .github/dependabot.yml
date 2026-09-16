@@ -1,0 +1,46 @@
+# Updates arrive as pull requests rather than being noticed when something breaks. Three
+# ecosystems, because the deployed system is built from three kinds of thing that each get
+# security advisories: NuGet packages, the .NET base images in the Dockerfiles, and the Actions
+# the workflows run. Weekly, on one day, with a small cap on open PRs, so a quiet week is quiet
+# and a busy one does not bury the repository.
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for the framework rather than a dozen that must be merged together anyway: the
+      # ASP.NET Core and EF Core packages move in lock-step and disagree with each other otherwise.
+      dotnet:
+        patterns:
+          - "Microsoft.AspNetCore.*"
+          - "Microsoft.EntityFrameworkCore.*"
+          - "Microsoft.Extensions.*"
+          - "Npgsql.EntityFrameworkCore.*"
+      testing:
+        patterns:
+          - "xunit*"
+          - "Microsoft.NET.Test.Sdk"
+          - "coverlet.*"
+          - "Testcontainers.*"
+
+  - package-ecosystem: docker
+    directories:
+      - /src/ReadingTracker.Catalog
+      - /src/ReadingTracker.Library
+      - /src/ReadingTracker.Gateway
+      - /src/ReadingTracker.Web
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 2
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 2

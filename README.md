@@ -149,6 +149,16 @@ service for its own assemblies nor disturbs your incremental build state.
 CI still runs build and test on every PR regardless — the hook is the fast local echo of it, not a
 replacement.
 
+### A restore that fails on a vulnerable package
+
+`Directory.Build.props` turns NuGet's audit on for every project and makes a high or critical
+advisory — on a package referenced directly or pulled in transitively — a restore *error*
+(`NU1903`, `NU1904`). So a restore can fail, locally or in CI, on a commit that changed nothing:
+an advisory was published against something already in use. That is the gate doing its job. The
+fix is to move to the patched version (`dotnet list package --vulnerable --include-transitive`
+names it), and Dependabot usually has the pull request for it open already — it watches the NuGet
+packages, the Dockerfiles' base images and the workflows' Actions weekly.
+
 ## Design documentation
 
 - [`CONTEXT.md`](./CONTEXT.md) — the domain glossary. Worth reading first: it defines `Book`, `LibraryEntry`, `ReadingSession`, `ReadingStatus` and `TrackingMethod`, and is deliberately free of implementation detail.
