@@ -733,6 +733,14 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        // Fetched now, while nothing is waiting on it, rather than at the first tap on +. Loaded
+        // on demand it arrived a beat after the dock had already been painted, and the dock spent
+        // that beat at whatever height it had before the script took it over.
+        if (firstRender)
+        {
+            _sheet = await JS.InvokeAsync<IJSObjectReference>("import", "./js/sheet.js");
+        }
+
         if (_focusQuery)
         {
             _focusQuery = false;
@@ -742,11 +750,12 @@
         // The dock is a draggable bottom sheet on a phone; sheet.js owns its height while it is
         // open. A no-op on a wide screen (no handle, no pointer drag), so it is safe to attach
         // whenever the dock opens and detach when it closes.
-        if (_searchOpen && !_sheetAttached)
+        if (_searchOpen && !_sheetAttached && _sheet is not null)
         {
-            _sheet ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/sheet.js");
             // Opened at its peek: the dock is a field to type in until there is something to
-            // show, and half a screen of empty sheet is not that. It grows when the library answers.
+            // show, and half a screen of empty sheet is not that. It grows when the library
+            // answers. The stylesheet has already painted it at the peek, so this is the script
+            // agreeing with what is on screen rather than changing it.
             await _sheet.InvokeVoidAsync("attach", _dockEl, "peek");
             _sheetAttached = true;
         }

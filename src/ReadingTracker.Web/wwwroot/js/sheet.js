@@ -1,24 +1,25 @@
 // The phone's search dock as a bottom sheet you can drag between three heights: a peek (just the
 // field and its handle), a default half, and nearly full. Blazor owns whether the dock is open;
 // this owns only how tall it is while it is, so a drag never round-trips to .NET — the height is
-// written straight to the element on every pointer move and snapped on release.
+// written straight to the element on every frame of a drag and snapped on release.
 //
 // Everything here is a no-op where it cannot apply: called on a wide screen, or where pointer
 // events are missing, it attaches nothing and the dock keeps whatever height the stylesheet gave
 // it. The sheet is only ever this on a phone.
 
-const SNAP = { peek: 0, default: 0.55, full: 0.92 };
+const SNAP = { default: 0.55, full: 0.92 };
 const controllers = new WeakMap();
 
-function heights() {
+function heights(el) {
     const h = window.innerHeight;
-    // Peek is the field plus its handle, not a fraction of the screen: it has to be exactly tall
-    // enough to type in, whatever the screen.
-    return { peek: 132, default: Math.round(h * SNAP.default), full: Math.round(h * SNAP.full) };
+    // The peek is the stylesheet's: it is also the height the dock first paints at, before this
+    // script has said anything, and the two must agree or the dock jumps on opening.
+    const peek = parseFloat(getComputedStyle(el).getPropertyValue('--sheet-peek')) || 132;
+    return { peek, default: Math.round(h * SNAP.default), full: Math.round(h * SNAP.full) };
 }
 
-function nearest(value) {
-    const h = heights();
+function nearest(el, value) {
+    const h = heights(el);
     return Object.entries(h).reduce((best, [name, px]) =>
         Math.abs(px - value) < Math.abs(h[best] - value) ? name : best, 'default');
 }
@@ -29,17 +30,25 @@ export function attach(el, startState = 'default') {
     }
 
     const grip = el.querySelector('.search__grip');
-    const scroll = el.querySelector('.search__found');
     if (!grip) {
         return;
     }
 
     const setState = name => {
         el.dataset.sheet = name;
-        el.style.height = heights()[name] + 'px';
+        el.style.height = heights(el)[name] + 'px';
     };
 
     let dragging = false, startY = 0, startH = 0, moved = false;
+    // The height the last pointer move asked for, and the frame that will write it. Pointer
+    // events can arrive faster than the screen repaints; writing the height on each one is
+    // layout work nobody sees. One write per frame is what tracks a finger.
+    let wanted = 0, frame = 0;
+
+    const write = () => {
+        frame = 0;
+        el.style.height = wanted + 'px';
+    };
 
     const down = e => {
         dragging = true;
@@ -47,6 +56,9 @@ export function attach(el, startState = 'default') {
         startY = e.clientY;
         startH = el.getBoundingClientRect().height;
         el.style.transition = 'none';
+        // The dock arrives with a short slide; a drag begun inside it would be fighting that
+        // slide for the same element. The finger wins.
+        el.style.animation = 'none';
         grip.setPointerCapture(e.pointerId);
     };
 
@@ -54,12 +66,12 @@ export function attach(el, startState = 'default') {
         if (!dragging) {
             return;
         }
-        const h = heights();
-        const next = Math.min(h.full, Math.max(h.peek, startH + (startY - e.clientY)));
-        if (Math.abs(next - startH) > 3) {
+        const h = heights(el);
+        wanted = Math.min(h.full, Math.max(h.peek, startH + (startY - e.clientY)));
+        if (Math.abs(wanted - startH) > 3) {
             moved = true;
         }
-        el.style.height = next + 'px';
+        frame ||= requestAnimationFrame(write);
     };
 
     const up = () => {
@@ -67,11 +79,15 @@ export function attach(el, startState = 'default') {
             return;
         }
         dragging = false;
+        if (frame) {
+            cancelAnimationFrame(frame);
+            write();
+        }
         el.style.transition = '';
         // A tap on the handle with no drag toggles between peek and default, so the sheet can be
         // got out of the way and back without a deliberate drag.
         const state = moved
-            ? nearest(el.getBoundingClientRect().height)
+            ? nearest(el, el.getBoundingClientRect().height)
             : (el.dataset.sheet === 'peek' ? 'default' : 'peek');
         setState(state);
     };
@@ -85,12 +101,12 @@ export function attach(el, startState = 'default') {
     // them, not resize the sheet, so the handle is the only drag surface and this is left alone.
     const onResize = () => {
         if (el.dataset.sheet) {
-            el.style.height = heights()[el.dataset.sheet] + 'px';
+            el.style.height = heights(el)[el.dataset.sheet] + 'px';
         }
     };
     window.addEventListener('resize', onResize);
 
-    controllers.set(el, { grip, down, move, up, onResize, scroll });
+    controllers.set(el, { grip, down, move, up, onResize });
     setState(startState);
 }
 
@@ -104,7 +120,7 @@ export function snap(el, name) {
     }
 
     el.dataset.sheet = name;
-    el.style.height = heights()[name] + 'px';
+    el.style.height = heights(el)[name] + 'px';
 }
 
 export function detach(el) {
@@ -119,6 +135,7 @@ export function detach(el) {
     window.removeEventListener('resize', c.onResize);
     el.style.height = '';
     el.style.transition = '';
+    el.style.animation = '';
     delete el.dataset.sheet;
     controllers.delete(el);
 }

@@ -2290,6 +2290,10 @@ button.danger:hover:not(:disabled) {
         heading goes; the placeholder says what the box is for.
     */
     .search {
+        /* The peek: the grip and the field, and nothing else — exactly tall enough to type in,
+           whatever the screen. sheet.js reads this rather than carrying its own copy. */
+        --sheet-peek: 132px;
+
         position: fixed;
         left: 0;
         right: 0;
@@ -2297,9 +2301,12 @@ button.danger:hover:not(:disabled) {
         z-index: 10;
         display: flex;
         flex-direction: column;
-        /* The first height before sheet.js takes over; after that the drag owns it. overflow is
-           hidden so a peeked sheet clips its results rather than spilling them up the screen. */
-        height: 55vh;
+        /* The dock opens at its peek, and it is the stylesheet that puts it there: the sheet
+           script sets the same height a beat later, so the first paint and the first frame the
+           script owns are the same frame. (It used to open at half and drop to the peek once the
+           script arrived.) overflow is hidden so a peeked sheet clips its results rather than
+           spilling them up the screen. */
+        height: var(--sheet-peek);
         overflow: hidden;
         padding: 0 1rem calc(0.9rem + env(safe-area-inset-bottom));
         border-width: 1px 0 0;
