@@ -10,12 +10,23 @@
 const SNAP = { default: 0.55, full: 0.92 };
 const controllers = new WeakMap();
 
+/** How much of the screen can actually be seen: with the keyboard up, that is not the window. */
+function visible() {
+    return window.visualViewport?.height ?? window.innerHeight;
+}
+
 function heights(el) {
-    const h = window.innerHeight;
+    const h = visible();
     // The peek is the stylesheet's: it is also the height the dock first paints at, before this
     // script has said anything, and the two must agree or the dock jumps on opening.
     const peek = parseFloat(getComputedStyle(el).getPropertyValue('--sheet-peek')) || 132;
-    return { peek, default: Math.round(h * SNAP.default), full: Math.round(h * SNAP.full) };
+    // Fractions of what is visible, never less than the peek: a keyboard can take more than half
+    // the screen, and the half of what is left may be shorter than the field itself.
+    return {
+        peek,
+        default: Math.max(peek, Math.round(h * SNAP.default)),
+        full: Math.max(peek, Math.round(h * SNAP.full)),
+    };
 }
 
 function nearest(el, value) {
@@ -106,7 +117,29 @@ export function attach(el, startState = 'default') {
     };
     window.addEventListener('resize', onResize);
 
-    controllers.set(el, { grip, down, move, up, onResize });
+    // The dock is pinned to the foot of the layout viewport, and on iOS the keyboard comes up
+    // over that viewport without shrinking it — so a dock pinned to its foot is pinned under
+    // the keyboard, field and all. The visual viewport is the part that can be seen; the dock
+    // is lifted by however much of the layout viewport lies below it, and its heights are
+    // worked out again from what is left. On Android the page asks the keyboard to shrink the
+    // layout viewport instead (interactive-widget in index.html), so the lift there is zero and
+    // the ordinary resize above does the work.
+    const vv = window.visualViewport;
+    const follow = () => {
+        const lift = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+        el.style.bottom = lift + 'px';
+        onResize();
+    };
+    vv?.addEventListener('resize', follow);
+    vv?.addEventListener('scroll', follow);
+
+    controllers.set(el, { grip, down, move, up, onResize, follow });
+    // The keyboard may already be up by the time this runs — the + raises it inside the tap,
+    // and the sheet is attached after the render that follows — so the lift is taken now rather
+    // than waited for.
+    if (vv) {
+        follow();
+    }
     setState(startState);
 }
 
@@ -167,9 +200,43 @@ export function detach(el) {
     c.grip.removeEventListener('pointerup', c.up);
     c.grip.removeEventListener('pointercancel', c.up);
     window.removeEventListener('resize', c.onResize);
+    window.visualViewport?.removeEventListener('resize', c.follow);
+    window.visualViewport?.removeEventListener('scroll', c.follow);
     el.style.height = '';
+    el.style.bottom = '';
     el.style.transition = '';
     el.style.animation = '';
     delete el.dataset.sheet;
     controllers.delete(el);
+}
+
+const armed = new WeakSet();
+
+/**
+ * Makes a tap on the + open the dock with the keyboard already up.
+ *
+ * A phone raises its keyboard for a focus() only when the call is made inside the tap that
+ * asked for it. Blazor's own click handling reaches .NET asynchronously, so by the time the
+ * dock has rendered open and Home asks for focus, the tap is over and iOS declines: the dock
+ * opens, the keyboard does not, and the reader taps the field a second time. This listener sits
+ * on the button itself, ahead of Blazor's, and does the two things that have to happen inside
+ * the tap: shows the dock (the field cannot take focus while it is display: none) and focuses
+ * the field. Blazor's handler then renders the very state it finds, and nothing moves.
+ *
+ * Says whether the button is armed, so the caller can stop asking until there is a new one.
+ */
+export function armOpener(fab, el) {
+    if (!(fab instanceof Element) || !(el instanceof Element)) {
+        return false;
+    }
+
+    if (!armed.has(fab)) {
+        armed.add(fab);
+        fab.addEventListener('click', () => {
+            el.classList.add('search--open');
+            el.querySelector('.search__inputs input')?.focus({ preventScroll: true });
+        });
+    }
+
+    return true;
 }

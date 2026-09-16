@@ -2322,7 +2322,10 @@ button.danger:hover:not(:disabled) {
         -webkit-backdrop-filter: var(--blur);
         backdrop-filter: var(--blur);
         box-shadow: 0 -10px 30px rgb(0 0 0 / 12%);
-        transition: height 260ms var(--ease-out);
+        /* bottom is how far the keyboard has lifted it (sheet.js); it eases the way height does. */
+        transition:
+            height 260ms var(--ease-out),
+            bottom 260ms var(--ease-out);
     }
 
     /* The handle you drag the sheet by: a short bar at its top, and the only surface that resizes

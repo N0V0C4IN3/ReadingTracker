@@ -403,8 +403,10 @@
 
         @if (!_searchOpen)
         {
-            @* Phone only (app.css): a round + at the bottom right, where a thumb already is. *@
-            <button type="button" class="search__fab" aria-label="Find a book" @onclick="OpenSearch">
+            @* Phone only (app.css): a round + at the bottom right, where a thumb already is. The
+               keyboard is raised by sheet.js inside the tap itself — see armOpener — and this
+               handler records that the dock is open. *@
+            <button type="button" class="search__fab" aria-label="Find a book" @ref="_fabEl" @onclick="OpenSearch">
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg>
             </button>
         }
@@ -728,13 +730,18 @@
     private bool _sheetAttached;
     private ElementReference _queryBox;
     private ElementReference _dockEl;
+    private ElementReference _fabEl;
+
+    /// <summary>Whether the + now on screen has its in-tap opener (sheet.js armOpener) attached.</summary>
+    private bool _fabArmed;
     private IJSObjectReference? _sheet;
 
     private void OpenSearch()
     {
         _searchOpen = true;
-        // The dock opens to be typed in: the cursor goes in the box, and the keyboard comes up
-        // with it, without a second tap. Done after the render, once the box exists.
+        // The dock opens to be typed in: the cursor goes in the box. On a phone sheet.js has
+        // already put it there, inside the tap, which is the only place a phone will raise its
+        // keyboard from; this is for everywhere else, done after the render, once the box exists.
         _focusQuery = true;
     }
 
@@ -752,6 +759,14 @@
         {
             _focusQuery = false;
             await _queryBox.FocusAsync();
+        }
+
+        // Whenever the + is on screen it is armed to open the dock inside the tap. It is a fresh
+        // element each time the dock closes, so this is asked again after each close — and until
+        // the button is actually in the page, since the first renders may be the sign-in screen.
+        if (!_searchOpen && !_fabArmed && _sheet is not null)
+        {
+            _fabArmed = await _sheet.InvokeAsync<bool>("armOpener", _fabEl, _dockEl);
         }
 
         if (_showResultsTop && _sheet is not null)
@@ -782,6 +797,7 @@
         _searchProblem = null;
         _addProblem = null;
         _searchOpen = false;
+        _fabArmed = false;
         StopAddingByHand();
 
         if (_sheetAttached && _sheet is not null)

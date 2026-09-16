@@ -3,7 +3,10 @@
 
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- interactive-widget: when the keyboard comes up, shrink the page rather than lie over it,
+         so anything pinned to the page's foot (the search dock) is pinned above the keyboard.
+         Android Chrome honours this; iOS ignores it, and js/sheet.js covers that case itself. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
     <title>ReadingTracker</title>
     <base href="/" />
 
