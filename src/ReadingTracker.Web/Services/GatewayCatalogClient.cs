@@ -47,6 +47,9 @@ public enum SearchUnavailable
     /// boxes are capped to the same length, so a reader only sees this by going around them.
     /// </summary>
     Refused,
+
+    /// <summary>The Gateway said 429: this reader has searched enough for the moment.</summary>
+    TooManyRequests,
 }
 
 /// <summary>
@@ -67,6 +70,9 @@ public enum BookCreationProblem
 
     /// <summary>A Book already exists for this ISBN. There is one Book per ISBN, catalog-wide.</summary>
     IsbnAlreadyInCatalog,
+
+    /// <summary>The Gateway said 429: this reader has added enough by hand for the moment.</summary>
+    TooManyRequests,
 }
 
 /// <summary>
@@ -139,6 +145,11 @@ public sealed class GatewayCatalogClient(HttpClient httpClient)
             return (null, SearchUnavailable.Refused);
         }
 
+        if (response.StatusCode is HttpStatusCode.TooManyRequests)
+        {
+            return (null, SearchUnavailable.TooManyRequests);
+        }
+
         response.EnsureSuccessStatusCode();
 
         var body = await response.Content.ReadFromJsonAsync<SearchResponseBody>(cancellationToken);
@@ -171,6 +182,11 @@ public sealed class GatewayCatalogClient(HttpClient httpClient)
         if (response.StatusCode is HttpStatusCode.Conflict)
         {
             return BookCreation.Failed(BookCreationProblem.IsbnAlreadyInCatalog);
+        }
+
+        if (response.StatusCode is HttpStatusCode.TooManyRequests)
+        {
+            return BookCreation.Failed(BookCreationProblem.TooManyRequests);
         }
 
         if (response.StatusCode is HttpStatusCode.BadRequest)

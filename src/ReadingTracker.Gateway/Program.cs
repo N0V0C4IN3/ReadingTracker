@@ -71,6 +71,11 @@ var devSigningKey = devSignInEnabled
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy => policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod()));
 
+// How fast any one reader may go. The defaults are for people; configuration can lower them
+// for a test, or raise them if a real reader ever meets one.
+builder.Services.AddReaderPace(
+    builder.Configuration.GetSection(RateLimits.SectionName).Get<RateLimits>() ?? new RateLimits());
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -161,6 +166,9 @@ if (devSignInEnabled)
 
 app.UseCors();
 app.UseAuthentication();
+// After authentication, so a reader is counted as themselves; before authorization, so a caller
+// with no reader is counted by address before being turned away.
+app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapReverseProxy(proxy =>

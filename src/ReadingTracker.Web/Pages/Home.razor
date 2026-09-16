@@ -277,6 +277,10 @@
             {
                 <p class="notice">That search could not be run. Try fewer words, or an earlier page.</p>
             }
+            else if (_searchProblem == SearchUnavailable.TooManyRequests)
+            {
+                <p class="notice">You are searching faster than the library can keep up with. Give it a minute.</p>
+            }
             else if (Searching && !_addingByHand)
             {
                 @* Typing has only ever narrowed the shelf; the library is a request, and this is
@@ -359,6 +363,10 @@
                     else if (_creation?.Problem == BookCreationProblem.GatewayUnreachable)
                     {
                         <p class="notice notice--bad">ReadingTracker could not be reached just now. Try again shortly.</p>
+                    }
+                    else if (_creation?.Problem == BookCreationProblem.TooManyRequests)
+                    {
+                        <p class="notice notice--bad">That is a lot of books in a short time. Give it a minute, then add the next.</p>
                     }
 
                     <div class="session-form__actions">
