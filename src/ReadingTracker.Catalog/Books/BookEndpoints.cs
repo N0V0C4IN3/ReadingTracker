@@ -10,6 +10,22 @@ public static class BookEndpoints
     /// </summary>
     private const int MaxBooksPerLookup = 200;
 
+    /// <summary>
+    /// What a Book typed in by hand may be made of. Anyone signed in can add one, and one with
+    /// an ISBN is shown to every reader who searches for it, so these are the Catalog's limits
+    /// rather than the form's. Generous for any real book; there for the ones that are not.
+    /// </summary>
+    private const int MaxTitleLength = 200;
+
+    private const int MaxAuthorLength = 200;
+
+    private const int MaxAuthors = 10;
+
+    private const int MaxCoverUrlLength = 2000;
+
+    /// <summary>Longer than any book in print; a page count past this is not a page count.</summary>
+    private const int MaxTotalPages = 20_000;
+
     public static void MapBookEndpoints(this IEndpointRouteBuilder endpoints)
     {
         // Lets a caller render a list of Books without one request per Book.
@@ -70,9 +86,9 @@ public static class BookEndpoints
                 isbn = typedIsbn;
             }
 
-            if (PagingErrors(page, pageSize) is { Count: > 0 } pagingErrors)
+            if (SearchErrors(q, isbn, title, author, page, pageSize) is { Count: > 0 } searchErrors)
             {
-                return Results.ValidationProblem(pagingErrors);
+                return Results.ValidationProblem(searchErrors);
             }
 
             var window = new SearchWindow(page ?? 1, pageSize ?? SearchWindow.DefaultPageSize);
@@ -113,10 +129,12 @@ public static class BookEndpoints
                 return Results.ValidationProblem(errors);
             }
 
+            // The ISBN is stored the way an ISBN search looks one up: bare digits, no hyphens.
+            // Validate has already established that it has that shape.
             var book = await catalog.AddByHandAsync(
                 request.Title!,
                 request.Authors!,
-                string.IsNullOrWhiteSpace(request.Isbn) ? null : request.Isbn.Trim(),
+                Isbn.TryNormalise(request.Isbn, out var isbn) ? isbn : null,
                 string.IsNullOrWhiteSpace(request.CoverUrl) ? null : request.CoverUrl.Trim(),
                 request.TotalPages,
                 cancellationToken);
@@ -143,17 +161,48 @@ public static class BookEndpoints
     }
 
     /// <summary>
-    /// A page that cannot exist is a mistake in the request, not an empty result: answering it
-    /// with no matches would read as "there are no more books" rather than "you asked for
-    /// page zero".
+    /// A search that cannot be run is a mistake in the request, not an empty result: answering
+    /// a page that cannot exist with no matches would read as "there are no more books" rather
+    /// than "you asked for page zero". Refused before any provider is asked.
     /// </summary>
-    private static Dictionary<string, string[]> PagingErrors(int? page, int? pageSize)
+    private static Dictionary<string, string[]> SearchErrors(
+        string? q,
+        string? isbn,
+        string? title,
+        string? author,
+        int? page,
+        int? pageSize)
     {
         var errors = new Dictionary<string, string[]>();
+        var tooLong = $"A search can be at most {SearchWindow.MaxQueryLength} characters.";
+
+        if (q is { } words && words.Trim().Length > SearchWindow.MaxQueryLength)
+        {
+            errors[nameof(q)] = [tooLong];
+        }
+
+        if (isbn is { } number && number.Trim().Length > SearchWindow.MaxQueryLength)
+        {
+            errors[nameof(isbn)] = [tooLong];
+        }
+
+        if (title is { } t && t.Trim().Length > SearchWindow.MaxQueryLength)
+        {
+            errors[nameof(title)] = [tooLong];
+        }
+
+        if (author is { } a && a.Trim().Length > SearchWindow.MaxQueryLength)
+        {
+            errors[nameof(author)] = [tooLong];
+        }
 
         if (page is < 1)
         {
             errors[nameof(page)] = ["Pages start at 1."];
+        }
+        else if (page is > SearchWindow.MaxPage)
+        {
+            errors[nameof(page)] = [$"There is nothing past page {SearchWindow.MaxPage}."];
         }
 
         if (pageSize is < 1 or > SearchWindow.MaxPageSize)
@@ -166,7 +215,8 @@ public static class BookEndpoints
 
     /// <summary>
     /// A Book's details as typed in by hand. Title and author are the minimum that makes a
-    /// Book meaningful; everything else is what the reader happens to know.
+    /// Book meaningful; everything else is what the reader happens to know — within the limits
+    /// above, each refusal naming the field it is about.
     /// </summary>
     private static Dictionary<string, string[]> Validate(NewBookRequest request)
     {
@@ -176,16 +226,55 @@ public static class BookEndpoints
         {
             errors[nameof(request.Title)] = ["A title is required."];
         }
+        else if (request.Title.Trim().Length > MaxTitleLength)
+        {
+            errors[nameof(request.Title)] = [$"A title can be at most {MaxTitleLength} characters."];
+        }
 
         if (request.Authors is null || request.Authors.Count == 0 ||
             request.Authors.All(string.IsNullOrWhiteSpace))
         {
             errors[nameof(request.Authors)] = ["At least one author is required."];
         }
+        else if (request.Authors.Count > MaxAuthors)
+        {
+            errors[nameof(request.Authors)] = [$"A book can have at most {MaxAuthors} authors here."];
+        }
+        else if (request.Authors.Any(author => author is { } named && named.Trim().Length > MaxAuthorLength))
+        {
+            errors[nameof(request.Authors)] = [$"An author's name can be at most {MaxAuthorLength} characters."];
+        }
+
+        // Optional, but not free-form: an ISBN that is not shaped like one would never be found
+        // by an ISBN search, and would take that ISBN's one slot in the catalog for nothing.
+        if (!string.IsNullOrWhiteSpace(request.Isbn) && !Isbn.TryNormalise(request.Isbn, out _))
+        {
+            errors[nameof(request.Isbn)] = ["An ISBN is ten or thirteen digits, with or without hyphens."];
+        }
+
+        // Every reader's browser will load this as an image, so it has to be an address a
+        // browser can be sent to: absolute, and https, since the site is.
+        if (!string.IsNullOrWhiteSpace(request.CoverUrl))
+        {
+            var cover = request.CoverUrl.Trim();
+
+            if (cover.Length > MaxCoverUrlLength)
+            {
+                errors[nameof(request.CoverUrl)] = [$"A cover URL can be at most {MaxCoverUrlLength} characters."];
+            }
+            else if (!Uri.TryCreate(cover, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+            {
+                errors[nameof(request.CoverUrl)] = ["A cover URL must be a full https:// address."];
+            }
+        }
 
         if (request.TotalPages is <= 0)
         {
             errors[nameof(request.TotalPages)] = ["A page count must be greater than zero."];
+        }
+        else if (request.TotalPages is > MaxTotalPages)
+        {
+            errors[nameof(request.TotalPages)] = [$"A page count can be at most {MaxTotalPages}."];
         }
 
         return errors;

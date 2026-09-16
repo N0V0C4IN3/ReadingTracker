@@ -64,6 +64,18 @@ public sealed class GatewayCatalogClientTests
     }
 
     [Fact]
+    public async Task Reports_when_catalog_refused_to_run_the_search()
+    {
+        var (client, gateway) = CreateClient();
+        gateway.Respond = _ => new HttpResponseMessage(HttpStatusCode.BadRequest);
+
+        var (page, problem) = await client.SearchAsync(new string('q', 500), page: 1, CancellationToken.None);
+
+        Assert.Null(page);
+        Assert.Equal(SearchUnavailable.Refused, problem);
+    }
+
+    [Fact]
     public async Task Reports_when_the_session_has_ended()
     {
         var (client, gateway) = CreateClient();

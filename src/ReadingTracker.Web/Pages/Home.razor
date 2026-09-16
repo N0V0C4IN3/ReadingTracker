@@ -54,7 +54,7 @@
             <div class="search-row">
                 <label class="search__field">
                     <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
-                    <input value="@_query" @oninput="OnQueryInput" placeholder="Find a book — on your shelf, or in the library" aria-label="Find a book" @onkeydown="SearchOnEnterAsync" />
+                    <input value="@_query" @oninput="OnQueryInput" maxlength="@MaxQueryLength" placeholder="Find a book — on your shelf, or in the library" aria-label="Find a book" @onkeydown="SearchOnEnterAsync" />
                     @if (_query.Length > 0)
                     {
                         <button type="button" class="search__clear" aria-label="Clear search" @onclick="ClearSearch">
@@ -273,6 +273,10 @@
             {
                 <p class="notice">ReadingTracker could not be reached just now. Try again shortly.</p>
             }
+            else if (_searchProblem == SearchUnavailable.Refused)
+            {
+                <p class="notice">That search could not be run. Try fewer words, or an earlier page.</p>
+            }
             else if (Searching && !_addingByHand)
             {
                 @* Typing has only ever narrowed the shelf; the library is a request, and this is
@@ -387,7 +391,7 @@
             <div class="search__inputs">
                 <label class="search__field">
                     <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
-                    <input @ref="_queryBox" value="@_query" @oninput="OnQueryInput" placeholder="Find a book" aria-label="Find a book" @onkeydown="SearchOnEnterAsync" />
+                    <input @ref="_queryBox" value="@_query" @oninput="OnQueryInput" maxlength="@MaxQueryLength" placeholder="Find a book" aria-label="Find a book" @onkeydown="SearchOnEnterAsync" />
                     @if (_query.Length > 0)
                     {
                         <button type="button" class="search__clear" aria-label="Clear search" @onclick="ClearSearch">
@@ -597,6 +601,12 @@
     }
 
     private string _query = "";
+
+    /// <summary>
+    /// The most Catalog will search for, so the box stops where Catalog would refuse rather
+    /// than letting a reader type past it and be told afterwards.
+    /// </summary>
+    private const int MaxQueryLength = 200;
 
     /// <summary>
     /// What was actually searched for, which is not the same thing as what is in the box now.

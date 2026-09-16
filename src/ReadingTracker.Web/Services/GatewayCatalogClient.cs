@@ -41,6 +41,12 @@ public enum SearchUnavailable
 
     /// <summary>The Gateway itself could not be reached — a network failure, not a refusal.</summary>
     GatewayUnreachable,
+
+    /// <summary>
+    /// Catalog read the search and would not run it: too long, or a page past its last. The
+    /// boxes are capped to the same length, so a reader only sees this by going around them.
+    /// </summary>
+    Refused,
 }
 
 /// <summary>
@@ -126,6 +132,11 @@ public sealed class GatewayCatalogClient(HttpClient httpClient)
         if (response.StatusCode is HttpStatusCode.ServiceUnavailable)
         {
             return (null, SearchUnavailable.ProvidersUnavailable);
+        }
+
+        if (response.StatusCode is HttpStatusCode.BadRequest)
+        {
+            return (null, SearchUnavailable.Refused);
         }
 
         response.EnsureSuccessStatusCode();
