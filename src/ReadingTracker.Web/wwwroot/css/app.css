@@ -2324,9 +2324,28 @@ button.danger:hover:not(:disabled) {
         margin: 0;
         padding: 0;
         background: transparent;
-        border-radius: 0;
+        /* Only the keyboard focus ring ever draws this box, and a pill wants a round one. */
+        border-radius: 999px;
         cursor: grab;
         touch-action: none;
+        transition: none;
+    }
+
+    /*
+        It is a button, so every rule written for buttons reaches it: the hover fill, the pressed
+        squash, the fill a touch screen leaves behind after a tap. All of them turn the pill into
+        a lozenge the moment a finger lands on it. The pill is the whole of what a reader sees
+        of this control, so under a finger it looks exactly as it does at rest. The focus ring
+        stays, for whoever reaches it by keyboard: focus-visible is not set by a tap.
+    */
+    .search__grip:hover:not(:disabled),
+    .search__grip:active:not(:disabled) {
+        background: transparent;
+        transform: none;
+    }
+
+    .search__grip:active:not(:disabled) {
+        cursor: grabbing;
     }
 
     .search__grip::before {
