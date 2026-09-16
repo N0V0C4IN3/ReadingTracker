@@ -110,36 +110,40 @@ export function attach(el, startState = 'default') {
 
     // The scroll area and the drag must not fight: a drag that starts on the results should scroll
     // them, not resize the sheet, so the handle is the only drag surface and this is left alone.
-    const onResize = () => {
-        if (el.dataset.sheet) {
-            el.style.height = heights(el)[el.dataset.sheet] + 'px';
-        }
-    };
-    window.addEventListener('resize', onResize);
-
     // The dock is pinned to the foot of the layout viewport, and on iOS the keyboard comes up
     // over that viewport without shrinking it — so a dock pinned to its foot is pinned under
     // the keyboard, field and all. The visual viewport is the part that can be seen; the dock
     // is lifted by however much of the layout viewport lies below it, and its heights are
     // worked out again from what is left. On Android the page asks the keyboard to shrink the
-    // layout viewport instead (interactive-widget in index.html), so the lift there is zero and
-    // the ordinary resize above does the work.
+    // layout viewport instead (interactive-widget in index.html), so there the window is
+    // already the visible part and the lift is nothing.
+    //
+    // Worked out one frame after whichever event asked, never in the event itself. When the
+    // keyboard comes up the window and the visual viewport do not change in the same instant,
+    // and a lift measured between the two — the visual viewport already short, the window not
+    // yet — is a whole keyboard's worth of nothing: the dock leapt up over a page that had
+    // already made room for it, and stayed there. By the next frame both have settled.
     const vv = window.visualViewport;
+    let settling = 0;
     const follow = () => {
-        const lift = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
-        el.style.bottom = lift + 'px';
-        onResize();
+        settling ||= requestAnimationFrame(() => {
+            settling = 0;
+            const lift = vv ? Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)) : 0;
+            el.style.bottom = lift ? lift + 'px' : '';
+            if (el.dataset.sheet) {
+                el.style.height = heights(el)[el.dataset.sheet] + 'px';
+            }
+        });
     };
+    window.addEventListener('resize', follow);
     vv?.addEventListener('resize', follow);
     vv?.addEventListener('scroll', follow);
 
-    controllers.set(el, { grip, down, move, up, onResize, follow });
+    controllers.set(el, { grip, down, move, up, follow, cancel: () => cancelAnimationFrame(settling) });
     // The keyboard may already be up by the time this runs — the + raises it inside the tap,
     // and the sheet is attached after the render that follows — so the lift is taken now rather
     // than waited for.
-    if (vv) {
-        follow();
-    }
+    follow();
     setState(startState);
 }
 
@@ -199,9 +203,10 @@ export function detach(el) {
     c.grip.removeEventListener('pointermove', c.move);
     c.grip.removeEventListener('pointerup', c.up);
     c.grip.removeEventListener('pointercancel', c.up);
-    window.removeEventListener('resize', c.onResize);
+    window.removeEventListener('resize', c.follow);
     window.visualViewport?.removeEventListener('resize', c.follow);
     window.visualViewport?.removeEventListener('scroll', c.follow);
+    c.cancel();
     el.style.height = '';
     el.style.bottom = '';
     el.style.transition = '';
