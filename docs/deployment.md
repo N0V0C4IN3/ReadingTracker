@@ -45,6 +45,39 @@ localhost. Nothing secret goes in it, because nothing there can be: the file is 
 visitor. The Google client id is public by design — it identifies the application, it does not
 authenticate it.
 
+## The Content-Security-Policy, and why the workflow finishes it
+
+`wwwroot/staticwebapp.config.json` sends a Content-Security-Policy with every page. It is
+committed with two blanks — `{gateway}` and `{inline-script-hashes}` — that `deploy-web.yml` fills
+in after `dotnet publish`, because neither is known before it: the Gateway's origin is the
+deployment's, and the inline scripts' hashes change whenever the page does. Blazor writes the
+import map into `index.html` at publish time, fingerprinted, so its hash changes with every build
+that touches a framework file. The workflow hashes every inline `<script>` it finds rather than
+pinning hashes in the config, so editing one of the page's own scripts cannot silently break the
+deployed site. (A local `dotnet run` sends no policy at all; the config is Static Web Apps' alone.)
+
+What each source is for, so the next origin goes in the right place:
+
+- `script-src 'self' 'wasm-unsafe-eval' <hashes>` — the app's own scripts, the .NET runtime
+  (WebAssembly needs `wasm-unsafe-eval`), and the page's inline scripts by hash. No
+  `unsafe-inline`, no other origin.
+- `style-src 'self' 'unsafe-inline'` — components set `style` attributes (arrival delays, the
+  loading bar), which counts as inline style. Blocking that would need every one rewritten as a
+  class; inline *style* is a far smaller risk than inline script, so it is allowed.
+- `img-src 'self' https:` — book jackets come from whichever provider had the book, and from
+  hand-entered cover URLs, so any `https` origin; never `http`, never `data:`.
+- `connect-src` — the Gateway, and Google's two endpoints the sign-in library fetches
+  (discovery at `accounts.google.com`, signing keys at `www.googleapis.com`).
+- `frame-src 'self' https://accounts.google.com` — the hidden iframe that asks Google whether a
+  session already exists, which Google answers by redirecting back to this origin.
+- `frame-ancestors 'self'` — the same iframe, from the other side. `X-Frame-Options` stays for
+  browsers that only read that.
+- `upgrade-insecure-requests` — some providers still hand out `http://` jacket URLs.
+
+Adding a provider that serves covers means nothing; adding one the *browser* has to call means
+its origin in `connect-src`. `Permissions-Policy` turns off camera, microphone, geolocation and
+payment, none of which this application has any use for.
+
 ## What to create
 
 ### 1. Neon

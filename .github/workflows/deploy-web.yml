@@ -79,6 +79,43 @@ jobs:
       - name: Publish
         run: dotnet publish src/ReadingTracker.Web/ReadingTracker.Web.csproj --configuration Release --output published
 
+      # The Content-Security-Policy is committed with two blanks in it, because neither can be
+      # known until now. The Gateway's origin is the deployment's (the same variable the settings
+      # file above is written from), and the hashes are of the page's inline scripts as published:
+      # Blazor writes the import map into index.html at publish time, fingerprints and all, so its
+      # hash is different on every build that changes a framework file. Hashing every inline
+      # script here, rather than pinning hashes in the config, is what keeps an edit to one of
+      # them from silently breaking the site. See docs/deployment.md.
+      - name: Fill in the Content-Security-Policy
+        env:
+          GATEWAY: ${{ vars.WEB_GATEWAY_BASE_ADDRESS }}
+        run: |
+          hashes=$(python3 - <<'PY'
+          import re, hashlib, base64
+          html = open('published/wwwroot/index.html', encoding='utf-8').read()
+          # Every <script> with a body and no src, hashed over exactly its body: CSP checks the
+          # bytes between the tags, untrimmed.
+          inline = re.findall(r'<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>', html, re.S)
+          print(' '.join(
+              "'sha256-" + base64.b64encode(hashlib.sha256(body.encode('utf-8')).digest()).decode() + "'"
+              for body in inline))
+          PY
+          )
+          origin=$(python3 -c 'import sys; from urllib.parse import urlsplit; u = urlsplit(sys.argv[1]); print(f"{u.scheme}://{u.netloc}")' "$GATEWAY")
+
+          config=published/wwwroot/staticwebapp.config.json
+          filled=$(jq --arg hashes "$hashes" --arg origin "$origin" \
+            '.globalHeaders["Content-Security-Policy"] |= (gsub("\\{inline-script-hashes\\}"; $hashes) | gsub("\\{gateway\\}"; $origin))' \
+            "$config")
+          printf '%s\n' "$filled" > "$config"
+
+          policy=$(jq -r '.globalHeaders["Content-Security-Policy"]' "$config")
+          echo "Content-Security-Policy: $policy"
+          case "$policy" in
+            *'{'*) echo "::error::The Content-Security-Policy still has a blank in it"; exit 1 ;;
+          esac
+          [ -n "$hashes" ] || { echo "::error::No inline scripts were found to hash; index.html has changed shape"; exit 1; }
+
       # A deployed frontend that still points at localhost is the failure this whole workflow
       # exists to prevent, so it is checked rather than assumed — after the publish, in the
       # output that is actually about to be uploaded.
