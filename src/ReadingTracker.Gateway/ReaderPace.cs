@@ -12,6 +12,7 @@ namespace ReadingTracker.Gateway;
 /// </summary>
 public sealed class RateLimits
 {
+    /// <summary>The configuration section; a test lowers these, a deployment could raise them.</summary>
     public const string SectionName = "RateLimits";
 
     /// <summary>Each search reaches out to two providers and spends shared quota.</summary>
@@ -30,15 +31,21 @@ public sealed class RateLimits
     public int AnonymousRequestsPerMinute { get; set; } = 60;
 }
 
+/// <summary>
+/// The rate limiter, set up so that each reader is counted as themselves and a caller with no
+/// reader is counted by address. <see cref="RateLimits"/> says how much; this says of what.
+/// </summary>
 public static class ReaderPace
 {
     /// <summary>Named in the route configuration, so the routes say which pace applies to them.</summary>
     public const string SearchPolicy = "search";
 
+    /// <summary>The pace for adding a Book by hand — see <see cref="SearchPolicy"/>.</summary>
     public const string ByHandPolicy = "by-hand";
 
     private static readonly TimeSpan Window = TimeSpan.FromMinutes(1);
 
+    /// <summary>Registers the limiter; <c>UseRateLimiter</c> in the pipeline is what applies it.</summary>
     public static IServiceCollection AddReaderPace(this IServiceCollection services, RateLimits limits) =>
         services.AddRateLimiter(options =>
         {
@@ -62,7 +69,7 @@ public static class ReaderPace
             // of junk tokens from one place never draws on any reader's allowance.
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(http =>
                 ReaderOf(http) is { } reader
-                    ? Partition("reader:" + reader, limits.RequestsPerMinute)
+                    ? ForReader(reader, limits.RequestsPerMinute)
                     : Partition("address:" + AddressOf(http), limits.AnonymousRequestsPerMinute));
 
             options.AddPolicy(SearchPolicy, http => PerReader(http, limits.SearchesPerMinute));
@@ -76,8 +83,11 @@ public static class ReaderPace
     /// </summary>
     private static RateLimitPartition<string> PerReader(HttpContext http, int perMinute) =>
         ReaderOf(http) is { } reader
-            ? Partition("reader:" + reader, perMinute)
+            ? ForReader(reader, perMinute)
             : RateLimitPartition.GetNoLimiter("anonymous");
+
+    private static RateLimitPartition<string> ForReader(string reader, int perMinute) =>
+        Partition("reader:" + reader, perMinute);
 
     private static RateLimitPartition<string> Partition(string key, int perMinute) =>
         RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions

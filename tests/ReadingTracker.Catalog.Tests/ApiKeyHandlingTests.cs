@@ -5,8 +5,9 @@ namespace ReadingTracker.Catalog.Tests;
 /// <summary>
 /// The Google Books key is a secret, and a request URI is not a place secrets survive: it is
 /// what proxies, access logs and exception messages all quote. The key travels as a header,
-/// which none of them do. Catalog's own request logging redacts the query string, and the
-/// second test is what keeps that so.
+/// which none of them do. The framework's request logging, which Catalog runs at Information,
+/// redacts the query string on its own (.NET 10 logs "volumes?*"); the second test is what
+/// notices if a future version, or a logging change here, stops that.
 /// </summary>
 [Collection(CatalogApiCollection.Name)]
 public sealed class ApiKeyHandlingTests(CatalogApiFixture fixture)

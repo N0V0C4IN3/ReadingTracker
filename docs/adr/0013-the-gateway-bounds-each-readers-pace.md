@@ -2,7 +2,7 @@
 
 Anyone with a Google account can sign in to the deployed demo, and nothing behind the Gateway can
 tell a reader from a loop. One signed-in caller could search until the Google Books daily quota
-was spent — taking library search away from every other reader for the rest of the day — or add
+was spent — taking Catalog search away from every other reader for the rest of the day — or add
 Books by hand until the shared Catalog was full of them. Neither needs a vulnerability; both are
 the ordinary API used quickly.
 

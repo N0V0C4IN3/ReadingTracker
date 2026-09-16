@@ -174,26 +174,15 @@ public static class BookEndpoints
         int? pageSize)
     {
         var errors = new Dictionary<string, string[]>();
-        var tooLong = $"A search can be at most {SearchWindow.MaxQueryLength} characters.";
 
-        if (q is { } words && words.Trim().Length > SearchWindow.MaxQueryLength)
+        // The same line for every field a reader can type into: none is allowed to be longer
+        // than the longest thing it could name.
+        foreach (var (field, value) in new[] { (nameof(q), q), (nameof(isbn), isbn), (nameof(title), title), (nameof(author), author) })
         {
-            errors[nameof(q)] = [tooLong];
-        }
-
-        if (isbn is { } number && number.Trim().Length > SearchWindow.MaxQueryLength)
-        {
-            errors[nameof(isbn)] = [tooLong];
-        }
-
-        if (title is { } t && t.Trim().Length > SearchWindow.MaxQueryLength)
-        {
-            errors[nameof(title)] = [tooLong];
-        }
-
-        if (author is { } a && a.Trim().Length > SearchWindow.MaxQueryLength)
-        {
-            errors[nameof(author)] = [tooLong];
+            if (value is { } typed && typed.Trim().Length > SearchWindow.MaxQueryLength)
+            {
+                errors[field] = [$"A search can be at most {SearchWindow.MaxQueryLength} characters."];
+            }
         }
 
         if (page is < 1)

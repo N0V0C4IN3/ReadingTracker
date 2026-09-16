@@ -201,6 +201,7 @@ public sealed class TitleAuthorSearchTests(CatalogApiFixture fixture)
     public async Task Refuses_a_search_it_cannot_run_and_names_the_field(string field, string query)
     {
         fixture.GoogleBooks.Requests.Clear();
+        fixture.OpenLibrary.Requests.Clear();
 
         var response = await fixture.CreateClient().GetAsync($"/api/books/search?{query}");
 
@@ -208,6 +209,7 @@ public sealed class TitleAuthorSearchTests(CatalogApiFixture fixture)
         var problem = await response.Content.ReadFromJsonAsync<ValidationProblem>();
         Assert.Contains(field, problem!.Errors!.Keys);
         Assert.Empty(fixture.GoogleBooks.Requests);
+        Assert.Empty(fixture.OpenLibrary.Requests);
     }
 
     [Fact]

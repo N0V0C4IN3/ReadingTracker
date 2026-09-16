@@ -612,7 +612,8 @@
 
     /// <summary>
     /// The most Catalog will search for, so the box stops where Catalog would refuse rather
-    /// than letting a reader type past it and be told afterwards.
+    /// than letting a reader type past it and be told afterwards. KEEP IN STEP with Catalog's
+    /// SearchWindow.MaxQueryLength: this application does not reference Catalog's code.
     /// </summary>
     private const int MaxQueryLength = 200;
 

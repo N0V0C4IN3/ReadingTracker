@@ -70,8 +70,9 @@ What each source is for, so the next origin goes in the right place:
   (discovery at `accounts.google.com`, signing keys at `www.googleapis.com`).
 - `frame-src 'self' https://accounts.google.com` — the hidden iframe that asks Google whether a
   session already exists, which Google answers by redirecting back to this origin.
-- `frame-ancestors 'self'` — the same iframe, from the other side. `X-Frame-Options` stays for
-  browsers that only read that.
+- No `frame-ancestors`, on purpose: who may frame *this* site is `X-Frame-Options`' job, and it
+  is already per route — `DENY` everywhere but the sign-in callback, which the iframe above
+  needs `SAMEORIGIN` for. A CSP directive here would override that for every route at once.
 - `upgrade-insecure-requests` — some providers still hand out `http://` jacket URLs.
 
 Adding a provider that serves covers means nothing; adding one the *browser* has to call means
