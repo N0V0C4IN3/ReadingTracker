@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ReadingTracker.Catalog.Books;
 using Testcontainers.PostgreSql;
 using Testcontainers.RabbitMq;
@@ -29,6 +30,17 @@ public sealed class CatalogApiFixture : WebApplicationFactory<Program>, IAsyncLi
 
     public StubHttpMessageHandler OpenLibrary { get; } = new();
 
+    /// <summary>
+    /// The Google Books key this Catalog runs with. A secret in every way but one: a test has
+    /// to know it to prove it never shows up anywhere it should not.
+    /// </summary>
+    public const string GoogleBooksApiKey = "AIzaTestKeyThatMustNeverBeLogged";
+
+    /// <summary>Everything Catalog has logged, so a test can assert on what it never said.</summary>
+    public IReadOnlyList<string> Logs => _logs.Lines;
+
+    private readonly LogCollector _logs = new();
+
     public CatalogApiFixture() =>
         // Unless a test says otherwise, Open Library simply has no match for the ISBN.
         OpenLibrary.Respond = _ => StubHttpMessageHandler.Json("{}");
@@ -40,12 +52,62 @@ public sealed class CatalogApiFixture : WebApplicationFactory<Program>, IAsyncLi
     {
         builder.UseSetting("ConnectionStrings:CatalogDb", _postgres.GetConnectionString());
         builder.UseSetting("RabbitMq:ConnectionString", _rabbitMq.GetConnectionString());
+        builder.UseSetting("GoogleBooks:ApiKey", GoogleBooksApiKey);
+
+        builder.ConfigureLogging(logging => logging.AddProvider(_logs));
 
         builder.ConfigureTestServices(services =>
         {
             services.AddHttpClient<GoogleBooksProvider>().ConfigurePrimaryHttpMessageHandler(() => GoogleBooks);
             services.AddHttpClient<OpenLibraryProvider>().ConfigurePrimaryHttpMessageHandler(() => OpenLibrary);
         });
+    }
+
+    /// <summary>
+    /// Keeps every line Catalog logs, formatted the way a real sink would see it. Registered
+    /// alongside the ordinary providers rather than instead of them, so the application's
+    /// logging configuration — its levels in particular — is what is under test.
+    /// </summary>
+    private sealed class LogCollector : ILoggerProvider
+    {
+        private readonly List<string> _lines = [];
+
+        public IReadOnlyList<string> Lines
+        {
+            get
+            {
+                lock (_lines)
+                {
+                    return [.. _lines];
+                }
+            }
+        }
+
+        public ILogger CreateLogger(string categoryName) => new Logger(this, categoryName);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class Logger(LogCollector collector, string category) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(
+                LogLevel logLevel,
+                EventId eventId,
+                TState state,
+                Exception? exception,
+                Func<TState, Exception?, string> formatter)
+            {
+                lock (collector._lines)
+                {
+                    collector._lines.Add($"{category}: {formatter(state, exception)}");
+                }
+            }
+        }
     }
 
     async Task IAsyncLifetime.DisposeAsync()
