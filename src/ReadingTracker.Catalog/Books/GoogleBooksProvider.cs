@@ -52,12 +52,20 @@ public sealed class GoogleBooksProvider(HttpClient httpClient, IOptions<GoogleBo
         var query = $"volumes?q={Uri.EscapeDataString(searchTerms)}"
             + $"&startIndex={window.Offset}&maxResults={window.PageSize}";
 
+        using var request = new HttpRequestMessage(HttpMethod.Get, query);
+
+        // As a header, never as a query parameter: a URI is what proxies, access logs and
+        // exception messages quote, and a key in one is a key in all of them. Google accepts
+        // either; only one of them keeps the secret out of the address.
         if (!string.IsNullOrWhiteSpace(_options.ApiKey))
         {
-            query += $"&key={Uri.EscapeDataString(_options.ApiKey)}";
+            request.Headers.Add("X-Goog-Api-Key", _options.ApiKey);
         }
 
-        var payload = await httpClient.GetFromJsonAsync<VolumesResponse>(query, cancellationToken);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var payload = await response.Content.ReadFromJsonAsync<VolumesResponse>(cancellationToken);
 
         // Google omits "items" entirely when nothing matches, rather than returning an empty array.
         return payload?.Items?.Select(item => ToSearchResult(item, searchedIsbn)).ToArray() ?? [];

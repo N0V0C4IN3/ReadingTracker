@@ -1,0 +1,24 @@
+<Project>
+
+  <!--
+    Every project in the repository, src and tests alike. Nothing here is a build setting a
+    project would want to differ on; it is the one place the whole solution says what it will
+    and will not build with.
+  -->
+  <PropertyGroup>
+    <!--
+      A restore that resolves a package with a known high or critical advisory — direct or
+      transitive — is a failed restore, not a warning to scroll past. NuGet checks every package
+      against nuget.org's advisory database during restore; NU1903 is a high advisory and NU1904 a
+      critical one, and both are errors here. Lower advisories are left to Dependabot's pull
+      requests rather than put in every build's output. The demo is public and runs whatever
+      restore resolves, so this is the gate that notices a vulnerable dependency before a visitor
+      does.
+    -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>high</NuGetAuditLevel>
+    <WarningsAsErrors>$(WarningsAsErrors);NU1903;NU1904</WarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

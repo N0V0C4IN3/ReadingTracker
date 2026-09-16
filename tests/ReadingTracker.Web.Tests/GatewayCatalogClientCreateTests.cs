@@ -144,6 +144,18 @@ public sealed class GatewayCatalogClientCreateTests
     private static HttpResponseMessage Created(string body) =>
         new(HttpStatusCode.Created) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
 
+    [Fact]
+    public async Task Reports_when_the_reader_is_adding_too_fast()
+    {
+        var (client, gateway) = CreateClient();
+        gateway.Respond = _ => new HttpResponseMessage(HttpStatusCode.TooManyRequests);
+
+        var creation = await client.CreateAsync(ABookNobodyHas, CancellationToken.None);
+
+        Assert.False(creation.Ok);
+        Assert.Equal(BookCreationProblem.TooManyRequests, creation.Problem);
+    }
+
     private static (GatewayCatalogClient Client, StubHttpMessageHandler Gateway) CreateClient()
     {
         var gateway = new StubHttpMessageHandler();

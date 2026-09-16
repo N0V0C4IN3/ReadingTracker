@@ -190,6 +190,40 @@ public sealed class TitleAuthorSearchTests(CatalogApiFixture fixture)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    /// <summary>
+    /// No provider goes that deep, and a page number with no ceiling is an offset that can be
+    /// made to overflow. A search past the line is a mistake in the request, refused before any
+    /// provider is asked.
+    /// </summary>
+    [Theory]
+    [InlineData("page", "title=Earthsea&page=101")]
+    [InlineData("q", "q=" + "a%20" + "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
+    public async Task Refuses_a_search_it_cannot_run_and_names_the_field(string field, string query)
+    {
+        fixture.GoogleBooks.Requests.Clear();
+        fixture.OpenLibrary.Requests.Clear();
+
+        var response = await fixture.CreateClient().GetAsync($"/api/books/search?{query}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblem>();
+        Assert.Contains(field, problem!.Errors!.Keys);
+        Assert.Empty(fixture.GoogleBooks.Requests);
+        Assert.Empty(fixture.OpenLibrary.Requests);
+    }
+
+    [Fact]
+    public async Task Runs_a_search_that_sits_exactly_on_the_line()
+    {
+        fixture.GoogleBooks.Respond = _ => StubHttpMessageHandler.Json(GoogleNoMatches);
+
+        var response = await fixture.CreateClient().GetAsync($"/api/books/search?q={new string('q', 200)}&page=100");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    private sealed record ValidationProblem(Dictionary<string, string[]>? Errors);
+
     private sealed record SearchResponse(IReadOnlyList<Book> Results, int Page, int PageSize, bool HasMore);
 
     private sealed record Book(Guid Id, string Title, int? TotalPages, string Source);
