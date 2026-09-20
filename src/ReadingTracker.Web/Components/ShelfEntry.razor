@@ -15,7 +15,7 @@
     jacket desaturated, the accent turned to grey — so on a shelf of everything the books actually
     in hand are the ones in colour.
 *@
-<article class="entry @(_working ? "entry--working" : null) @(Parked ? "entry--parked" : null)" style="--at:@At">
+<article class="entry @(_working ? "entry--working" : null) @(Parked ? "entry--parked" : null) @(Finished ? "entry--finished" : null)" style="--at:@At">
     <div class="entry__cover">
         @if (Entry.Book?.CoverUrl is { } cover)
         {
@@ -48,7 +48,8 @@
         <ProgressBar Progress="Entry.Progress"
                      TrackingMethod="@Entry.TrackingMethod"
                      EffectivePageCount="Entry.EffectivePageCount"
-                     Bookmark="Entry.Bookmark" />
+                     Bookmark="Entry.Bookmark"
+                     Finished="Finished" />
 
         <div class="entry__status">
             <label class="visually-hidden" for="@($"status-{Entry.Id}")">Reading status</label>
@@ -244,6 +245,12 @@
     public int At { get; set; }
 
     private bool Parked => Entry.Status is "OnHold" or "Dropped";
+
+    /// <summary>
+    /// Read to the end. The card goes warm the way a parked one goes grey: colour is a book
+    /// alive, grey one set aside, and this the one that has been on the shelf a while.
+    /// </summary>
+    private bool Finished => Entry.Status == "Finished";
 
     /// <summary>Raised when this entry changed in a way the shelf around it needs to know about.</summary>
     [Parameter]
