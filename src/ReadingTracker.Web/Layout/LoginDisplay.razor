@@ -3,6 +3,7 @@
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IOptions<DevSignInOptions> DevSignIn
+@inject GatewayDevicesClient Devices
 
 @*
     Who is signed in, and the way in or out.
@@ -19,6 +20,11 @@
 
     With dev sign-in enabled there is no Google session to forget in the first place (ADR-0009),
     and signing out is just dropping the minted token.
+
+    The Devices row carries the devices' state in a word — "1 syncing", "2 quiet" — so a Kindle
+    that has stopped talking is noticed from the menu, without opening the page. The list is asked
+    for the first time the menu opens, not on every page: it is a request, and most visits never
+    open the menu at all.
 *@
 
 <AuthorizeView>
@@ -35,8 +41,22 @@
                 <button type="button" class="account__scrim" tabindex="-1" aria-hidden="true" @onclick="Close"></button>
                 <div class="account__menu" role="menu">
                     <p class="account__who">Signed in as <strong>@context.User.Identity?.Name</strong></p>
-                    <a class="account__link" role="menuitem" href="devices" @onclick="Close">Devices</a>
-                    <button type="button" role="menuitem" @onclick="SignOut">Sign out</button>
+                    <a class="account__row" role="menuitem" href="devices" @onclick="Close">
+                        Devices
+                        @if (DevicesSummary is { } summary)
+                        {
+                            <span class="pill pill--@summary.Kind.ToString().ToLowerInvariant()">
+                                @if (summary.Kind == DeviceStateKind.Syncing)
+                                {
+                                    <i aria-hidden="true"></i>
+                                }
+                                @summary.Label
+                            </span>
+                        }
+                    </a>
+                    <div class="account__out">
+                        <button type="button" class="account__row" role="menuitem" @onclick="SignOut">Sign out</button>
+                    </div>
                 </div>
             }
         </div>
@@ -55,8 +75,45 @@
 
 @code {
     private bool _open;
+    private IReadOnlyList<Device>? _devices;
+    private bool _askedForDevices;
 
-    private void Toggle() => _open = !_open;
+    private async Task Toggle()
+    {
+        _open = !_open;
+
+        if (_open && !_askedForDevices)
+        {
+            _askedForDevices = true;
+            var listed = await Devices.ListAsync(CancellationToken.None);
+            // A list that could not be fetched is no pill, not a complaint: the menu is not the
+            // place, and the Devices page will say what is wrong.
+            _devices = listed.Value;
+        }
+    }
+
+    /// <summary>
+    /// The devices in a word: how many are syncing if any are, else how many have gone quiet.
+    /// Nothing for no devices, and nothing for devices never used — there is nothing to notice.
+    /// </summary>
+    private DeviceState? DevicesSummary
+    {
+        get
+        {
+            if (_devices is null || _devices.Count == 0)
+            {
+                return null;
+            }
+
+            var states = _devices.Select(device => DeviceState.Of(device, DateTimeOffset.Now).Kind).ToList();
+            var syncing = states.Count(kind => kind == DeviceStateKind.Syncing);
+            var quiet = states.Count(kind => kind == DeviceStateKind.Quiet);
+
+            return syncing > 0 ? new(DeviceStateKind.Syncing, $"{syncing} syncing")
+                : quiet > 0 ? new(DeviceStateKind.Quiet, $"{quiet} quiet")
+                : null;
+        }
+    }
 
     private void Close() => _open = false;
 
