@@ -105,6 +105,10 @@
                         *@
                         @foreach (var (entry, at) in VisibleEntries.Select((entry, at) => (entry, at)))
                         {
+                            @if (Grouped && (at == 0 || VisibleEntries[at - 1].Status != entry.Status))
+                            {
+                                <p class="group group--shelf" @key="entry.Status">@StatusLabel(entry.Status) <span>· @VisibleEntries.Count(other => other.Status == entry.Status)</span></p>
+                            }
                             <ShelfEntry @key="entry.Id"
                                         Entry="entry"
                                         At="at"
@@ -542,14 +546,22 @@
     private bool Searching => !string.IsNullOrWhiteSpace(_query);
 
     /// <summary>
+    /// Whether the shelf shows its status groups under their own headings: on the All tab, at
+    /// rest. A tab is one status already, and a search cuts across them all.
+    /// </summary>
+    private bool Grouped => _filter is null && !Searching;
+
+    private static string StatusLabel(string status) =>
+        Filters.FirstOrDefault(filter => filter.Value == status).Label ?? status;
+
+    /// <summary>
     /// The shelf under the current status tab (client-side, so switching tabs is instant). The
-    /// whole shelf puts the books being read first; a tab already is one status, so it keeps
-    /// Library's newest-first order.
+    /// whole shelf is grouped by status, Reading at the top and Dropped at the bottom; a tab is
+    /// one of those groups on its own, in the same order within.
     /// </summary>
     private IReadOnlyList<LibraryEntry> StatusFiltered =>
         _entries is null ? [] :
-        _filter is null ? ShelfOrder.ReadingFirst(_entries) :
-        _entries.Where(entry => entry.Status == _filter).ToArray();
+        ShelfOrder.ByStatus(_filter is null ? _entries : [.. _entries.Where(entry => entry.Status == _filter)]);
 
     /// <summary>
     /// What the shelf shows: the current tab at rest, or — while searching — every book whose
