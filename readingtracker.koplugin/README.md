@@ -12,7 +12,8 @@ cannot do one of those.
    `plugins/` folder, so you have `plugins/readingtracker.koplugin/main.lua`.
 3. In that folder, copy `readingtracker_config.example.lua` to `readingtracker_config.lua` and
    fill in your Gateway's address and the token.
-4. Restart KOReader. The plugin sits under the tools menu as **ReadingTracker**.
+4. Restart KOReader. While reading, **ReadingTracker** is the last entry of the first menu tab (the one
+   with contents and bookmarks); in the file manager it is under the tools tab.
 
 ## What it does
 
