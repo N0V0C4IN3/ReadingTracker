@@ -6,7 +6,7 @@ local OTHER_BOOK_ID = "33333333-3333-3333-3333-333333333333"
 local ENTRY_ID = "22222222-2222-2222-2222-222222222222"
 
 local function search_finds(env, books)
-  env:respond("GET", "/api/books/search?title=", 200, { books = books, page = 1, pageSize = 20, hasMore = false })
+  env:respond("GET", "/api/books/search?title=", 200, { results = books, page = 1, pageSize = 20, hasMore = false })
 end
 
 local RESULTS = {
@@ -39,7 +39,7 @@ describe("linking a document without a usable ISBN", function()
 
   it("asks the same when the catalog does not know the ISBN it has", function()
     local env = FakeEnv.new({ identifiers = "isbn:9780441478125", title = "The Left Hand of Darkness" })
-    env:respond("GET", "/api/books/search?isbn=", 200, { books = {}, page = 1, pageSize = 20, hasMore = false })
+    env:respond("GET", "/api/books/search?isbn=", 200, { results = {}, page = 1, pageSize = 20, hasMore = false })
     local app = App.new(env)
 
     app:onReaderReady()

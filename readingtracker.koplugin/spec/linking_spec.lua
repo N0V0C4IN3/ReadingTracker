@@ -7,13 +7,13 @@ local ENTRY_ID = "22222222-2222-2222-2222-222222222222"
 
 local function catalog_has(env, isbn)
   env:respond("GET", "/api/books/search?isbn=" .. isbn, 200, {
-    books = { { id = BOOK_ID, title = "The Left Hand of Darkness", authors = { "Ursula K. Le Guin" }, totalPages = 304 } },
+    results = { { id = BOOK_ID, title = "The Left Hand of Darkness", authors = { "Ursula K. Le Guin" }, totalPages = 304 } },
     page = 1, pageSize = 20, hasMore = false,
   })
 end
 
 local function catalog_has_nothing(env, isbn)
-  env:respond("GET", "/api/books/search?isbn=" .. isbn, 200, { books = {}, page = 1, pageSize = 20, hasMore = false })
+  env:respond("GET", "/api/books/search?isbn=" .. isbn, 200, { results = {}, page = 1, pageSize = 20, hasMore = false })
 end
 
 local function shelf_is_empty(env)
