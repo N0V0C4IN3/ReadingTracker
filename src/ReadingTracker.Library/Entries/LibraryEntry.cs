@@ -46,6 +46,18 @@ public sealed class LibraryEntry
     public DateTimeOffset AddedAt { get; init; }
 
     /// <summary>
+    /// Where this reader currently is in the book, as a percentage, as last reported by a device
+    /// — the "where", where sessions are the "how much". Null until a device has said. It is a
+    /// report of a position and never a source of truth for how much has been read: moving it
+    /// forward is what a device's reading turns into sessions, moving it back records nothing,
+    /// and correcting sessions leaves it alone (ADR-0015).
+    /// </summary>
+    public decimal? BookmarkPercent { get; set; }
+
+    /// <summary>When the reading that put the Bookmark where it is happened, by the device's account.</summary>
+    public DateTimeOffset? BookmarkReportedAt { get; set; }
+
+    /// <summary>
     /// The page count everything else is worked out from: this reader's own where they set one,
     /// otherwise whatever Catalog knows — which may still be nothing at all. A zero from Catalog
     /// is nothing at all: providers send 0 for "we don't know", and taken as a length it would

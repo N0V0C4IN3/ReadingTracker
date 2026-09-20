@@ -333,6 +333,84 @@ public static class LibraryEndpoints
         })
         .WithName("DeleteReadingSession");
 
+        // A device saying where the reader is. Not a session endpoint, though it may make one:
+        // the device reports a position, and how much reading that was is Library's to work out.
+        endpoints.MapPut("/api/library/{entryId:guid}/bookmark", async (
+            Guid entryId,
+            BookmarkRequest body,
+            HttpRequest request,
+            ReadingLibrary library,
+            CatalogClient catalog,
+            CancellationToken cancellationToken) =>
+        {
+            if (Reader.From(request) is not { } readerId)
+            {
+                return NotSaidWhoIsAsking();
+            }
+
+            if (await library.FindAsync(readerId, entryId, cancellationToken) is not { } entry)
+            {
+                return Results.NotFound();
+            }
+
+            if (body.Percent is not { } percent)
+            {
+                return NotAPercentage();
+            }
+
+            // The book is needed before the report, not just after it: a first report is measured
+            // against what the reader had already read, which takes the page count to express.
+            CatalogBook? book;
+
+            try
+            {
+                book = await catalog.FindBookAsync(entry.BookId, cancellationToken);
+            }
+            catch (HttpRequestException)
+            {
+                // Best-effort once the Bookmark exists, as every other answer is. Before it
+                // exists, "Catalog could not say" must not be read as "the book has no length":
+                // that would measure hand-logged pages from zero and count them twice, and the
+                // Bookmark set by that mistake would never be measured again. The device tries
+                // later; a device is built for that.
+                if (entry.BookmarkPercent is null && entry.PageCountOverride is null)
+                {
+                    return Results.Problem(
+                        title: "The book's length could not be looked up",
+                        detail: "A first Bookmark report is measured against what has already been read, " +
+                                "which needs the book's page count, and Catalog could not be reached. Try again shortly.",
+                        statusCode: StatusCodes.Status503ServiceUnavailable);
+                }
+
+                book = null;
+            }
+
+            var (session, problem) = await library.ReportBookmarkAsync(
+                readerId,
+                entryId,
+                percent,
+                body.OccurredAt,
+                book?.TotalPages,
+                cancellationToken);
+
+            return problem switch
+            {
+                BookmarkProblem.NotAPercentage => NotAPercentage(),
+                BookmarkProblem.NoSuchEntry => Results.NotFound(),
+                BookmarkProblem.ReportedMeanwhile => Results.Problem(
+                    title: "Another report for this book arrived at the same time",
+                    detail: "The Bookmark moved while this report was being applied, so this one was not. " +
+                            "Report the current position again.",
+                    statusCode: StatusCodes.Status409Conflict),
+                _ => Results.Ok(new BookmarkReportResponse(
+                    session is null
+                        ? null
+                        : SessionResponse.From(session, entry.TrackingMethod, entry.EffectivePageCount(book?.TotalPages)),
+                    await DescribeAsync(library, entry, book, cancellationToken))),
+            };
+        })
+        .WithName("ReportBookmark");
+
         endpoints.MapGet("/api/library/{entryId:guid}/sessions", async (
             Guid entryId,
             HttpRequest request,
@@ -432,6 +510,12 @@ public static class LibraryEndpoints
         _ => Results.NotFound(),
     };
 
+    private static IResult NotAPercentage() =>
+        Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["percent"] = ["Say where in the book the reader is, between 0 and 100 percent."],
+        });
+
     private static IResult SessionRejected(string detail) =>
         Results.ValidationProblem(new Dictionary<string, string[]> { ["session"] = [detail] });
 
@@ -456,6 +540,7 @@ public static class LibraryEndpoints
     /// The count everything is worked out from, so a client never has to decide for itself
     /// which of the two applies. Null when neither the reader nor Catalog knows.
     /// </param>
+    /// <param name="Bookmark">Where a device last said the reader is; null when none has said.</param>
     private sealed record LibraryEntryResponse(
         Guid Id,
         Guid BookId,
@@ -465,7 +550,8 @@ public static class LibraryEndpoints
         int? PageCountOverride,
         int? EffectivePageCount,
         BookDetailsResponse? Book,
-        ProgressResponse? Progress)
+        ProgressResponse? Progress,
+        BookmarkResponse? Bookmark)
     {
         public static LibraryEntryResponse From(
             LibraryEntry entry,
@@ -480,7 +566,16 @@ public static class LibraryEndpoints
                 entry.PageCountOverride,
                 entry.EffectivePageCount(book?.TotalPages),
                 book is null ? null : BookDetailsResponse.From(book),
-                progress is null ? null : ProgressResponse.From(progress));
+                progress is null ? null : ProgressResponse.From(progress),
+                BookmarkResponse.Of(entry));
+    }
+
+    private sealed record BookmarkResponse(decimal Percent, DateTimeOffset ReportedAt)
+    {
+        public static BookmarkResponse? Of(LibraryEntry entry) =>
+            entry is { BookmarkPercent: { } percent, BookmarkReportedAt: { } reportedAt }
+                ? new BookmarkResponse(percent, reportedAt)
+                : null;
     }
 
     /// <summary>
@@ -500,10 +595,12 @@ public static class LibraryEndpoints
     /// reader now tracks the book by. The recorded amount is never converted — it is the record
     /// of what the reader actually entered.
     /// </summary>
+    /// <param name="Source">Whether the reader typed this or a device reported it.</param>
     private sealed record SessionResponse(
         Guid Id,
         decimal Amount,
         string Unit,
+        string Source,
         DateTimeOffset OccurredAt,
         int? DurationMinutes,
         DisplayedAmountResponse? Displayed)
@@ -513,6 +610,7 @@ public static class LibraryEndpoints
                 session.Id,
                 session.Amount,
                 session.Unit.ToString(),
+                session.Source.ToString(),
                 session.OccurredAt,
                 session.DurationMinutes,
                 DisplayedAmountResponse.Of(session, method, totalPages));
@@ -536,6 +634,18 @@ public static class LibraryEndpoints
     /// the card the reader is looking at, not the session.
     /// </summary>
     private sealed record LoggedSessionResponse(SessionResponse Session, LibraryEntryResponse Entry);
+
+    /// <summary>
+    /// What comes back for a Bookmark report: the session it amounted to — null when the reader
+    /// went backwards or nowhere, which is not reading — and the book as it now stands.
+    /// </summary>
+    private sealed record BookmarkReportResponse(SessionResponse? Session, LibraryEntryResponse Entry);
+
+    /// <summary>
+    /// Where a device says the reader is, as a percentage of the book, and when that was — the
+    /// time of the reading, which on a device that syncs later is not the time of the report.
+    /// </summary>
+    private sealed record BookmarkRequest(decimal? Percent, DateTimeOffset? OccurredAt);
 
     private sealed record SetTrackingMethodRequest(string? TrackingMethod);
 

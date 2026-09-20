@@ -1,5 +1,12 @@
 namespace ReadingTracker.Library.Entries;
 
+/// <summary>Where a session came from: typed in by the reader, or derived from a device's Bookmark report.</summary>
+public enum SessionSource
+{
+    Reader,
+    Device,
+}
+
 /// <summary>
 /// A discrete stretch of reading against one LibraryEntry: "read 22 pages on Tuesday evening".
 /// The record of when and how much someone read.
@@ -35,6 +42,12 @@ public sealed class ReadingSession
     public int? DurationMinutes { get; set; }
 
     public DateTimeOffset LoggedAt { get; init; }
+
+    /// <summary>
+    /// Whether the reader said this or a device did. A correction does not change it: a
+    /// corrected device report is still the record of a device report, now corrected.
+    /// </summary>
+    public SessionSource Source { get; init; }
 }
 
 /// <summary>

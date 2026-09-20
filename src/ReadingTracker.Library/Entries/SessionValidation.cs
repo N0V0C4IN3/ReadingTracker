@@ -13,6 +13,23 @@ public enum SessionProblem
     NotAnAmountOfReading,
 }
 
+/// <summary>Why a device's Bookmark report could not be taken.</summary>
+public enum BookmarkProblem
+{
+    /// <summary>The reader has no such entry — including because it is someone else's.</summary>
+    NoSuchEntry,
+
+    /// <summary>A position in a book is somewhere between its start and its end.</summary>
+    NotAPercentage,
+
+    /// <summary>
+    /// Another report for the same book landed between this one reading the Bookmark and
+    /// moving it — a second device, or the same one retrying. The report that lost is not
+    /// applied, so the reading it would have credited is not credited twice.
+    /// </summary>
+    ReportedMeanwhile,
+}
+
 public static class SessionValidation
 {
     /// <summary>

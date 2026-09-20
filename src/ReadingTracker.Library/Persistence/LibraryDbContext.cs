@@ -45,6 +45,7 @@ public sealed class LibraryDbContext(DbContextOptions<LibraryDbContext> options)
                 .OnDelete(DeleteBehavior.Cascade);
 
             session.Property(s => s.Unit).HasConversion<string>().IsRequired();
+            session.Property(s => s.Source).HasConversion<string>().IsRequired();
 
             // Reading a book's history, and finding its latest session, are the two things
             // ever asked of this table.
