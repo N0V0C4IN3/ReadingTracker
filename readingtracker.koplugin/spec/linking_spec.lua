@@ -154,6 +154,28 @@ describe("linking a document by ISBN", function()
     assert.are.equal(1, #env.requests)
   end)
 
+  it("forgets a pending position when the document is linked to a different book", function()
+    local env = FakeEnv.new({ page_count = 200, page = 1, online = true })
+    env:save_setting("entry_id", "22222222-2222-2222-2222-222222222222")
+    env:save_setting("pending", { percent = 20, at = 1 })
+    local app = App.new(env)
+
+    app:link("33333333-3333-3333-3333-333333333333", "Another Book")
+
+    assert.is_nil(env:read_setting("pending"))
+  end)
+
+  it("forgets a pending position when the document is unlinked", function()
+    local env = FakeEnv.new({ page_count = 200, page = 1, online = true })
+    env:save_setting("entry_id", "22222222-2222-2222-2222-222222222222")
+    env:save_setting("pending", { percent = 20, at = 1 })
+    local app = App.new(env)
+
+    app:unlink()
+
+    assert.is_nil(env:read_setting("pending"))
+  end)
+
   it("unlinks from the menu", function()
     local env = FakeEnv.new({})
     env:save_setting("entry_id", ENTRY_ID)

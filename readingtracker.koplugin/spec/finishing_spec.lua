@@ -26,6 +26,14 @@ local function reach_the_end(env, app)
   app:onEndOfBook()
 end
 
+local function reports_sent(env)
+  local sent = {}
+  for _, request in ipairs(env:requests_to("PUT", "/bookmark")) do
+    table.insert(sent, json.decode(request.body))
+  end
+  return sent
+end
+
 local function status_changes(env)
   local sent = {}
   for _, request in ipairs(env:requests_to("PUT", "/status")) do
@@ -64,6 +72,17 @@ describe("finishing a book from the device", function()
     env:answer("no")
     reach_the_end(env, app)
     assert.are.equal(2, #env.prompts)
+  end)
+
+  it("asks when a book is reopened on its last page, without a page having been turned", function()
+    local env, app = open_linked("Reading")
+    env:turn_to(200)
+    env:answer("no")
+
+    app:onEndOfBook()
+
+    assert.are.equal(1, #env.prompts)
+    assert.are.equal(100, reports_sent(env)[1].percent)
   end)
 
   it("never asks about a book that is already finished, but still reports the reading", function()

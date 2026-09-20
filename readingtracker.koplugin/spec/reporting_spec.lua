@@ -171,6 +171,32 @@ describe("reporting where the reader is", function()
     assert.are.equal(20, env:read_setting("pending").percent)
   end)
 
+  it("waits a whole interval before trying again after a report that failed", function()
+    local env, app = open_linked()
+    env.responses = {}
+    env:respond("PUT", "/bookmark", 503, "")
+
+    read_to(env, app, 40, 6 * 60)
+    read_to(env, app, 41, 5)
+    read_to(env, app, 42, 5)
+    assert.are.equal(1, #reports(env))
+    assert.are.equal(1, #env.notices)
+
+    read_to(env, app, 60, 5 * 60)
+    assert.are.equal(2, #reports(env))
+  end)
+
+  it("says the position was kept when syncing now offline", function()
+    local env, app = open_linked({ online = false })
+    read_to(env, app, 10, 10)
+
+    app:sync_now()
+
+    assert.are.same({}, reports(env))
+    assert.are.equal(5, env:read_setting("pending").percent)
+    assert.are.same({ "Offline — 5% kept for the next chance" }, env.notices)
+  end)
+
   it("syncs now from the menu whatever the interval says", function()
     local env, app = open_linked()
     read_to(env, app, 10, 10)

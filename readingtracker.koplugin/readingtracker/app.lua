@@ -60,7 +60,7 @@ function App:onReaderReady()
   self.page = nil
   self.turned_at = nil
   self.last_reported_page = nil
-  self.last_report_at = nil
+  self.last_attempt_at = nil
   self.entry_status = nil
   self.asked_to_finish = false
 
@@ -323,10 +323,12 @@ function App:document_author()
   return App.split_authors(authors)[1] or ""
 end
 
+-- A position kept for the old entry is not the new one's, so linking forgets it either way.
 function App:link(entry_id, title)
   self.env:save_setting(App.ENTRY, entry_id)
   self.env:save_setting(App.ENTRY_TITLE, title)
   self.env:save_setting(App.NEVER, nil)
+  self.env:save_setting(App.PENDING, nil)
   self.env:flush_settings()
   self.env:notify("Linked to " .. tostring(title))
 end
@@ -334,6 +336,7 @@ end
 function App:unlink()
   self.env:save_setting(App.ENTRY, nil)
   self.env:save_setting(App.ENTRY_TITLE, nil)
+  self.env:save_setting(App.PENDING, nil)
   self.env:flush_settings()
   self.env:notify("Unlinked from ReadingTracker")
 end
@@ -352,10 +355,11 @@ function App:onPageUpdate(page)
     return
   end
 
-  -- Once every interval while paging, measured from the last report that got through — or
-  -- from opening the book, before there has been one.
-  local since = self.last_report_at or self.opened_at or self.turned_at
+  -- Once every interval while paging, measured from the last attempt — or from opening the
+  -- book, before there has been one. A failed attempt counts too: page turns are not retries.
+  local since = self.last_attempt_at or self.opened_at or self.turned_at
   if self.env:clock() - since >= self:interval_seconds() then
+    self.last_attempt_at = self.env:clock()
     self:report_if_moved()
   end
 end
@@ -367,7 +371,7 @@ function App:onCloseDocument()
   self.page = nil
   self.turned_at = nil
   self.last_reported_page = nil
-  self.last_report_at = nil
+  self.last_attempt_at = nil
   self.entry_status = nil
   self.asked_to_finish = false
 end
@@ -381,6 +385,12 @@ end
 function App:onEndOfBook()
   if self.disabled or not self:linked_entry() or self.asked_to_finish then
     return
+  end
+
+  -- Reopened on the last page, nothing has been turned; the page is the document's.
+  if not self.page then
+    self.page = (self.env.document or {}).page
+    self.turned_at = self.page and self.env:clock()
   end
 
   if not self.env:is_online() then
@@ -452,8 +462,14 @@ function App:sync_now()
     return
   end
 
+  local percent = App.trim(self:percent_of(page))
+  if not self.env:is_online() then
+    self:keep_pending(self:percent_of(page), self.turned_at or self.env:clock())
+    return self.env:notify(string.format("Offline — %s%% kept for the next chance", percent))
+  end
+
   if self:report(page, self.turned_at or self.env:clock()) then
-    self.env:notify(string.format("Reported %s%% to ReadingTracker", App.trim(self:percent_of(page))))
+    self.env:notify(string.format("Reported %s%% to ReadingTracker", percent))
   end
 end
 
@@ -512,7 +528,7 @@ function App:sent(page, answer)
   self.env:save_setting(App.PENDING, nil)
   self.env:flush_settings()
   self.last_reported_page = page or self.last_reported_page
-  self.last_report_at = self.env:clock()
+  self.last_attempt_at = self.env:clock()
   if type(answer) == "table" and type(answer.entry) == "table" then
     self.entry_status = answer.entry.status
   end

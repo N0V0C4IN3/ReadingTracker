@@ -140,7 +140,7 @@ function ReadingTracker:buildEnv()
       title_align = "center",
       buttons = rows,
       dismissable = true,
-      dismiss_callback = function() on_answer(nil) end,
+      tap_close_callback = function() on_answer(nil) end,
     }
     UIManager:show(dialog)
   end
@@ -345,21 +345,31 @@ function ReadingTracker:pageTurned(page)
   UIManager:scheduleIn(2, self.pending_turn)
 end
 
+-- A turn still waiting its moment is not to be lost to closing or sleeping: it is handed to
+-- the app now, so what gets reported is the page the reader is actually on.
+function ReadingTracker:settlePendingTurn()
+  if self.pending_turn then
+    UIManager:unschedule(self.pending_turn)
+    local turn = self.pending_turn
+    self.pending_turn = nil
+    turn()
+  end
+end
+
 function ReadingTracker:onCloseDocument()
   if not self.config then
     return
   end
-  if self.pending_turn then
-    UIManager:unschedule(self.pending_turn)
-    self.pending_turn = nil
-  end
+  self:settlePendingTurn()
   self.app:onCloseDocument()
 end
 
 function ReadingTracker:onSuspend()
-  if self.config then
-    self.app:onSuspend()
+  if not self.config then
+    return
   end
+  self:settlePendingTurn()
+  self.app:onSuspend()
 end
 
 function ReadingTracker:onNetworkConnected()

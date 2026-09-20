@@ -32,8 +32,9 @@ end
 function Isbn.from_line(line)
   local lowered = line:lower()
 
-  -- Only lines that mention isbn, or that are nothing but a number: "calibre:123" is not one.
-  if not lowered:find("isbn", 1, true) and lowered:find("[a-z]") then
+  -- Only lines that mention isbn, or that are nothing but a number (an ISBN-10 may end in X):
+  -- "calibre:123" is not one.
+  if not lowered:find("isbn", 1, true) and lowered:find("[a-wyz]") then
     return nil
   end
 

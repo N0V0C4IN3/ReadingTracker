@@ -11,6 +11,7 @@ describe("finding an ISBN in a document's identifiers", function()
 
   it("keeps an ISBN-10, check digit and all", function()
     assert.are.equal("044147812X", Isbn.from_identifiers("ISBN 0-441-47812-x"))
+    assert.are.equal("044147812X", Isbn.from_identifiers("044147812X"))
   end)
 
   it("prefers a 13 over a 10 when both are given", function()
