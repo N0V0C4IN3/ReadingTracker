@@ -68,20 +68,23 @@
         </div>
 
         <div class="entry__actions">
-            <button type="button"
-                    class="button--log @(_panel == Panel.Log ? "button--log--open" : null)"
-                    @onclick="() => Toggle(Panel.Log)"
-                    disabled="@_working">
-                @if (_panel == Panel.Log)
-                {
-                    <text>Cancel</text>
-                }
-                else
-                {
-                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.4 1.6l3 3L5.2 13.8 1.5 14.5l.7-3.7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" /></svg>
-                    <text>Log reading</text>
-                }
-            </button>
+            @if (Logging)
+            {
+                <button type="button"
+                        class="button--log @(_panel == Panel.Log ? "button--log--open" : null)"
+                        @onclick="() => Toggle(Panel.Log)"
+                        disabled="@_working">
+                    @if (_panel == Panel.Log)
+                    {
+                        <text>Cancel</text>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.4 1.6l3 3L5.2 13.8 1.5 14.5l.7-3.7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" /></svg>
+                        <text>Log reading</text>
+                    }
+                </button>
+            }
             <button type="button" class="link-button" @onclick="ToggleHistoryAsync" disabled="@_working">
                 History
             </button>
@@ -103,7 +106,7 @@
             </ul>
         }
 
-        @if (_panel == Panel.Log)
+        @if (_panel == Panel.Log && Logging)
         {
             <SessionForm Unit="@Entry.TrackingMethod"
                          SubmitLabel="Log it"
@@ -249,6 +252,14 @@
     private bool Parked => Entry.Status is "OnHold" or "Dropped";
 
     /// <summary>
+    /// Whether reading can be logged against this book: only while it is being read or waiting
+    /// to be. A finished, paused or abandoned book is not being read, so the card offers the
+    /// status, which is how it comes back to life, and not a form for pages it is not turning.
+    /// The sessions it already has stay in History.
+    /// </summary>
+    private bool Logging => Entry.Status is "Reading" or "WantToRead";
+
+    /// <summary>
     /// Read to the end. The card goes warm the way a parked one goes grey: colour is a book
     /// alive, grey one set aside, and this the one that has been on the shelf a while.
     /// </summary>
@@ -322,6 +333,12 @@
 
         await RunAsync(token => Library.SetStatusAsync(Entry.Id, status, token), async entry =>
         {
+            // A log form open on a book just set aside has nothing left to log against.
+            if (_panel == Panel.Log && entry.Status is not ("Reading" or "WantToRead"))
+            {
+                Close();
+            }
+
             await Show(entry);
             Shelf.Announce();
         });
