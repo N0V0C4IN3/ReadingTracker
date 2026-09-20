@@ -12,6 +12,10 @@
     A book with no sessions yet has no progress at all — not zero. Saying "0%" would claim
     something about the reader's reading that nothing has established, so the figure is a dash
     and the bar is empty.
+
+    The Bookmark — where a device last said the reader is (ADR-0015) — is a different fact from
+    the total and is shown as one: a mark on the track and a line beneath it, never the figure.
+    Read-only, and absent until a device has said anything.
 *@
 
 <div class="progress">
@@ -45,6 +49,10 @@
              aria-valuenow="@percent" aria-valuemin="0" aria-valuemax="100"
              aria-label="How much of this book you have read">
             <div class="progress__fill" style="width: @(percent)%"></div>
+            @if (Bookmark is { } mark)
+            {
+                <div class="progress__bookmark" style="left: @(Trim(mark.Percent))%" aria-hidden="true"></div>
+            }
         </div>
     }
     else
@@ -57,6 +65,14 @@
         </div>
         <div class="progress__track" aria-hidden="true"></div>
     }
+
+    @if (Bookmark is { } bookmark)
+    {
+        <p class="progress__device">
+            On your device: <strong>@Trim(bookmark.Percent)%</strong>
+            <span class="progress__device-when">@bookmark.ReportedAt.ToLocalTime().ToString("d MMM, HH:mm")</span>
+        </p>
+    }
 </div>
 
 @code {
@@ -68,6 +84,9 @@
 
     [Parameter]
     public int? EffectivePageCount { get; set; }
+
+    [Parameter]
+    public Bookmark? Bookmark { get; set; }
 
     /// <summary>
     /// What the reader has read, in words, under the percentage. Against a known length it is

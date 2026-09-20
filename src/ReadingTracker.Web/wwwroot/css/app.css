@@ -1475,6 +1475,45 @@ button.danger:hover:not(:disabled) {
     transition: width 560ms var(--ease-out);
 }
 
+.progress__track {
+    position: relative;
+}
+
+/*
+    Where the device is, as a tick on the track. Usually it sits at the end of the fill; it
+    sits behind it when the reader flipped back, and ahead of it when the tracker has reading
+    the device reported but the page count makes a smaller percentage of.
+*/
+.progress__bookmark {
+    position: absolute;
+    top: -2px;
+    bottom: -2px;
+    width: 2px;
+    margin-left: -1px;
+    background: var(--ink);
+    border-radius: 1px;
+}
+
+.progress__device {
+    grid-column: 1 / -1;
+    margin: -0.15rem 0 0;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+}
+
+.progress__device strong {
+    font-weight: 600;
+    color: var(--ink);
+}
+
+.progress__device-when {
+    color: var(--ink-faint);
+}
+
+.progress__device-when::before {
+    content: "· ";
+}
+
 /* Panels ------------------------------------------------------------------ */
 
 .panel {
@@ -1614,6 +1653,17 @@ button.danger:hover:not(:disabled) {
 
 .session__how-long::before {
     content: "· ";
+}
+
+/* A session the reader did not type: a small tag rather than a sentence. */
+.session__source {
+    padding: 0.05rem 0.4rem;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
 }
 
 /* Search ------------------------------------------------------------------ */

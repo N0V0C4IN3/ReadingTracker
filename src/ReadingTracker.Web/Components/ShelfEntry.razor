@@ -47,7 +47,8 @@
 
         <ProgressBar Progress="Entry.Progress"
                      TrackingMethod="@Entry.TrackingMethod"
-                     EffectivePageCount="Entry.EffectivePageCount" />
+                     EffectivePageCount="Entry.EffectivePageCount"
+                     Bookmark="Entry.Bookmark" />
 
         <div class="entry__status">
             <label class="visually-hidden" for="@($"status-{Entry.Id}")">Reading status</label>
@@ -139,6 +140,12 @@
                                     @if (session.DurationMinutes is { } minutes)
                                     {
                                         <span class="session__how-long">@minutes min</span>
+                                    }
+                                    @if (session.Source == "Device")
+                                    {
+                                        @* Reported by an e-reader rather than typed in: worth knowing when a
+                                           session looks like nothing the reader remembers logging. *@
+                                        <span class="session__source" title="Reported by your device">device</span>
                                     }
                                     <button type="button" class="link-button" @onclick="() => StartEditing(session.Id)">Correct</button>
                                     <button type="button" class="link-button link-button--danger" @onclick="() => DeleteSessionAsync(session.Id)">Delete</button>
