@@ -49,6 +49,9 @@
     --danger: #a3392b;
     --danger-soft: rgb(163 57 43 / 10%);
     --danger-fill: rgb(163 57 43 / 14%);
+    /* For a thing that has gone quiet: neither fine nor broken, so neither the accent nor danger. */
+    --warn: #8a6a2a;
+    --warn-soft: rgb(212 160 84 / 18%);
     /* The page's washes: the accent and two neighbours, an amber and a blue, all as tints. Kept
        this pale on purpose — they are what the sheer cards are sheer against, not a picture. */
     --wash-accent: rgb(47 107 79 / 17%);
@@ -95,6 +98,8 @@
         --danger: #e28a7c;
         --danger-soft: rgb(226 138 124 / 14%);
         --danger-fill: rgb(226 138 124 / 18%);
+        --warn: #e6b260;
+        --warn-soft: rgb(230 178 96 / 16%);
         --wash-accent: rgb(142 197 164 / 17%);
         --wash-warm: rgb(230 178 96 / 13%);
         --wash-cool: rgb(120 160 210 / 13%);
@@ -328,8 +333,8 @@ header > a:hover {
     top: calc(100% + 0.5rem);
     right: 0;
     z-index: 2;
-    min-width: 13rem;
-    padding: 0.85rem;
+    min-width: 13.5rem;
+    padding: 0.5rem;
     border: 1px solid var(--line);
     border-radius: var(--radius-sm);
     background: var(--card);
@@ -338,7 +343,8 @@ header > a:hover {
 }
 
 .account__who {
-    margin: 0 0 0.75rem;
+    margin: 0;
+    padding: 0.45rem 0.55rem 0.65rem;
     font-size: 0.88rem;
     color: var(--ink-soft);
     overflow-wrap: anywhere;
@@ -349,20 +355,38 @@ header > a:hover {
     font-weight: 600;
 }
 
-.account__menu button {
+/*
+    The menu's rows — a page and the one action — set alike: a quiet row that fills on hover, as
+    the rows of a menu do, rather than one underlined link over one filled button.
+*/
+.account__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
     width: 100%;
+    margin: 0;
+    padding: 0.5rem 0.55rem;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ink);
+    font-size: 0.92rem;
+    font-weight: 500;
+    text-align: left;
+    text-decoration: none;
+    transition: background-color var(--quick) var(--ease);
 }
 
-/* A page in the menu, above the one action. Set like a quiet row rather than a button. */
-.account__link {
-    display: block;
-    margin: 0 0 0.6rem;
-    font-size: 0.92rem;
+.account__row:hover:not(:disabled) {
+    background: var(--fill);
     text-decoration: none;
 }
 
-.account__link:hover {
-    text-decoration: underline;
+/* Signing out sits apart from the pages, under a rule. */
+.account__out {
+    margin-top: 0.35rem;
+    padding-top: 0.4rem;
+    border-top: 1px solid var(--line);
 }
 
 header input {
@@ -2068,24 +2092,138 @@ button.danger:hover:not(:disabled) {
 
 /* Devices ----------------------------------------------------------------- */
 
-.devices .field input[type="text"] {
+/* The mint form is the search box's row: a field and the one filled action beside it. */
+.devices__mint {
+    display: flex;
+    gap: 0.5rem;
+    margin: 0 0 1rem;
+}
+
+.devices__mint input {
     flex: 1 1 auto;
     min-width: 0;
 }
 
-.devices .field + .session-form__actions {
-    margin-top: 0.4rem;
+.devices__mint .button--primary {
+    flex: 0 0 auto;
+    padding-inline: 1.25rem;
+    font-weight: 600;
 }
 
-/* The revoke question drops under its row rather than squeezing in beside the name. */
-.devices .session .panel {
-    flex-basis: 100%;
-    margin-top: 0.4rem;
-    margin-bottom: 0.4rem;
+/* The shelf's stack of cards, as a list. */
+.devices .entries {
+    list-style: none;
+    margin: 0;
+    padding: 0;
 }
 
-.devices .session > .link-button {
-    margin-left: auto;
+/*
+    A device on the shelf: glyph, name and dates in the book card's places, and its state on the
+    right where the card's actions go. A grid rather than the entry's flex row, because the name
+    and the dates stack in one column while the glyph and the state span both.
+*/
+.device {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.15rem 1rem;
+    align-items: center;
+    padding: 0.85rem 1rem;
+}
+
+.device__glyph {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    display: grid;
+    place-items: center;
+    width: 2.6rem;
+    height: 3.2rem;
+    border-radius: 6px;
+    background: var(--fill);
+    color: var(--ink-soft);
+}
+
+.device__glyph svg {
+    width: 1.4rem;
+    height: 1.9rem;
+}
+
+.device__name {
+    grid-column: 2;
+    grid-row: 1;
+    margin: 0;
+    font-weight: 650;
+    line-height: 1.25;
+}
+
+.device__when {
+    grid-column: 2;
+    grid-row: 2;
+    margin: 0;
+    font-size: 0.83rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-soft);
+}
+
+.device__state {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.35rem;
+}
+
+/* The revoke question drops under the whole row rather than squeezing in beside the name. */
+.device__question {
+    grid-column: 1 / -1;
+    margin-top: 0.5rem;
+}
+
+/* On a phone the state goes under the dates, with the pill first and Revoke at the end. */
+@media (max-width: 480px) {
+    .device__state {
+        grid-column: 2;
+        grid-row: 3;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 0.4rem;
+    }
+}
+
+/* State said in a word and a colour: the accent for talking, amber for quiet, nothing for never. */
+.pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.12rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+}
+
+.pill i {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.pill--syncing {
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.pill--quiet {
+    background: var(--warn-soft);
+    color: var(--warn);
+}
+
+.pill--neverused {
+    background: var(--fill);
+    color: var(--ink-soft);
 }
 
 /*

@@ -32,21 +32,17 @@
                 </p>
             </div>
 
-            <div class="panel">
-                <div class="field">
-                    <label for="device-name">Name</label>
-                    <input id="device-name" type="text" maxlength="100" placeholder="Kindle" @bind="_name" @bind:event="oninput" @onkeydown="MintOnEnterAsync" />
-                </div>
-
-                @if (_mintComplaint is { } complaint)
-                {
-                    <p class="entry__reasons" role="alert">@complaint</p>
-                }
-
-                <div class="session-form__actions">
-                    <button type="button" @onclick="MintAsync" disabled="@(_working || string.IsNullOrWhiteSpace(_name))">Create a token</button>
-                </div>
+            @* One row, like the search box: a name and the one thing to do with it. *@
+            <div class="devices__mint">
+                <label class="visually-hidden" for="device-name">Name</label>
+                <input id="device-name" type="text" maxlength="100" placeholder="Name a device, e.g. Kindle" @bind="_name" @bind:event="oninput" @onkeydown="MintOnEnterAsync" />
+                <button type="button" class="button--primary" @onclick="MintAsync" disabled="@(_working || string.IsNullOrWhiteSpace(_name))">Create a token</button>
             </div>
+
+            @if (_mintComplaint is { } complaint)
+            {
+                <p class="entry__reasons" role="alert">@complaint</p>
+            }
 
             @if (_minted is { } minted)
             {
@@ -75,25 +71,40 @@
             }
             else
             {
-                <ul class="sessions">
+                @*
+                    A device is a card like a book on the shelf: a glyph where the cover sits, the name
+                    as the title, the dates beneath — and its state as a pill, because "is my Kindle
+                    still talking to this?" is what the page is opened to find out, and a date makes
+                    the reader do the sum.
+                *@
+                <ul class="entries">
                     @foreach (var device in _devices)
                     {
-                        <li class="session">
-                            <span class="session__what">@device.Name</span>
-                            <span class="session__when">added @device.CreatedAt.LocalDateTime.ToString("d MMM yyyy")</span>
-                            <span class="session__how-long">@LastUsed(device)</span>
+                        var state = DeviceState.Of(device, DateTimeOffset.Now);
+                        <li class="entry device">
+                            <span class="device__glyph" aria-hidden="true">
+                                <svg viewBox="0 0 22 30" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="20" height="28" rx="3" /><rect x="4" y="4" width="14" height="18" rx="1" /></svg>
+                            </span>
+                            <p class="device__name">@device.Name</p>
+                            <p class="device__when">@When(device)</p>
+                            <div class="device__state">
+                                <span class="pill pill--@state.Kind.ToString().ToLowerInvariant()">
+                                    @if (state.Kind != DeviceStateKind.NeverUsed)
+                                    {
+                                        <i aria-hidden="true"></i>
+                                    }
+                                    @state.Label
+                                </span>
+                                <button type="button" class="link-button link-button--danger" @onclick="() => _revoking = device.Id" disabled="@(_working || _revoking == device.Id)">Revoke</button>
+                            </div>
 
                             @if (_revoking == device.Id)
                             {
-                                <div class="panel panel--danger">
+                                <div class="panel panel--danger device__question">
                                     <p>Revoke <strong>@device.Name</strong>? Anything holding its token stops working at once.</p>
                                     <button type="button" class="danger" @onclick="() => RevokeAsync(device.Id)" disabled="@_working">Revoke it</button>
                                     <button type="button" class="link-button" @onclick="() => _revoking = null" disabled="@_working">Keep it</button>
                                 </div>
-                            }
-                            else
-                            {
-                                <button type="button" class="link-button" @onclick="() => _revoking = device.Id" disabled="@_working">Revoke</button>
                             }
                         </li>
                     }
@@ -227,10 +238,25 @@
         _working = false;
     }
 
-    private static string LastUsed(Device device) =>
-        device.LastUsedAt is { } used
-            ? $"last used {used.LocalDateTime:d MMM yyyy, HH:mm}"
-            : "never used";
+    /// <summary>
+    /// The dates, in the reader's own time: "Last used today at 20:51 · added 20 Sep 2026". Today
+    /// gets the hour, because that is the difference between a device that just reported and one
+    /// that reported this morning; any other day, the day is enough.
+    /// </summary>
+    private static string When(Device device)
+    {
+        var added = $"added {device.CreatedAt.LocalDateTime:d MMM yyyy}";
+
+        if (device.LastUsedAt is not { } used)
+        {
+            return $"Added {device.CreatedAt.LocalDateTime:d MMM yyyy}";
+        }
+
+        var local = used.LocalDateTime;
+        return local.Date == DateTime.Today
+            ? $"Last used today at {local:HH:mm} · {added}"
+            : $"Last used {local:d MMM yyyy} · {added}";
+    }
 
     private static string Describe(DeviceProblem problem) => problem switch
     {
