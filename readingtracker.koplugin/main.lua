@@ -400,10 +400,14 @@ end
 
 -- Menu -----------------------------------------------------------------------------------------
 
+-- While reading, the menu sits at the end of the first tab, where the book's own things —
+-- contents, bookmarks — are, and where the reader reaches for it; a plugin with no hint lands
+-- there too, but with a "NEW:" stuck in front of its name for good. The file manager's first
+-- tab is its own settings, so there it stays with the other tools.
 function ReadingTracker:addToMainMenu(menu_items)
   menu_items.readingtracker = {
     text = _("ReadingTracker"),
-    sorting_hint = "more_tools",
+    sorting_hint = self.ui and self.ui.document and "navi" or "more_tools",
     sub_item_table_func = function() return self:menuItems() end,
   }
 end
