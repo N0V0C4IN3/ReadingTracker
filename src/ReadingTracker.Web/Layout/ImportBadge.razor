@@ -1,0 +1,32 @@
+@using ReadingTracker.Web.Services
+@implements IDisposable
+@inject ImportJob Job
+
+@*
+    A running import, in the header wherever the reader has gone: the count so far, or the
+    seconds until the next lookup while the Gateway's pace is waited out. Tapping it goes back
+    to the page with the list. Gone once the import is done — the page says how it ended.
+*@
+
+@if (Job.Running)
+{
+    <a class="import-badge" href="import" title="Importing — see the list">
+        <span class="import-badge__dot" aria-hidden="true"></span>
+        @if (Job.WaitingSeconds is { } seconds)
+        {
+            <span>Importing @Job.Results.Count / @Job.Books.Count · @seconds s</span>
+        }
+        else
+        {
+            <span>Importing @Job.Results.Count / @Job.Books.Count</span>
+        }
+    </a>
+}
+
+@code {
+    protected override void OnInitialized() => Job.Changed += Redraw;
+
+    private void Redraw() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Job.Changed -= Redraw;
+}

@@ -1,15 +1,16 @@
 @page "/import"
 @using ReadingTracker.Web.Services
-@inject GatewayCatalogClient Catalog
-@inject GatewayLibraryClient Library
+@implements IDisposable
+@inject ImportJob Job
 
 @*
     Bringing a shelf over from Hardcover. Its export (Settings → Export) is a CSV; this reads it
-    in the browser, shows what it would do, and then does it one book at a time through the same
-    doors a reader uses by hand — see LibraryImporter. Nothing leaves the browser but the books.
+    in the browser, shows what it would do, and hands it to the ImportJob, which does it one book
+    at a time through the same doors a reader uses by hand — see LibraryImporter — whether or not
+    the reader stays on this page. Nothing leaves the browser but the books.
 
     The Gateway paces searches per reader (ADR-0013), so a shelf of fifty takes a few minutes.
-    The page counts up as it goes and says when it is waiting, rather than sitting on a spinner.
+    The page counts up as it goes and counts down while it waits, rather than sitting on a spinner.
 *@
 
 <PageTitle>Import · ReadingTracker</PageTitle>
@@ -32,7 +33,7 @@
                 </p>
             </div>
 
-            @if (_books is null)
+            @if (_books is null && !Job.Running && !Job.Done)
             {
                 <label class="import__drop">
                     <InputFile OnChange="ReadAsync" accept=".csv,text/csv" class="visually-hidden" />
@@ -47,7 +48,7 @@
                     <p class="notice notice--bad" role="alert">@problem</p>
                 }
             }
-            else if (_results is null)
+            else if (_books is not null && !Job.Running && !Job.Done)
             {
                 <div class="import__summary">
                     <p class="import__count"><strong>@_books.Count</strong> books in the file</p>
@@ -71,31 +72,35 @@
                 </ul>
 
                 <div class="import__actions">
-                    <button type="button" class="button--primary" @onclick="ImportAsync">Import @_books.Count books</button>
+                    <button type="button" class="button--primary" @onclick="Begin">Import @_books.Count books</button>
                     <button type="button" class="link-button" @onclick="Reset">Choose another file</button>
-                    <p class="hint">Takes a few minutes: the library looks each book up in turn.</p>
+                    <p class="hint">Takes a few minutes — the library looks up ten books a minute. You can leave this page; the header shows how it is going.</p>
                 </div>
             }
             else
             {
                 <div class="import__progress" role="status" aria-live="polite">
                     <p class="import__count">
-                        @if (_done)
+                        @if (Job.Done)
                         {
-                            <strong>Done.</strong> <text>@Count(ImportOutcome.Added) added, @Count(ImportOutcome.AlreadyOnShelf) already here@(Count(ImportOutcome.Failed) is > 0 and var failed ? $", {failed} could not be" : "").</text>
+                            <strong>Done.</strong> <text>@Job.Count(ImportOutcome.Added) added, @Job.Count(ImportOutcome.AlreadyOnShelf) already here@(Job.Count(ImportOutcome.Failed) is > 0 and var failed ? $", {failed} could not be" : "").</text>
+                        }
+                        else if (Job.WaitingSeconds is { } seconds)
+                        {
+                            <strong>@Job.Results.Count of @Job.Books.Count</strong> <text>· the library takes ten lookups a minute — carrying on in @seconds s</text>
                         }
                         else
                         {
-                            <strong>@_results.Count of @_books.Count</strong> <text>· @(_waiting ?? _current)</text>
+                            <strong>@Job.Results.Count of @Job.Books.Count</strong> <text>· @Job.Current</text>
                         }
                     </p>
                     <div class="progress__track" aria-hidden="true">
-                        <div class="progress__fill" style="width: @(_books.Count == 0 ? 0 : _results.Count * 100 / _books.Count)%"></div>
+                        <div class="progress__fill" style="width: @(Job.Books.Count == 0 ? 0 : Job.Results.Count * 100 / Job.Books.Count)%"></div>
                     </div>
                 </div>
 
                 <ul class="import__rows">
-                    @foreach (var result in _results)
+                    @foreach (var result in Job.Results)
                     {
                         <li class="import__row import__row--@result.Outcome.ToString().ToLowerInvariant()">
                             <span class="import__title">@result.Book.Title</span>
@@ -111,12 +116,16 @@
                     }
                 </ul>
 
-                @if (_done)
+                @if (Job.Done)
                 {
                     <div class="import__actions">
                         <a class="button--primary import__shelf" href="/">See your shelf</a>
                         <button type="button" class="link-button" @onclick="Reset">Import another file</button>
                     </div>
+                }
+                else
+                {
+                    <p class="hint">You can leave this page; the import carries on and the header shows how it is going.</p>
                 }
             }
         </section>
@@ -128,10 +137,10 @@
 
     private IReadOnlyList<ImportedBook>? _books;
     private string? _readingProblem;
-    private List<ImportResult>? _results;
-    private string? _current;
-    private string? _waiting;
-    private bool _done;
+
+    protected override void OnInitialized() => Job.Changed += Redraw;
+
+    private void Redraw() => _ = InvokeAsync(StateHasChanged);
 
     private IEnumerable<(string Status, int Count)> ByStatus =>
         (_books ?? [])
@@ -167,46 +176,22 @@
         }
     }
 
-    private async Task ImportAsync()
+    private void Begin()
     {
-        if (_books is null)
+        if (_books is { } books && Job.Start(books))
         {
-            return;
+            _books = null;
         }
-
-        var importer = new LibraryImporter(Catalog, Library, Task.Delay);
-        importer.Waiting += message =>
-        {
-            _waiting = message;
-            StateHasChanged();
-        };
-
-        _results = [];
-        _done = false;
-
-        foreach (var book in _books)
-        {
-            _current = book.Title;
-            _waiting = null;
-            StateHasChanged();
-
-            _results.Add(await importer.ImportAsync(book, CancellationToken.None));
-        }
-
-        _current = null;
-        _waiting = null;
-        _done = true;
     }
 
     private void Reset()
     {
         _books = null;
-        _results = null;
         _readingProblem = null;
-        _done = false;
+        Job.Clear();
     }
 
-    private int Count(ImportOutcome outcome) => _results?.Count(result => result.Outcome == outcome) ?? 0;
+    public void Dispose() => Job.Changed -= Redraw;
 
     private static string Label(string status) => status switch
     {

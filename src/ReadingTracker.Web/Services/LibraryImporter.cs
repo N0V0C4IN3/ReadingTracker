@@ -22,18 +22,18 @@ public sealed record ImportResult(ImportedBook Book, ImportOutcome Outcome, stri
 /// have been done by a reader, one book at a time.
 ///
 /// The Gateway paces searches and books-by-hand per reader (ADR-0013), and an export is dozens
-/// of each. Rather than ask for a wider door, the import waits: a 429 is a pause and a retry,
-/// and the page says so while it does. A fifty-book shelf takes a few minutes; it is done once.
+/// of each. Rather than ask for a wider door, the import waits: a 429 is a pause for as long as
+/// the Gateway said and a retry, and the job says so while it does. A fifty-book shelf takes a
+/// few minutes; it is done once.
 /// </summary>
 public sealed class LibraryImporter(
     GatewayCatalogClient catalog,
     GatewayLibraryClient library,
     Func<TimeSpan, CancellationToken, Task> wait)
 {
-    private static readonly TimeSpan Pause = TimeSpan.FromSeconds(15);
-    private const int MostRetries = 8;
-
-    public event Action<string>? Waiting;
+    /// <summary>When the Gateway does not say how long: its windows are a minute (ADR-0013).</summary>
+    private static readonly TimeSpan Pause = TimeSpan.FromSeconds(61);
+    private const int MostRetries = 3;
 
     public async Task<ImportResult> ImportAsync(ImportedBook book, CancellationToken cancellationToken)
     {
@@ -142,9 +142,7 @@ public sealed class LibraryImporter(
         }
     }
 
-    private Task PauseAsync(CancellationToken cancellationToken)
-    {
-        Waiting?.Invoke("Waiting for the library's pace…");
-        return wait(Pause, cancellationToken);
-    }
+    /// <summary>As long as the Gateway asked, and a second more so the window has turned.</summary>
+    private Task PauseAsync(CancellationToken cancellationToken) =>
+        wait((catalog.RetryAfter ?? Pause) + TimeSpan.FromSeconds(1), cancellationToken);
 }

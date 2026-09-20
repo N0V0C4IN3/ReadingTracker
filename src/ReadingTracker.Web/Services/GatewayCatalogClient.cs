@@ -108,6 +108,12 @@ public sealed record BookCreation(
 public sealed class GatewayCatalogClient(HttpClient httpClient)
 {
     /// <summary>
+    /// How long the Gateway last said to wait when it said 429 (ADR-0013), for a caller that
+    /// means to try again rather than give up — the import does. Null until it has said so.
+    /// </summary>
+    public TimeSpan? RetryAfter { get; private set; }
+
+    /// <summary>
     /// One box's worth of words — a title, an author, an ISBN, some of each. Catalog works out
     /// which; this just hands them over.
     /// </summary>
@@ -147,6 +153,7 @@ public sealed class GatewayCatalogClient(HttpClient httpClient)
 
         if (response.StatusCode is HttpStatusCode.TooManyRequests)
         {
+            RetryAfter = response.Headers.RetryAfter?.Delta;
             return (null, SearchUnavailable.TooManyRequests);
         }
 
@@ -186,6 +193,7 @@ public sealed class GatewayCatalogClient(HttpClient httpClient)
 
         if (response.StatusCode is HttpStatusCode.TooManyRequests)
         {
+            RetryAfter = response.Headers.RetryAfter?.Delta;
             return BookCreation.Failed(BookCreationProblem.TooManyRequests);
         }
 
