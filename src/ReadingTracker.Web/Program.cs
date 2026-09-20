@@ -80,6 +80,7 @@ else
 // application is allowed to know — never at Catalog or Library directly.
 AddGatewayClient<GatewayLibraryClient>();
 AddGatewayClient<GatewayCatalogClient>();
+AddGatewayClient<GatewayDevicesClient>();
 
 var host = builder.Build();
 

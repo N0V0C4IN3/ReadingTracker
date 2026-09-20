@@ -353,6 +353,18 @@ header > a:hover {
     width: 100%;
 }
 
+/* A page in the menu, above the one action. Set like a quiet row rather than a button. */
+.account__link {
+    display: block;
+    margin: 0 0 0.6rem;
+    font-size: 0.92rem;
+    text-decoration: none;
+}
+
+.account__link:hover {
+    text-decoration: underline;
+}
+
 header input {
     max-width: 9rem;
 }
@@ -1983,6 +1995,44 @@ button.danger:hover:not(:disabled) {
 }
 
 /* Page-level messages ----------------------------------------------------- */
+
+/* Devices ----------------------------------------------------------------- */
+
+.devices .field input[type="text"] {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.devices .field + .session-form__actions {
+    margin-top: 0.4rem;
+}
+
+/* The revoke question drops under its row rather than squeezing in beside the name. */
+.devices .session .panel {
+    flex-basis: 100%;
+    margin-top: 0.4rem;
+    margin-bottom: 0.4rem;
+}
+
+.devices .session > .link-button {
+    margin-left: auto;
+}
+
+/*
+    The token, on its one and only showing. Monospace and wrapped, so a long secret fits a phone
+    and can be selected whole; picked out in the accent so the eye lands on it before the notice
+    above says why.
+*/
+.token-reveal__secret {
+    display: block;
+    margin: 0.6rem 0 0.9rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--radius-sm);
+    background: var(--card);
+    font-size: 0.9rem;
+    overflow-wrap: anywhere;
+    user-select: all;
+}
 
 .notice {
     padding: 0.7rem 0.95rem;
