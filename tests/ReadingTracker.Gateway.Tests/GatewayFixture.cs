@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -11,12 +12,19 @@ namespace ReadingTracker.Gateway.Tests;
 /// Boots the real Gateway in-process. This is the single seam the suite exercises: tests drive
 /// the Gateway through its own HTTP surface and observe what reached the services behind it.
 ///
-/// Unlike Catalog's and Library's fixtures there are no containers to start, because the Gateway
-/// owns no database and no queue. Catalog and Library are stubbed at the network boundary rather
-/// than by replacing anything inside the Gateway, so the genuine forwarding path runs.
+/// The Gateway owns a schema of its own for DeviceTokens, so there is a Postgres to start —
+/// shared with the other Gateway fixtures through <see cref="TestPostgres"/>. There is no queue.
+/// Catalog and Library are stubbed at the network boundary rather than by replacing anything
+/// inside the Gateway, so the genuine forwarding path runs.
 /// </summary>
-public sealed class GatewayFixture : WebApplicationFactory<Program>
+public sealed class GatewayFixture : WebApplicationFactory<Program>, IAsyncLifetime
 {
+    private string _connectionString = "";
+
+    public async Task InitializeAsync() => _connectionString = await TestPostgres.ConnectionStringAsync();
+
+    Task IAsyncLifetime.DisposeAsync() => Task.CompletedTask;
+
     /// <summary>
     /// Stands in for both services behind the Gateway. They are told apart by the host the
     /// Gateway dialled, which is what proves a request went to the right one.
@@ -51,6 +59,19 @@ public sealed class GatewayFixture : WebApplicationFactory<Program>
     }
 
     /// <summary>
+    /// Mints a DeviceToken the way the web app would — with a Google-signed session — and hands
+    /// back the secret a device would be given to paste into its configuration.
+    /// </summary>
+    public async Task<string> MintDeviceTokenAsync(string subject, string name)
+    {
+        var response = await ClientFor(subject).PostAsJsonAsync("/api/devices", new { name });
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<MintedDeviceToken>())!.Token;
+    }
+
+    private sealed record MintedDeviceToken(string Token);
+
+    /// <summary>
     /// Resets the stub to answering 200 with nothing recorded yet, and returns the live list it
     /// records into — so a test can assert on what actually arrived downstream, which is the only
     /// place most of the Gateway's behaviour is visible. The fixture is shared across the
@@ -69,6 +90,7 @@ public sealed class GatewayFixture : WebApplicationFactory<Program>
         builder.UseSetting("ReverseProxy:Clusters:library:Destinations:primary:Address", $"http://{LibraryHost}/");
         builder.UseSetting("Google:ClientId", FakeGoogle.ClientId);
         builder.UseSetting("AllowedOrigins:0", AllowedOrigin);
+        builder.UseSetting("ConnectionStrings:GatewayDb", _connectionString);
 
         _googleTransport.Respond = Google.Answer;
 

@@ -11,8 +11,14 @@ namespace ReadingTracker.Gateway.Tests;
 /// <see cref="GatewayFixture"/> because most tests must prove DevSignIn is off by default — this
 /// fixture exists only to prove the enabled path works when a developer actually opts in.
 /// </summary>
-public sealed class DevSignInFixture : WebApplicationFactory<Program>
+public sealed class DevSignInFixture : WebApplicationFactory<Program>, IAsyncLifetime
 {
+    private string _connectionString = "";
+
+    public async Task InitializeAsync() => _connectionString = await TestPostgres.ConnectionStringAsync();
+
+    Task IAsyncLifetime.DisposeAsync() => Task.CompletedTask;
+
     public const string CatalogHost = "catalog.test";
 
     public const string LibraryHost = "library.test";
@@ -30,6 +36,7 @@ public sealed class DevSignInFixture : WebApplicationFactory<Program>
         builder.UseSetting("Google:ClientId", ClientId);
         builder.UseSetting("AllowedOrigins:0", AllowedOrigin);
         builder.UseSetting("DevSignIn:Enabled", "true");
+        builder.UseSetting("ConnectionStrings:GatewayDb", _connectionString);
 
         builder.ConfigureTestServices(services =>
             services.AddSingleton<IForwarderHttpClientFactory>(new StubForwarder(Downstream)));

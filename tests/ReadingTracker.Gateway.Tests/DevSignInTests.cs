@@ -67,5 +67,30 @@ public sealed class DevSignInWhenEnabledTests(DevSignInFixture fixture)
         Assert.Equal("dev-tester-1", Assert.Single(fixture.Downstream.Requests).Headers.GetValues("X-Reader-Id").Single());
     }
 
+    [Fact]
+    public async Task Can_mint_a_device_token_so_a_plugin_can_be_tested_locally()
+    {
+        fixture.Downstream.Requests.Clear();
+        fixture.Downstream.Respond = _ => new HttpResponseMessage(HttpStatusCode.OK);
+
+        var signIn = await fixture.CreateClient().PostAsJsonAsync("/dev/sign-in", new { readerId = "dev-tester-2" });
+        var session = fixture.CreateClient();
+        session.DefaultRequestHeaders.Authorization =
+            new("Bearer", (await signIn.Content.ReadFromJsonAsync<DevSignInResponse>())!.IdToken);
+
+        var minted = await session.PostAsJsonAsync("/api/devices", new { name = "Emulator" });
+        Assert.Equal(HttpStatusCode.Created, minted.StatusCode);
+
+        var device = fixture.CreateClient();
+        device.DefaultRequestHeaders.Authorization =
+            new("Bearer", (await minted.Content.ReadFromJsonAsync<MintedDeviceToken>())!.Token);
+        await device.GetAsync("/api/library");
+
+        // A DevSignIn reader is a reader like any other: the device it minted acts as it.
+        Assert.Equal("dev-tester-2", Assert.Single(fixture.Downstream.Requests).Headers.GetValues("X-Reader-Id").Single());
+    }
+
     private sealed record DevSignInResponse(string IdToken);
+
+    private sealed record MintedDeviceToken(string Token);
 }

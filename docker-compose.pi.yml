@@ -104,11 +104,15 @@ services:
       AllowedOrigins__0: ${ALLOWED_ORIGIN:?set ALLOWED_ORIGIN in .env}
       ReverseProxy__Clusters__catalog__Destinations__primary__Address: "http://catalog:8080/"
       ReverseProxy__Clusters__library__Destinations__primary__Address: "http://library:8080/"
+      # The Gateway's own schema, for DeviceTokens (ADR-0014).
+      ConnectionStrings__GatewayDb: "Host=postgres;Port=5432;Database=readingtracker;Username=readingtracker;Password=${POSTGRES_PASSWORD};Gss Encryption Mode=Disable"
     # Loopback only. The internet reaches the Gateway through the tailscale sidecar below, never
     # through a published port; this one exists so a human on the Pi can curl /health.
     ports:
       - "127.0.0.1:5100:8080"
     depends_on:
+      postgres:
+        condition: service_healthy
       catalog:
         condition: service_started
       library:

@@ -20,7 +20,7 @@ public sealed class DevSignInStaysOffOutsideDevelopmentTests
     [Fact]
     public async Task Configuration_alone_does_not_enable_it_outside_development()
     {
-        using var factory = new ProductionWithDevSignInConfiguredFixture();
+        using var factory = new ProductionWithDevSignInConfiguredFixture(await TestPostgres.ConnectionStringAsync());
         var client = factory.CreateClient();
 
         var response = await client.PostAsync("/dev/sign-in", JsonContent.Create(new { }));
@@ -28,7 +28,7 @@ public sealed class DevSignInStaysOffOutsideDevelopmentTests
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
-    private sealed class ProductionWithDevSignInConfiguredFixture : WebApplicationFactory<Program>
+    private sealed class ProductionWithDevSignInConfiguredFixture(string connectionString) : WebApplicationFactory<Program>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
@@ -38,6 +38,7 @@ public sealed class DevSignInStaysOffOutsideDevelopmentTests
             builder.UseSetting("Google:ClientId", FakeGoogle.ClientId);
             builder.UseSetting("AllowedOrigins:0", "http://frontend.test");
             builder.UseSetting("DevSignIn:Enabled", "true");
+            builder.UseSetting("ConnectionStrings:GatewayDb", connectionString);
 
             builder.ConfigureTestServices(services =>
                 services.AddSingleton<IForwarderHttpClientFactory>(new StubForwarder(new StubHttpMessageHandler())));

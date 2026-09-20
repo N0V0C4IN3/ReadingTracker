@@ -1,8 +1,12 @@
 using System.Security.Cryptography;
 using DotNetEnv;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.IdentityModel.Tokens;
 using ReadingTracker.Gateway;
+using ReadingTracker.Gateway.Devices;
+using ReadingTracker.Gateway.Persistence;
 using Yarp.ReverseProxy.Forwarder;
 using Yarp.ReverseProxy.Transforms;
 
@@ -55,6 +59,24 @@ if (allowedOrigins is not { Length: > 0 })
         "No AllowedOrigins are configured, so no browser could call the gateway. Set AllowedOrigins__0.");
 }
 
+// The Gateway holds state of its own for the first time — DeviceTokens (ADR-0014) — and so, like
+// the services behind it, fails at startup with a clear message rather than deep inside Npgsql on
+// the first device that calls.
+var gatewayDbConnectionString = builder.Configuration.GetConnectionString("GatewayDb");
+
+if (string.IsNullOrWhiteSpace(gatewayDbConnectionString))
+{
+    throw new InvalidOperationException(
+        "Connection string 'GatewayDb' is not configured. Set ConnectionStrings__GatewayDb.");
+}
+
+builder.Services.AddDbContext<GatewayDbContext>(options =>
+    options.UseNpgsql(
+        gatewayDbConnectionString,
+        npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", GatewayDbContext.Schema)));
+
+builder.Services.TryAddSingleton(TimeProvider.System);
+
 // A valid reader identity for local testing, without a real Google account. Both gates are
 // required (ADR-0008): configuration alone cannot turn this on in a deployed environment, since
 // nothing there runs the Development environment, and the Development environment alone does not
@@ -76,7 +98,11 @@ builder.Services.AddCors(options =>
 builder.Services.AddReaderPace(
     builder.Configuration.GetSection(RateLimits.SectionName).Get<RateLimits>() ?? new RateLimits());
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+// Every request is authenticated under the selector, which reads the shape of the bearer token
+// and hands it to the DeviceToken lookup or to Google's verification. The two never mix: a JWT is
+// never looked up, and a DeviceToken is never parsed.
+builder.Services.AddAuthentication(DeviceTokenAuthentication.SelectorScheme)
+    .AddDeviceTokens()
     .AddJwtBearer(options =>
     {
         // Google publishes its signing keys; the handler fetches them through this authority and
@@ -119,13 +145,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization(options =>
-    options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+builder.Services.AddAuthorizationBuilder()
+    .SetFallbackPolicy(new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
         // A token with no subject names no reader, and the Gateway must not be the thing that
         // invents one.
         .RequireClaim(GoogleIdentity.SubjectClaim)
-        .Build());
+        .Build())
+    .AddInPersonPolicy();
 
 builder.Services.AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
@@ -147,9 +174,14 @@ builder.Services.AddReverseProxy()
         return ValueTask.CompletedTask;
     }));
 
-builder.Services.AddHealthChecks();
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<GatewayDbContext>("gateway-db");
 
 var app = builder.Build();
+
+// The Gateway owns its schema (ADR-0004), so it brings it up to date on boot, taking a lock so
+// concurrent replicas serialise rather than race (ADR-0006).
+await GatewaySchema.MigrateAsync(app.Services);
 
 // Answers without a token: the platform has to be able to tell whether the Gateway is up
 // without holding a Google account.
@@ -170,6 +202,9 @@ app.UseAuthentication();
 // with no reader is counted by address before being turned away.
 app.UseRateLimiter();
 app.UseAuthorization();
+
+// Served here, not proxied: the table these read and write is the Gateway's own.
+app.MapDeviceEndpoints();
 
 app.MapReverseProxy(proxy =>
     proxy.Use(async (context, next) =>

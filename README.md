@@ -89,7 +89,7 @@ Web sends the **ID token** Google issued at sign-in, not an access token: Google
 
 The two services can still be called directly on their own ports, which is how you drive them by hand locally. That is exactly what must be impossible once deployed: anything that can reach them directly can claim to be any reader by setting a header. See ADR-0007.
 
-Each service exposes `/health`. For Catalog and Library it returns `Healthy` only when they can actually reach their own database; the Gateway owns no database, so its health check says only that the Gateway itself is up. Catalog and Library share one Postgres instance but own separate schemas and never read each other's tables.
+Each service exposes `/health`, and each returns `Healthy` only when it can actually reach its own database. Catalog, Library and the Gateway share one Postgres instance but own separate schemas and never read each other's tables; the Gateway's holds DeviceTokens and nothing else (ADR-0014).
 
 > **Ports.** Postgres is on **55432** and RabbitMQ on **55672** (management UI on **55673**), deliberately off the default ports so they don't collide with anything already installed locally.
 
