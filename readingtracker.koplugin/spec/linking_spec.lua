@@ -108,24 +108,25 @@ describe("linking a document by ISBN", function()
     end)
   end)
 
-  it("does nothing for a document with no ISBN", function()
+  it("does not search the catalog for a document with no ISBN", function()
     local env = FakeEnv.new({ identifiers = "calibre:42\nuuid:0d6b2c7e" })
     local app = App.new(env)
 
     app:onReaderReady()
 
+    -- Offered a search instead (search_spec); nothing is looked up unasked.
     assert.are.same({}, env.requests)
-    assert.are.same({}, env.prompts)
+    assert.are.equal("prompt", env:last_prompt().kind)
   end)
 
-  it("does nothing when the catalog does not know the ISBN", function()
+  it("falls back to offering a search when the catalog does not know the ISBN", function()
     local env = FakeEnv.new({ identifiers = "isbn:9780441478125" })
     catalog_has_nothing(env, "9780441478125")
     local app = App.new(env)
 
     app:onReaderReady()
 
-    assert.are.same({}, env.prompts)
+    assert.matches("Link ", env:last_prompt().text, 1, true)
     assert.is_nil(env:read_setting("entry_id"))
   end)
 

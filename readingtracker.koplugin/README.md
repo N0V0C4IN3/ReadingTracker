@@ -19,7 +19,11 @@ cannot do one of those.
 - **Opening a book with an ISBN** in its metadata looks the book up. If it is already on your
   shelf it is linked silently; if not, you are asked once whether to add it — *Yes*, *Not now*
   (asked again next time), or *Never for this document*.
-- The menu shows what the document is linked to and lets you unlink it.
+- **A book with no ISBN**, or one the library does not know, asks once whether to search: the
+  title and author are filled in from the file, you pick the right result, and it is added to
+  your shelf and linked. Nothing found? Add it by hand from the same place.
+- The menu shows what the document is linked to, lets you link it to a different book, or
+  unlink it.
 
 Nothing is sent while the device is offline; the plugin tries again at the next chance and
 never turns wifi on by itself.

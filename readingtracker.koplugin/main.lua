@@ -12,7 +12,10 @@ local NetworkMgr = require("ui/network/manager")
 local Trapper = require("ui/trapper")
 local ButtonDialog = require("ui/widget/buttondialog")
 local InfoMessage = require("ui/widget/infomessage")
+local Menu = require("ui/widget/menu")
+local MultiInputDialog = require("ui/widget/multiinputdialog")
 local Notification = require("ui/widget/notification")
+local Screen = require("device").screen
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local logger = require("logger")
 local http = require("socket.http")
@@ -120,6 +123,78 @@ function ReadingTracker:buildEnv()
       dismiss_callback = function() on_answer(nil) end,
     }
     UIManager:show(dialog)
+  end
+
+  -- A form of text fields, answered as { id = value } — or nil from Cancel.
+  function env:ask_text(form, on_submit)
+    local dialog
+    local fields = {}
+    for _, field in ipairs(form.fields) do
+      table.insert(fields, { text = field.value or "", hint = field.label })
+    end
+
+    dialog = MultiInputDialog:new {
+      title = form.title,
+      fields = fields,
+      buttons = { {
+        {
+          text = _("Cancel"),
+          id = "close",
+          callback = function()
+            UIManager:close(dialog)
+            on_submit(nil)
+          end,
+        },
+        {
+          text = form.submit or _("OK"),
+          is_enter_default = true,
+          callback = function()
+            local typed = dialog:getFields()
+            UIManager:close(dialog)
+            local values = {}
+            for index, field in ipairs(form.fields) do
+              values[field.id] = typed[index] or ""
+            end
+            Trapper:wrap(function() on_submit(values) end)
+          end,
+        },
+      } },
+    }
+    UIManager:show(dialog)
+    dialog:onShowKeyboard()
+  end
+
+  -- A full-screen list to pick one item from; closing it without picking answers nil.
+  function env:pick(list, on_pick)
+    local menu
+    local picked = false
+    local items = {}
+    for _, item in ipairs(list.items) do
+      table.insert(items, {
+        text = item.detail and (item.text .. " — " .. item.detail) or item.text,
+        id = item.id,
+      })
+    end
+
+    menu = Menu:new {
+      title = list.title,
+      item_table = items,
+      is_borderless = true,
+      is_popout = false,
+      width = Screen:getWidth(),
+      height = Screen:getHeight(),
+      onMenuSelect = function(_, item)
+        picked = true
+        UIManager:close(menu)
+        Trapper:wrap(function() on_pick(item.id) end)
+      end,
+      close_callback = function()
+        if not picked then
+          on_pick(nil)
+        end
+      end,
+    }
+    UIManager:show(menu)
   end
 
   -- A blocking request; the app is always run inside a Trapper so this does not freeze the
@@ -252,6 +327,15 @@ function ReadingTracker:menuItems()
         return _("Not linked to a book")
       end,
       enabled_func = function() return false end,
+    },
+    {
+      text_func = function()
+        return self.app:linked_entry() and _("Link to a different book…") or _("Link to a book…")
+      end,
+      enabled_func = function() return has_document and self.config ~= nil end,
+      callback = function()
+        Trapper:wrap(function() self.app:link_by_search() end)
+      end,
     },
     {
       text = _("Unlink this document"),

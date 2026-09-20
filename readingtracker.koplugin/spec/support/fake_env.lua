@@ -73,9 +73,25 @@ end
 -- prompt = { text = ..., choices = { { id = "yes", label = "Yes" }, ... } }; the answer is the
 -- id of the choice the reader tapped, or nil when they dismissed it.
 function FakeEnv:prompt(prompt, on_answer)
+  prompt.kind = "prompt"
   table.insert(self.prompts, prompt)
-  local scripted = table.remove(self.answers, 1)
-  on_answer(scripted)
+  on_answer(table.remove(self.answers, 1))
+end
+
+-- form = { title = ..., fields = { { id = "title", label = "Title", value = "..." }, ... } };
+-- answered with a table of values by field id, or nil when dismissed.
+function FakeEnv:ask_text(form, on_submit)
+  form.kind = "form"
+  table.insert(self.prompts, form)
+  on_submit(table.remove(self.answers, 1))
+end
+
+-- list = { title = ..., items = { { id = ..., text = ..., detail = ... }, ... } }; answered with
+-- the picked item's id, or nil when dismissed.
+function FakeEnv:pick(list, on_pick)
+  list.kind = "pick"
+  table.insert(self.prompts, list)
+  on_pick(table.remove(self.answers, 1))
 end
 
 -- request = { method = "GET", url = "...", body = table|nil }
