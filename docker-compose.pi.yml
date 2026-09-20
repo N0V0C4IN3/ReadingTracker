@@ -142,6 +142,28 @@ services:
       gateway:
         condition: service_started
 
+  # The Funnel ingress can quietly stop forwarding to the node after the sidecar loses its
+  # control connection: the node stays "Running", `tailscale funnel status` still says "Funnel
+  # on", and from the tailnet the hostname still answers -- only visitors from the internet see
+  # the TLS handshake fail. Restarting the sidecar re-registers the ingress and is the fix every
+  # time, so this does it unattended: it probes the Gateway the way a visitor does (public DNS,
+  # Funnel ingress -- see deploy/pi/funnel-watch.sh for why that matters) and restarts the
+  # sidecar after three misses in a row. Docker's own healthcheck could see it but cannot act on
+  # it, and the sidecar image has no curl to see it with; the Docker socket is what lets this
+  # restart a neighbour.
+  funnel-watch:
+    image: docker:cli
+    restart: unless-stopped
+    environment:
+      FUNNEL_URL: https://${FUNNEL_HOST:-readingtracker.tail03af11.ts.net}/health
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./deploy/pi/funnel-watch.sh:/funnel-watch.sh:ro
+    entrypoint: ["sh", "/funnel-watch.sh"]
+    depends_on:
+      tailscale:
+        condition: service_started
+
 volumes:
   postgres-data:
   rabbitmq-data:
