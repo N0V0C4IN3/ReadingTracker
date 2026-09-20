@@ -24,8 +24,27 @@ public sealed class DeviceToken
     /// <summary>Null until the token has been used at all.</summary>
     public DateTimeOffset? LastUsedAt { get; private set; }
 
+    /// <summary>
+    /// How stale a last-used stamp may be before a use refreshes it. A Kindle turning pages must
+    /// not turn every request into a write; "last used within the minute" is as much as a Reader
+    /// looking at the Devices page will ever want to know.
+    /// </summary>
+    private static readonly TimeSpan LastUsedResolution = TimeSpan.FromMinutes(1);
+
     private DeviceToken()
     {
+    }
+
+    /// <summary>Notes a use; says whether anything changed and so needs saving.</summary>
+    public bool Touch(DateTimeOffset now)
+    {
+        if (LastUsedAt is { } lastUsed && now - lastUsed < LastUsedResolution)
+        {
+            return false;
+        }
+
+        LastUsedAt = now;
+        return true;
     }
 
     public static DeviceToken Mint(string readerId, string name, string secretHash, DateTimeOffset now) =>

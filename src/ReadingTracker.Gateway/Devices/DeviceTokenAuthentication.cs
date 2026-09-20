@@ -54,7 +54,8 @@ public static class DeviceTokenAuthentication
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder,
-        GatewayDbContext db)
+        GatewayDbContext db,
+        TimeProvider clock)
         : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
     {
         protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -67,7 +68,6 @@ public static class DeviceTokenAuthentication
             var hash = DeviceTokenSecret.Hash(secret);
 
             var token = await db.DeviceTokens
-                .AsNoTracking()
                 .SingleOrDefaultAsync(t => t.SecretHash == hash, Context.RequestAborted);
 
             if (token is null)
@@ -75,6 +75,13 @@ public static class DeviceTokenAuthentication
                 // Unknown and revoked look the same from here, on purpose: a revoked token is
                 // deleted, and telling a caller which of the two they hold helps only an attacker.
                 return AuthenticateResult.Fail("This DeviceToken is not known to the Gateway.");
+            }
+
+            // So the Devices page can show a token that has gone quiet. Coarse, so that a device
+            // in use is one write a minute rather than one a request.
+            if (token.Touch(clock.GetUtcNow()))
+            {
+                await db.SaveChangesAsync(Context.RequestAborted);
             }
 
             var identity = new ClaimsIdentity(
