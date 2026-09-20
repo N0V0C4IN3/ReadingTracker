@@ -5,7 +5,7 @@ namespace ReadingTracker.Web.Tests;
 public class ShelfOrderTests
 {
     private static LibraryEntry Entry(string status, int addedDaysAgo) =>
-        new(Guid.NewGuid(), Guid.NewGuid(), status, "Pages", DateTimeOffset.UtcNow.AddDays(-addedDaysAgo), null, null, null, null, null);
+        new(Guid.NewGuid(), Guid.NewGuid(), status, "Pages", DateTimeOffset.UtcNow.AddDays(-addedDaysAgo), null, null, null, null, null, null);
 
     [Fact]
     public void Puts_the_books_being_read_first_and_keeps_everything_else_in_its_order()

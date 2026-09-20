@@ -12,6 +12,7 @@ public sealed record LibraryEntry(
     string Status,
     string TrackingMethod,
     DateTimeOffset AddedAt,
+    DateOnly? FinishedOn,
     int? PageCountOverride,
     int? EffectivePageCount,
     BookDetails? Book,
@@ -25,6 +26,12 @@ public sealed record LibraryEntry(
 /// progress, which is exactly what it is not.
 /// </summary>
 public sealed record Bookmark(decimal Percent, DateTimeOffset ReportedAt);
+
+/// <summary>
+/// A year's goal: how many books the reader means to finish, or null for none set, beside how
+/// many they have finished in it — the count is there either way.
+/// </summary>
+public sealed record ReadingGoal(int Year, int? Books, int Finished);
 
 public sealed record BookDetails(
     string Title,
@@ -222,13 +229,29 @@ public sealed class GatewayLibraryClient(HttpClient httpClient)
         return (entry, null);
     }
 
+    /// <summary>
+    /// Moves a book to a status. <paramref name="finishedOn"/> goes only with Finished, and says
+    /// which day it was when the reader knows — an import does — rather than today.
+    /// </summary>
     public Task<LibraryChange<LibraryEntry>> SetStatusAsync(
         Guid entryId,
         string status,
-        CancellationToken cancellationToken) =>
+        CancellationToken cancellationToken,
+        DateOnly? finishedOn = null) =>
         ChangeAsync<LibraryEntry>(
-            client => client.PutAsJsonAsync($"api/library/{entryId}/status", new { status }, cancellationToken),
+            client => client.PutAsJsonAsync($"api/library/{entryId}/status", new { status, finishedOn }, cancellationToken),
             cancellationToken);
+
+    public Task<LibraryChange<ReadingGoal>> GetGoalAsync(int year, CancellationToken cancellationToken) =>
+        ChangeAsync<ReadingGoal>(client => client.GetAsync($"api/library/goals/{year}", cancellationToken), cancellationToken);
+
+    public Task<LibraryChange<ReadingGoal>> SetGoalAsync(int year, int books, CancellationToken cancellationToken) =>
+        ChangeAsync<ReadingGoal>(
+            client => client.PutAsJsonAsync($"api/library/goals/{year}", new { books }, cancellationToken),
+            cancellationToken);
+
+    public Task<LibraryChange> ClearGoalAsync(int year, CancellationToken cancellationToken) =>
+        ChangeAsync(client => client.DeleteAsync($"api/library/goals/{year}", cancellationToken), cancellationToken);
 
     public Task<LibraryChange<LibraryEntry>> SetTrackingMethodAsync(
         Guid entryId,
