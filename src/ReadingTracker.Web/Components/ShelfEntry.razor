@@ -1,5 +1,6 @@
 @using ReadingTracker.Web.Services
 @inject GatewayLibraryClient Library
+@inject ShelfChanges Shelf
 
 @*
     One book on the reader's shelf, and everything they can do to it: change where it stands,
@@ -318,7 +319,11 @@
             return;
         }
 
-        await RunAsync(token => Library.SetStatusAsync(Entry.Id, status, token), Show);
+        await RunAsync(token => Library.SetStatusAsync(Entry.Id, status, token), async entry =>
+        {
+            await Show(entry);
+            Shelf.Announce();
+        });
     }
 
     /// <summary>Their answer to the prompt a completed book raises, which is the same change

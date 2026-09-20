@@ -316,7 +316,7 @@ header {
     own heading is the loud thing on the screen, and a wordmark set at the same weight was
     competing with it from a bar that is on every page.
 */
-header > a {
+header > a:first-child {
     font-size: 0.72rem;
     font-weight: 650;
     letter-spacing: 0.14em;
@@ -326,8 +326,156 @@ header > a {
     transition: color var(--quick) var(--ease);
 }
 
-header > a:hover {
+header > a:first-child:hover {
     color: var(--ink);
+}
+
+/*
+    The year's goal, in the bar's free middle: the figure and a short bar, quiet as the brand
+    beside it until the cursor asks. A button, so it can be tapped for the form; the menu that
+    opens is the account menu's, anchored under the badge.
+*/
+.goal {
+    position: relative;
+    display: flex;
+    margin-left: auto;
+}
+
+.goal__badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ink-soft);
+    font-size: 0.82rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    transition: background-color var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.goal__badge:hover:not(:disabled),
+.goal__badge[aria-expanded="true"] {
+    background: var(--fill);
+    color: var(--ink);
+}
+
+.goal__of {
+    font-weight: 500;
+    color: var(--ink-faint);
+}
+
+.goal__track {
+    width: 5.5rem;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--fill-hover);
+    overflow: hidden;
+}
+
+.goal__fill {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--accent);
+    transition: width 560ms var(--ease-out);
+}
+
+.goal__menu {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    z-index: 2;
+    width: 16rem;
+    padding: 0.9rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--card);
+    box-shadow: var(--shadow-lifted);
+    animation: unfold 240ms var(--ease-out) backwards;
+}
+
+.goal__heading {
+    margin: 0 0 0.7rem;
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+}
+
+.goal__heading strong {
+    color: var(--ink);
+    font-weight: 650;
+}
+
+.goal__pace {
+    display: block;
+    margin-top: 0.15rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--accent);
+}
+
+.goal__form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.3rem 0.5rem;
+    align-items: center;
+}
+
+.goal__form label {
+    grid-column: 1 / -1;
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+}
+
+.goal__form input {
+    width: 100%;
+}
+
+.goal__clear {
+    margin-top: 0.5rem;
+    padding-inline: 0;
+    font-size: 0.85rem;
+}
+
+/* An import under way, as a small live pill in the bar: a pulse and the count. */
+.import-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-left: auto;
+    padding: 0.25rem 0.7rem;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.import-badge + .goal {
+    margin-left: 0;
+}
+
+.import-badge__dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: currentColor;
+    animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .import-badge__dot {
+        animation: none;
+    }
 }
 
 /* The reader, as one round initial at the end of the bar. */
@@ -2669,8 +2817,17 @@ button.danger:hover:not(:disabled) {
         padding: 0.7rem 1rem;
     }
 
-    header > a {
+    header > a:first-child {
         margin-right: auto;
+    }
+
+    /* On a phone the figure alone is the badge: the bar has no room and the figure says it. */
+    .goal__track {
+        display: none;
+    }
+
+    .goal__badge {
+        padding-inline: 0.4rem;
     }
 
     /* The way in keeps its size whatever the space beside it does. */

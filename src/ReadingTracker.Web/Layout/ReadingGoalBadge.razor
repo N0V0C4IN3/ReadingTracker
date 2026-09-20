@@ -1,0 +1,216 @@
+@using ReadingTracker.Web.Services
+@implements IDisposable
+@inject GatewayLibraryClient Library
+@inject ShelfChanges Shelf
+
+@*
+    The year's goal, in the header on every page: "14 / 24" and a short bar, like a step count on
+    a watch. Tapping it opens the one small form there is — how many books this year — with
+    where the reader stands against it today. With no goal set it says how many were finished
+    this year and offers to set one; the count is worth seeing either way.
+
+    Fetched once when the header appears and again whenever the shelf says something changed
+    (a book marked Finished, an import landing), so the number never lags what the reader just
+    did. Nothing is shown until the first answer: a header that says "0 / 0" for a beat is
+    wrong for that beat.
+*@
+
+<AuthorizeView>
+    <Authorized>
+        @if (_goal is { } goal)
+        {
+            <div class="goal" @onkeydown="CloseOnEscape">
+                <button type="button" class="goal__badge"
+                        aria-haspopup="dialog" aria-expanded="@(_open ? "true" : "false")"
+                        aria-label="@Said(goal)"
+                        title="@Said(goal)"
+                        @onclick="Toggle">
+                    @if (goal.Books is { } books)
+                    {
+                        <span class="goal__figure">@goal.Finished <span class="goal__of">/ @books</span></span>
+                        <span class="goal__track" aria-hidden="true"><span class="goal__fill" style="width: @Percent(goal)%"></span></span>
+                    }
+                    else
+                    {
+                        <span class="goal__figure">@goal.Finished <span class="goal__of">read in @Year</span></span>
+                    }
+                </button>
+
+                @if (_open)
+                {
+                    <button type="button" class="account__scrim" tabindex="-1" aria-hidden="true" @onclick="Close"></button>
+                    <div class="goal__menu" role="dialog" aria-label="Reading goal">
+                        <p class="goal__heading">
+                            @if (goal.Books is { } target)
+                            {
+                                <strong>@goal.Finished of @target</strong> <text>books in @Year</text>
+                                <span class="goal__pace">@GoalPace.Of(goal.Finished, target, Today).Label</span>
+                            }
+                            else
+                            {
+                                <strong>@goal.Finished</strong> <text>@(goal.Finished == 1 ? "book" : "books") finished in @Year</text>
+                            }
+                        </p>
+
+                        <div class="goal__form">
+                            <label for="goal-books">Books this year</label>
+                            <input id="goal-books" type="number" inputmode="numeric" min="1" max="1000"
+                                   @bind="_books" @bind:event="oninput" @onkeydown="SetOnEnterAsync" disabled="@_working" />
+                            <button type="button" class="button--primary" @onclick="SetAsync" disabled="@(_working || !CanSet)">@(goal.Books is null ? "Set a goal" : "Set")</button>
+                        </div>
+
+                        @if (_problem is { } problem)
+                        {
+                            <p class="hint hint--bad" role="alert">@problem</p>
+                        }
+
+                        @if (goal.Books is not null)
+                        {
+                            <button type="button" class="link-button goal__clear" @onclick="ClearAsync" disabled="@_working">No goal this year</button>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private ReadingGoal? _goal;
+    private bool _open;
+    private int? _books;
+    private bool _working;
+    private string? _problem;
+
+    private static int Year => DateTime.Today.Year;
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
+    private bool CanSet => _books is >= 1 and <= 1000 && _books != _goal?.Books;
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool _asked;
+
+    protected override void OnInitialized() => Shelf.Changed += Refresh;
+
+    /// <summary>Asked for once somebody is signed in; before that the answer would be a 401.</summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_asked || AuthState is not { } pending || (await pending).User.Identity?.IsAuthenticated is not true)
+        {
+            return;
+        }
+
+        _asked = true;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var answer = await Library.GetGoalAsync(Year, CancellationToken.None);
+
+        if (answer.Ok)
+        {
+            _goal = answer.Value;
+            _books ??= _goal!.Books;
+        }
+    }
+
+    /// <summary>A book was finished, or an import landed: the figure may have moved.</summary>
+    private void Refresh() => _ = InvokeAsync(async () =>
+    {
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    private void Toggle()
+    {
+        _open = !_open;
+        _problem = null;
+        if (_open)
+        {
+            _books = _goal?.Books ?? _books;
+        }
+    }
+
+    private void Close() => _open = false;
+
+    private void CloseOnEscape(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            Close();
+        }
+    }
+
+    private async Task SetOnEnterAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && CanSet && !_working)
+        {
+            await SetAsync();
+        }
+    }
+
+    private async Task SetAsync()
+    {
+        if (_books is not { } books)
+        {
+            return;
+        }
+
+        _working = true;
+        _problem = null;
+
+        var answer = await Library.SetGoalAsync(Year, books, CancellationToken.None);
+
+        if (answer.Ok)
+        {
+            _goal = answer.Value;
+            _open = false;
+        }
+        else
+        {
+            _problem = answer.Problem switch
+            {
+                LibraryChangeProblem.Refused => answer.Reasons.Count > 0 ? string.Join(" ", answer.Reasons) : "A goal is between 1 and 1000 books.",
+                LibraryChangeProblem.NotSignedIn => "Your session has ended. Sign in again.",
+                _ => "ReadingTracker could not be reached just now.",
+            };
+        }
+
+        _working = false;
+    }
+
+    private async Task ClearAsync()
+    {
+        _working = true;
+        _problem = null;
+
+        var answer = await Library.ClearGoalAsync(Year, CancellationToken.None);
+
+        if (answer.Ok)
+        {
+            await LoadAsync();
+            _books = null;
+            _open = false;
+        }
+        else
+        {
+            _problem = "ReadingTracker could not be reached just now.";
+        }
+
+        _working = false;
+    }
+
+    private static int Percent(ReadingGoal goal) =>
+        goal.Books is { } books and > 0 ? Math.Min(100, goal.Finished * 100 / books) : 0;
+
+    private static string Said(ReadingGoal goal) =>
+        goal.Books is { } books
+            ? $"{goal.Finished} of {books} books finished in {Year} — {GoalPace.Of(goal.Finished, books, Today).Label}. Change the goal."
+            : $"{goal.Finished} books finished in {Year}. Set a goal.";
+
+    public void Dispose() => Shelf.Changed -= Refresh;
+}
