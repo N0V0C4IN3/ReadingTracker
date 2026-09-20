@@ -38,7 +38,7 @@ function Client:search_by_isbn(isbn)
   if err then
     return nil, err
   end
-  return body.books or {}, nil
+  return body.results or {}, nil
 end
 
 function Client:search(title, author)
@@ -50,7 +50,7 @@ function Client:search(title, author)
   if err then
     return nil, err
   end
-  return body.books or {}, nil
+  return body.results or {}, nil
 end
 
 function Client:add_book(book)
