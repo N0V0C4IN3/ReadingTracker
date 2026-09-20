@@ -425,42 +425,64 @@ header > a:hover {
     text-decoration: none;
 }
 
-/*
-    The theme, as three small choices in a row under their own rule: what the system says, light,
-    dark. The chosen one is filled like a tab; the rest are quiet.
-*/
+/* Dark mode, as a row like the others with a switch at its end. */
 .account__theme {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    justify-content: space-between;
+    gap: 0.6rem;
     margin-top: 0.35rem;
-    padding: 0.5rem 0.55rem 0.2rem;
+    padding: 0.5rem 0.55rem 0.3rem;
     border-top: 1px solid var(--line);
-    font-size: 0.8rem;
-    color: var(--ink-soft);
+    font-size: 0.92rem;
+    font-weight: 500;
 }
 
-.account__theme-label {
-    margin-right: auto;
-}
-
-.account__theme button {
-    padding: 0.2rem 0.55rem;
+/*
+    A switch of the kind a phone has: a pill track with a knob that slides to the far end and
+    the track filling with the accent when it is on. A button underneath, so it is focusable and
+    pressable like one; role="switch" and aria-checked say what it is.
+*/
+.switch {
+    position: relative;
+    flex: 0 0 auto;
+    width: 2.6rem;
+    height: 1.55rem;
+    padding: 0;
     border-radius: 999px;
-    background: transparent;
-    color: var(--ink-soft);
-    font-size: 0.78rem;
-    font-weight: 550;
+    background: var(--fill-hover);
+    transition: background-color var(--quick) var(--ease);
 }
 
-.account__theme button[aria-pressed="true"] {
+.switch:hover:not(:disabled) {
+    background: var(--line-strong);
+}
+
+.switch[aria-checked="true"],
+.switch[aria-checked="true"]:hover:not(:disabled) {
     background: var(--accent);
-    color: var(--accent-ink);
 }
 
-.account__theme button:hover:not(:disabled):not([aria-pressed="true"]) {
-    background: var(--fill);
-    color: var(--ink);
+.switch__knob {
+    position: absolute;
+    top: 0.15rem;
+    left: 0.15rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 30%);
+    transition: transform 200ms var(--ease-out);
+}
+
+.switch[aria-checked="true"] .switch__knob {
+    transform: translateX(1.05rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .switch__knob {
+        transition: none;
+    }
 }
 
 /* Signing out sits apart from the pages, under a rule. */

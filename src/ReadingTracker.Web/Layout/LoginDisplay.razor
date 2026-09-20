@@ -56,12 +56,12 @@
                         }
                     </a>
                     <a class="account__row" role="menuitem" href="import" @onclick="Close">Import</a>
-                    <div class="account__theme" role="group" aria-label="Theme">
-                        <span class="account__theme-label">Theme</span>
-                        @foreach (var (theme, label) in Themes)
-                        {
-                            <button type="button" aria-pressed="@(theme == _theme ? "true" : "false")" @onclick="() => SetThemeAsync(theme)">@label</button>
-                        }
+                    <div class="account__theme">
+                        <span id="dark-mode-label">Dark mode</span>
+                        <button type="button" class="switch" role="switch" aria-checked="@(_dark ? "true" : "false")"
+                                aria-labelledby="dark-mode-label" @onclick="ToggleDarkAsync">
+                            <span class="switch__knob" aria-hidden="true"></span>
+                        </button>
                     </div>
                     <div class="account__out">
                         <button type="button" class="account__row" role="menuitem" @onclick="SignOut">Sign out</button>
@@ -87,32 +87,25 @@
     private IReadOnlyList<Device>? _devices;
     private bool _askedForDevices;
 
-    private static readonly (string Theme, string Label)[] Themes =
-    [
-        ("system", "System"),
-        ("light", "Light"),
-        ("dark", "Dark"),
-    ];
-
     /// <summary>
-    /// The theme as this browser has it. index.html stamps the choice before first paint and
-    /// keeps it; this only reads it when the menu opens and writes it when a choice is made,
-    /// so the page and the menu can never disagree about which is on.
+    /// Whether the page is dark, as this browser has it. index.html stamps the choice before
+    /// first paint and keeps it; this only reads it as the menu opens and writes it when the
+    /// switch is flipped, so the page and the switch can never disagree.
     /// </summary>
-    private string _theme = "system";
+    private bool _dark = true;
 
-    private async Task SetThemeAsync(string theme)
+    private async Task ToggleDarkAsync()
     {
-        _theme = theme;
-        await JS.InvokeVoidAsync("readingTracker.setTheme", theme);
+        _dark = !_dark;
+        await JS.InvokeVoidAsync("readingTracker.setDark", _dark);
     }
 
     private async Task Toggle()
     {
         if (!_open)
         {
-            // Read before the menu shows, so its first frame already marks the right one.
-            _theme = await JS.InvokeAsync<string>("readingTracker.theme");
+            // Read before the menu shows, so its first frame already has the switch right.
+            _dark = await JS.InvokeAsync<bool>("readingTracker.isDark");
         }
 
         _open = !_open;

@@ -45,17 +45,18 @@
     <link rel="prefetch" href="covers/8242253-M.jpg" />
     <link rel="prefetch" href="covers/181493-M.jpg" />
     <link rel="preload" id="webassembly" />
-    <!-- The reader's theme, if they chose one, stamped before the stylesheet is applied so the page
-         never paints in the other theme first. Kept in this browser only: it is a preference about
-         this screen, not about the reader. -->
+    <!-- The reader's theme — dark unless they switched it — stamped before the stylesheet is
+         applied so the page never paints in the other theme first. Kept in this browser only: it
+         is a preference about this screen, not about the reader. -->
     <script>
         (function () {
+            var theme = "dark";
             try {
-                var theme = localStorage.getItem("readingtracker.theme");
-                if (theme === "light" || theme === "dark") {
-                    document.documentElement.setAttribute("data-theme", theme);
+                if (localStorage.getItem("readingtracker.theme") === "light") {
+                    theme = "light";
                 }
-            } catch (e) { /* no storage here: the system's theme, then */ }
+            } catch (e) { /* no storage here: dark, then */ }
+            document.documentElement.setAttribute("data-theme", theme);
         })();
     </script>
     <link rel="stylesheet" href="css/app.css" />
@@ -111,20 +112,12 @@
         window.readingTracker = {
             prefersStillness: () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
 
-            // The theme as chosen here: "light", "dark", or "system" for no choice at all.
-            theme: () => document.documentElement.getAttribute("data-theme") || "system",
-            setTheme: theme => {
-                if (theme === "light" || theme === "dark") {
-                    document.documentElement.setAttribute("data-theme", theme);
-                } else {
-                    document.documentElement.removeAttribute("data-theme");
-                }
+            // Whether the page is dark, and the switch for it.
+            isDark: () => document.documentElement.getAttribute("data-theme") !== "light",
+            setDark: dark => {
+                document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
                 try {
-                    if (theme === "light" || theme === "dark") {
-                        localStorage.setItem("readingtracker.theme", theme);
-                    } else {
-                        localStorage.removeItem("readingtracker.theme");
-                    }
+                    localStorage.setItem("readingtracker.theme", dark ? "dark" : "light");
                 } catch (e) { /* remembered for this page only */ }
             },
 
