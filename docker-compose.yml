@@ -109,11 +109,16 @@ services:
       # are a compose-network concern, since these two calls never leave the Docker network.
       ReverseProxy__Clusters__catalog__Destinations__primary__Address: "http://catalog:8080/"
       ReverseProxy__Clusters__library__Destinations__primary__Address: "http://library:8080/"
+      # The Gateway's own schema, for DeviceTokens (ADR-0014). See catalog above for why Gss
+      # Encryption Mode=Disable is here.
+      ConnectionStrings__GatewayDb: "Host=postgres;Port=5432;Database=readingtracker;Username=readingtracker;Password=readingtracker;Gss Encryption Mode=Disable"
       # Lets anyone testing locally get a valid reader identity via POST /dev/sign-in, without a
       # real Google account. Only ever active alongside ASPNETCORE_ENVIRONMENT=Development above —
       # see ADR-0008 for why that combination can never happen in a deployed environment.
       DevSignIn__Enabled: "true"
     depends_on:
+      postgres:
+        condition: service_healthy
       catalog:
         condition: service_started
       library:

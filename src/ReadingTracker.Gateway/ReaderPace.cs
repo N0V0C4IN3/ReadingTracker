@@ -21,6 +21,12 @@ public sealed class RateLimits
     /// <summary>Each Book added by hand is a row in the shared Catalog, for everyone, for good.</summary>
     public int BooksByHandPerMinute { get; set; } = 5;
 
+    /// <summary>
+    /// Each DeviceToken minted is a permanent credential (ADR-0014); a session minting them by the
+    /// hundred is not a person setting up an e-reader.
+    /// </summary>
+    public int DeviceTokensPerMinute { get; set; } = 5;
+
     /// <summary>Everything else a reader does, together — a ceiling nobody reaches by hand.</summary>
     public int RequestsPerMinute { get; set; } = 300;
 
@@ -42,6 +48,9 @@ public static class ReaderPace
 
     /// <summary>The pace for adding a Book by hand — see <see cref="SearchPolicy"/>.</summary>
     public const string ByHandPolicy = "by-hand";
+
+    /// <summary>The pace for minting DeviceTokens, applied by the endpoint itself since it is not proxied.</summary>
+    public const string MintPolicy = "mint";
 
     private static readonly TimeSpan Window = TimeSpan.FromMinutes(1);
 
@@ -74,6 +83,7 @@ public static class ReaderPace
 
             options.AddPolicy(SearchPolicy, http => PerReader(http, limits.SearchesPerMinute));
             options.AddPolicy(ByHandPolicy, http => PerReader(http, limits.BooksByHandPerMinute));
+            options.AddPolicy(MintPolicy, http => PerReader(http, limits.DeviceTokensPerMinute));
         });
 
     /// <summary>

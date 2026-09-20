@@ -176,10 +176,14 @@ someone changed in the portal to put out a fire.
 | --- | --- |
 | Catalog | `ConnectionStrings__CatalogDb`, `RabbitMq__ConnectionString`, `GOOGLE_BOOKS_API_KEY` |
 | Library | `ConnectionStrings__LibraryDb`, `RabbitMq__ConnectionString`, `Catalog__BaseAddress` |
-| Gateway | `Google__ClientId`, `AllowedOrigins__0`, `ReverseProxy__Clusters__catalog__Destinations__primary__Address`, `ReverseProxy__Clusters__library__Destinations__primary__Address` |
+| Gateway | `ConnectionStrings__GatewayDb`, `Google__ClientId`, `AllowedOrigins__0`, `ReverseProxy__Clusters__catalog__Destinations__primary__Address`, `ReverseProxy__Clusters__library__Destinations__primary__Address` |
 
-Two of the Gateway's are easy to miss and both stop it starting rather than letting it come up
+Three of the Gateway's are easy to miss and all stop it starting rather than letting it come up
 half-configured:
+
+- `ConnectionStrings__GatewayDb` is new with DeviceTokens (ADR-0014): the Gateway keeps a schema
+  of its own in the same Postgres as Catalog and Library, and migrates it on boot. Without it the
+  Gateway would come up, pass its health check, and fail on the first device that called.
 
 - `Google__ClientId` lives only in `appsettings.Development.json`, because a deployment was
   always meant to supply its own. Without it the Gateway would have nothing to check a token's

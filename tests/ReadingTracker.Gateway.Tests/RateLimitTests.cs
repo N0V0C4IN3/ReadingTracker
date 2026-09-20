@@ -80,7 +80,43 @@ public sealed class RateLimitTests : IClassFixture<RateLimitTests.Fixture>
             (await _fixture.ClientFor("unbothered").GetAsync("/api/library")).StatusCode);
     }
 
-    public sealed class Fixture : WebApplicationFactory<Program>
+    [Fact]
+    public async Task Counts_a_device_as_the_reader_who_minted_it()
+    {
+        var reader = _fixture.ClientFor("reads-on-a-kindle");
+        var minted = await reader.PostAsJsonAsync("/api/devices", new { name = "Kindle" });
+        var device = _fixture.ClientWithToken((await minted.Content.ReadFromJsonAsync<MintedDeviceToken>())!.Token);
+
+        for (var n = 1; n <= Fixture.SearchesPerMinute; n++)
+        {
+            Assert.Equal(HttpStatusCode.OK, (await device.GetAsync("/api/books/search?q=dune")).StatusCode);
+        }
+
+        // One allowance, however the reader signed in: the browser and the Kindle draw on the
+        // same pace, so a device cannot be a second reader's worth of searches.
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await device.GetAsync("/api/books/search?q=dune")).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await reader.GetAsync("/api/books/search?q=dune")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Bounds_minting_device_tokens_like_adding_by_hand()
+    {
+        var reader = _fixture.ClientFor("mints-a-lot");
+
+        for (var n = 1; n <= Fixture.DeviceTokensPerMinute; n++)
+        {
+            Assert.Equal(HttpStatusCode.Created, (await reader.PostAsJsonAsync("/api/devices", new { name = $"Device {n}" })).StatusCode);
+        }
+
+        // Each one is a permanent credential; a session that mints hundreds a minute is not a
+        // person setting up a Kindle.
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await reader.PostAsJsonAsync("/api/devices", new { name = "One more" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await reader.GetAsync("/api/library")).StatusCode);
+    }
+
+    private sealed record MintedDeviceToken(string Token);
+
+    public sealed class Fixture : WebApplicationFactory<Program>, IAsyncLifetime
     {
         public const int SearchesPerMinute = 3;
 
@@ -88,16 +124,31 @@ public sealed class RateLimitTests : IClassFixture<RateLimitTests.Fixture>
 
         public const int AnonymousRequestsPerMinute = 4;
 
+        public const int DeviceTokensPerMinute = 2;
+
         public StubHttpMessageHandler Downstream { get; } = new();
 
         private readonly FakeGoogle _google = new();
 
         private readonly StubHttpMessageHandler _googleTransport = new();
 
+        private string _connectionString = "";
+
+        public async Task InitializeAsync() => _connectionString = await TestPostgres.ConnectionStringAsync();
+
+        Task IAsyncLifetime.DisposeAsync() => Task.CompletedTask;
+
         public HttpClient ClientFor(string subject)
         {
             var client = CreateClient();
             client.DefaultRequestHeaders.Authorization = new("Bearer", _google.Token(subject));
+            return client;
+        }
+
+        public HttpClient ClientWithToken(string token)
+        {
+            var client = CreateClient();
+            client.DefaultRequestHeaders.Authorization = new("Bearer", token);
             return client;
         }
 
@@ -107,9 +158,11 @@ public sealed class RateLimitTests : IClassFixture<RateLimitTests.Fixture>
             builder.UseSetting("ReverseProxy:Clusters:library:Destinations:primary:Address", "http://library.test/");
             builder.UseSetting("Google:ClientId", FakeGoogle.ClientId);
             builder.UseSetting("AllowedOrigins:0", "http://frontend.test");
+            builder.UseSetting("ConnectionStrings:GatewayDb", _connectionString);
             builder.UseSetting("RateLimits:SearchesPerMinute", SearchesPerMinute.ToString());
             builder.UseSetting("RateLimits:BooksByHandPerMinute", BooksByHandPerMinute.ToString());
             builder.UseSetting("RateLimits:AnonymousRequestsPerMinute", AnonymousRequestsPerMinute.ToString());
+            builder.UseSetting("RateLimits:DeviceTokensPerMinute", DeviceTokensPerMinute.ToString());
 
             _googleTransport.Respond = _google.Answer;
 

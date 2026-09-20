@@ -35,6 +35,7 @@
                 <button type="button" class="account__scrim" tabindex="-1" aria-hidden="true" @onclick="Close"></button>
                 <div class="account__menu" role="menu">
                     <p class="account__who">Signed in as <strong>@context.User.Identity?.Name</strong></p>
+                    <a class="account__link" role="menuitem" href="devices" @onclick="Close">Devices</a>
                     <button type="button" role="menuitem" @onclick="SignOut">Sign out</button>
                 </div>
             }

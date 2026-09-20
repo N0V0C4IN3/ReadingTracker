@@ -13,6 +13,8 @@ ASP.NET Core's built-in limiter with fixed one-minute windows and no queue:
 
 - **Searches**: 10 a minute per reader. Each reaches out to two providers and spends shared quota.
 - **Books added by hand**: 5 a minute per reader. Each is a row in the shared Catalog, for everyone.
+- **DeviceTokens minted**: 5 a minute per reader (added with ADR-0014). Each is a permanent
+  credential.
 - **Everything else**: 300 a minute per reader, a ceiling nobody reaches by hand.
 - **Callers with no verified reader**: 60 a minute per client address. They only ever get a 401,
   so this bounds what a stream of junk tokens can cost, and it draws on no reader's allowance.

@@ -1,0 +1,245 @@
+@page "/devices"
+@using ReadingTracker.Web.Services
+@inject GatewayDevicesClient Gateway
+@inject IJSRuntime JS
+
+@*
+    Where a Reader mints a DeviceToken for something that cannot sign in with Google — a Kindle
+    running the KOReader plugin — and takes one away again (ADR-0014).
+
+    The token is shown once, here, and nowhere else afterwards: the Gateway keeps a hash of it and
+    could not show it again if asked. So the page says so, loudly, beside a copy button, and the
+    list below never carries a secret. A device that has gone quiet is visible from its last use,
+    and a lost one is revoked from the same row.
+*@
+
+<PageTitle>Devices · ReadingTracker</PageTitle>
+
+<AuthorizeView>
+    <Authorizing>
+        <Settling />
+    </Authorizing>
+    <NotAuthorized>
+        <p class="notice">Sign in to manage your devices.</p>
+    </NotAuthorized>
+    <Authorized>
+        <section class="devices">
+            <div class="shelf__heading">
+                <h1>Your devices</h1>
+                <p class="muted">
+                    A device token lets an e-reader act as you without a Google sign-in. Paste it into the
+                    ReadingTracker plugin on the device; revoke it here if the device is lost.
+                </p>
+            </div>
+
+            <div class="panel">
+                <div class="field">
+                    <label for="device-name">Name</label>
+                    <input id="device-name" type="text" maxlength="100" placeholder="Kindle" @bind="_name" @bind:event="oninput" @onkeydown="MintOnEnterAsync" />
+                </div>
+
+                @if (_mintComplaint is { } complaint)
+                {
+                    <p class="entry__reasons" role="alert">@complaint</p>
+                }
+
+                <div class="session-form__actions">
+                    <button type="button" @onclick="MintAsync" disabled="@(_working || string.IsNullOrWhiteSpace(_name))">Create a token</button>
+                </div>
+            </div>
+
+            @if (_minted is { } minted)
+            {
+                @* The one and only showing. Reloading this page, or minting another, loses it for good. *@
+                <div class="panel token-reveal" role="status">
+                    <p><strong>@minted.Name</strong> is ready. Copy this token now — it will not be shown again.</p>
+                    <code class="token-reveal__secret">@minted.Token</code>
+                    <div class="session-form__actions">
+                        <button type="button" @onclick="CopyAsync">@(_copied ? "Copied" : "Copy token")</button>
+                        <button type="button" class="link-button" @onclick="Dismiss">Done</button>
+                    </div>
+                </div>
+            }
+
+            @if (_problem is { } problem)
+            {
+                <p class="notice notice--bad">@Describe(problem)</p>
+            }
+            else if (_devices is null)
+            {
+                <p class="muted">Loading your devices…</p>
+            }
+            else if (_devices.Count == 0)
+            {
+                <p class="empty">No devices yet. Create a token above to connect one.</p>
+            }
+            else
+            {
+                <ul class="sessions">
+                    @foreach (var device in _devices)
+                    {
+                        <li class="session">
+                            <span class="session__what">@device.Name</span>
+                            <span class="session__when">added @device.CreatedAt.LocalDateTime.ToString("d MMM yyyy")</span>
+                            <span class="session__how-long">@LastUsed(device)</span>
+
+                            @if (_revoking == device.Id)
+                            {
+                                <div class="panel panel--danger">
+                                    <p>Revoke <strong>@device.Name</strong>? Anything holding its token stops working at once.</p>
+                                    <button type="button" class="danger" @onclick="() => RevokeAsync(device.Id)" disabled="@_working">Revoke it</button>
+                                    <button type="button" class="link-button" @onclick="() => _revoking = null" disabled="@_working">Keep it</button>
+                                </div>
+                            }
+                            else
+                            {
+                                <button type="button" class="link-button" @onclick="() => _revoking = device.Id" disabled="@_working">Revoke</button>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private IReadOnlyList<Device>? _devices;
+    private DeviceProblem? _problem;
+    private string _name = "";
+    private string? _mintComplaint;
+    private MintedDevice? _minted;
+    private bool _copied;
+    private Guid? _revoking;
+    private bool _working;
+
+    private bool _asked;
+
+    /// <summary>
+    /// Asked for once somebody is signed in — which may be after the page came up, if they signed
+    /// in from its header. Before that the answer would be a 401, which is not news: the page is
+    /// already saying to sign in.
+    /// </summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_asked || AuthState is not { } pending || (await pending).User.Identity?.IsAuthenticated is not true)
+        {
+            return;
+        }
+
+        _asked = true;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var listed = await Gateway.ListAsync(CancellationToken.None);
+
+        _devices = listed.Value;
+        _problem = listed.Problem;
+    }
+
+    private async Task MintOnEnterAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !_working && !string.IsNullOrWhiteSpace(_name))
+        {
+            await MintAsync();
+        }
+    }
+
+    private async Task MintAsync()
+    {
+        _working = true;
+        _mintComplaint = null;
+        _minted = null;
+        _copied = false;
+
+        var minted = await Gateway.MintAsync(_name.Trim(), CancellationToken.None);
+
+        if (minted.Ok)
+        {
+            _minted = minted.Value;
+            _name = "";
+            await LoadAsync();
+        }
+        else
+        {
+            _mintComplaint = minted.Problem switch
+            {
+                DeviceProblem.Refused => minted.Reasons.Count > 0
+                    ? string.Join(" ", minted.Reasons)
+                    : "That name could not be used.",
+                DeviceProblem.TooManyRequests => "You are creating tokens faster than is sensible. Give it a minute.",
+                { } problem => Describe(problem),
+                null => null,
+            };
+        }
+
+        _working = false;
+    }
+
+    private async Task CopyAsync()
+    {
+        if (_minted is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _minted.Token);
+            _copied = true;
+        }
+        catch (JSException)
+        {
+            // No clipboard here — an older browser, or a page not served securely. The token is
+            // still on the screen to be selected by hand.
+        }
+    }
+
+    private void Dismiss()
+    {
+        _minted = null;
+        _copied = false;
+    }
+
+    private async Task RevokeAsync(Guid deviceId)
+    {
+        _working = true;
+
+        var revoked = await Gateway.RevokeAsync(deviceId, CancellationToken.None);
+
+        // Gone either way: a token that was "no longer there" is exactly as revoked as one that
+        // was revoked just now.
+        if (revoked.Ok || revoked.Problem == DeviceProblem.NoLongerThere)
+        {
+            _revoking = null;
+            await LoadAsync();
+        }
+        else
+        {
+            _problem = revoked.Problem;
+        }
+
+        _working = false;
+    }
+
+    private static string LastUsed(Device device) =>
+        device.LastUsedAt is { } used
+            ? $"last used {used.LocalDateTime:d MMM yyyy, HH:mm}"
+            : "never used";
+
+    private static string Describe(DeviceProblem problem) => problem switch
+    {
+        DeviceProblem.NotSignedIn => "Your session has ended. Sign in again to manage your devices.",
+        DeviceProblem.NotInPerson => "Devices can only be managed from a signed-in browser, not from a device.",
+        DeviceProblem.GatewayUnreachable => "ReadingTracker could not be reached just now. Try again shortly.",
+        DeviceProblem.TooManyRequests => "Too many requests just now. Give it a minute.",
+        DeviceProblem.NoLongerThere => "That device is already gone.",
+        DeviceProblem.Refused => "That could not be done.",
+        _ => "Something went wrong.",
+    };
+}
