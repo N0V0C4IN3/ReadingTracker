@@ -442,13 +442,11 @@ function ReadingTracker:menuItems()
       callback = function() self:onReadingTrackerSync() end,
     },
     {
-      text = _("Mark as finished"),
-      enabled_func = function()
-        return has_document and self.app:linked_entry() ~= nil and self.app.entry_status ~= "Finished"
-      end,
+      text = _("Reading status…"),
+      enabled_func = function() return has_document and self.app:linked_entry() ~= nil end,
       callback = function()
         if self:configured() then
-          Trapper:wrap(function() self.app:mark_finished() end)
+          Trapper:wrap(function() self.app:change_status() end)
         end
       end,
     },

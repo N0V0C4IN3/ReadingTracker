@@ -31,7 +31,8 @@ cannot do one of those.
   the web app asks at 100%. Never asked about a book already finished; a re-read just logs
   sessions.
 - The menu shows what the document is linked to, lets you link it to a different book, unlink
-  it, sync now, or mark it finished.
+  it, sync now, or change its reading status — Want to Read, Reading, On Hold, Dropped or
+  Finished — the way the shelf's drop-down does.
 
 Nothing is sent while the device is offline; the plugin tries again at the next chance and
 never turns wifi on by itself.

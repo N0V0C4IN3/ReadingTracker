@@ -30,6 +30,16 @@ App.ENTRY_TITLE = "entry_title" -- so the menu can say what, without a request
 App.NEVER = "never"             -- the reader said not to ask about this document again
 App.PENDING = "pending"         -- { percent, at }: a position that could not be sent yet
 
+-- The ReadingStatuses a LibraryEntry can have, in the order the web app lists them, with the
+-- words the Reader knows them by.
+App.STATUSES = {
+  { id = "WantToRead", label = "Want to Read" },
+  { id = "Reading", label = "Reading" },
+  { id = "OnHold", label = "On Hold" },
+  { id = "Dropped", label = "Dropped" },
+  { id = "Finished", label = "Finished" },
+}
+
 -- Preferences, across documents.
 App.INTERVAL = "interval_minutes" -- how often to report while paging
 App.DEFAULT_INTERVAL_MINUTES = 5
@@ -428,13 +438,76 @@ function App:mark_finished()
     return self.env:notify("This document is not linked to a book on your shelf.")
   end
 
-  local entry, err = self.client:set_status(self:linked_entry(), "Finished")
+  self:set_status("Finished")
+end
+
+-- The menu's "reading status": every status the shelf knows, the current one marked, and the
+-- one picked set — the same change the web app's drop-down makes.
+function App:change_status()
+  if not self:linked_entry() then
+    return self.env:notify("This document is not linked to a book on your shelf.")
+  end
+
+  if not self.env:is_online() then
+    return self.env:notify("Offline — the status can be changed once the device is connected.")
+  end
+
+  if not self.entry_status then
+    self:learn_status()
+  end
+
+  local items = {}
+  for _, status in ipairs(App.STATUSES) do
+    table.insert(items, {
+      id = status.id,
+      text = status.label,
+      detail = status.id == self.entry_status and "now" or nil,
+    })
+  end
+
+  self.env:pick({ title = self:linked_title() .. " is…", items = items }, function(picked)
+    if picked and picked ~= self.entry_status then
+      self:set_status(picked)
+    end
+  end)
+end
+
+function App:set_status(status)
+  local entry, err = self.client:set_status(self:linked_entry(), status)
   if err then
     return self:complain(err)
   end
 
-  self.entry_status = entry.status or "Finished"
-  self.env:notify("Marked as finished")
+  self.entry_status = entry.status or status
+  if self.entry_status == "Finished" then
+    return self.env:notify("Marked as finished")
+  end
+  self.env:notify("Status: " .. App.status_label(self.entry_status))
+end
+
+-- What the shelf says the entry is, when nothing reported this opening has said yet. Best
+-- effort: the list is offered either way, and a failure here is not worth a word.
+function App:learn_status()
+  local entries, err = self.client:library()
+  if err or type(entries) ~= "table" then
+    return
+  end
+
+  for _, entry in ipairs(entries) do
+    if entry.id == self:linked_entry() then
+      self.entry_status = entry.status
+      return
+    end
+  end
+end
+
+function App.status_label(id)
+  for _, status in ipairs(App.STATUSES) do
+    if status.id == id then
+      return status.label
+    end
+  end
+  return tostring(id)
 end
 
 function App:linked_title()
