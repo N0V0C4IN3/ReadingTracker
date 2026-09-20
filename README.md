@@ -20,6 +20,41 @@ On the shelf, each book carries its reading status, a progress bar derived from 
 
 > **Everything through the Gateway now needs a verified token.** It verifies the token against Google's published keys, discards whatever `X-Reader-Id` the caller sent, and sets that header itself from the token's subject. `/health` is the only route that answers without one. Locally you sign in without a Google account at all — see [Signing in locally](#signing-in-locally-without-a-google-account).
 
+## What it looks like
+
+The shelf, grouped by status with what is being read at the top, and the year's goal in the header:
+
+![The shelf: Reading at the top with progress bars, then Want to read, each group under its own heading; the header shows 11 of 24 books towards the year's goal](docs/screenshots/shelf.png)
+
+Logging a session is one form on the card, and the sessions behind the bar are a click away:
+
+![A shelf card with the Log reading form open: pages read, the date, and optional minutes](docs/screenshots/log-reading.png)
+
+![The same card with its History open: 96 pages on 21 Sep 2026, 50 minutes, with Correct and Delete](docs/screenshots/history.png)
+
+Finished books say when, and sit in that order; the year's goal opens from the header:
+
+![The Finished tab: sepia cards each saying Read, all N pages, and the day it was finished](docs/screenshots/finished.png)
+
+![The goal popover: 11 of 24 books in 2026, 8 behind pace, and a field to change the goal](docs/screenshots/goal.png)
+
+A device token puts an e-reader on the shelf without a Google sign-in — the [KOReader plugin](readingtracker.koplugin/) syncs progress from the device — and a Hardcover export lands in one go:
+
+![Your devices: a freshly minted token for a Kindle Paperwhite, shown once, and the device listed below with Never used](docs/screenshots/devices.png)
+
+![Import from Hardcover: 50 books in the file, counted by status, listed with their authors and finish dates](docs/screenshots/import.png)
+
+<p>
+  <img src="docs/screenshots/phone.png" width="300" alt="The shelf on a phone: the same cards in one column, with a round add button in the corner" />
+  <img src="docs/screenshots/account-menu.png" width="420" alt="The account menu: signed in as, Devices, Import, a Dark mode switch, Sign out" />
+</p>
+
+Signed out, the welcome page keeps a reader company with a quote:
+
+![The welcome page: a sign-in button and a quote about books](docs/screenshots/welcome.png)
+
+The pictures are of a local run with the dev sign-in; the token shown was revoked as soon as the picture was taken.
+
 ## Running it locally
 
 **Prerequisites:** [.NET 10 SDK](https://dotnet.microsoft.com/download) and Docker.
