@@ -22,8 +22,13 @@ cannot do one of those.
 - **A book with no ISBN**, or one the library does not know, asks once whether to search: the
   title and author are filled in from the file, you pick the right result, and it is added to
   your shelf and linked. Nothing found? Add it by hand from the same place.
-- The menu shows what the document is linked to, lets you link it to a different book, or
-  unlink it.
+- **While you read**, where you are is reported as a percentage of the document — when you
+  close the book, when the device sleeps, and every five minutes while paging (the interval is
+  in the menu). ReadingTracker turns each report into a reading session and shows the position
+  on your shelf card. A report that cannot be sent is kept and sent at the next chance, with the
+  time you actually read.
+- The menu shows what the document is linked to, lets you link it to a different book, unlink
+  it, or sync now.
 
 Nothing is sent while the device is offline; the plugin tries again at the next chance and
 never turns wifi on by itself.

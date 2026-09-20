@@ -10,6 +10,8 @@
 --   is_online()                 whether a request has any chance of getting through
 --   read_setting(key), save_setting(key, value), flush_settings()
 --                               what the plugin remembers about the open document
+--   read_preference(key), save_preference(key, value)
+--                               the plugin's own settings, across documents
 --   notify(text)                a passing notice
 --   prompt(prompt, on_answer)   a question with choices; on_answer(choice_id or nil)
 --   ask_text(form, on_submit)   a form of text fields; on_submit({ id = value } or nil)
@@ -26,6 +28,11 @@ App.__index = App
 App.ENTRY = "entry_id"          -- the LibraryEntry this document is linked to
 App.ENTRY_TITLE = "entry_title" -- so the menu can say what, without a request
 App.NEVER = "never"             -- the reader said not to ask about this document again
+App.PENDING = "pending"         -- { percent, at }: a position that could not be sent yet
+
+-- Preferences, across documents.
+App.INTERVAL = "interval_minutes" -- how often to report while paging
+App.DEFAULT_INTERVAL_MINUTES = 5
 
 function App.new(env)
   local app = setmetatable({}, App)
@@ -48,7 +55,21 @@ function App:onReaderReady()
     return
   end
 
-  if self:linked_entry() or self.env:read_setting(App.NEVER) then
+  -- A fresh document: nothing turned yet, nothing reported yet.
+  self.opened_at = self.env:clock()
+  self.page = nil
+  self.turned_at = nil
+  self.last_reported_page = nil
+  self.last_report_at = nil
+  self.entry_status = nil
+
+  if self:linked_entry() then
+    -- A position from last time that never got through gets its chance now.
+    self:send_pending()
+    return
+  end
+
+  if self.env:read_setting(App.NEVER) then
     return
   end
 
@@ -314,6 +335,157 @@ function App:unlink()
   self.env:save_setting(App.ENTRY_TITLE, nil)
   self.env:flush_settings()
   self.env:notify("Unlinked from ReadingTracker")
+end
+
+-- Reporting -----------------------------------------------------------------------------------
+
+function App:onPageUpdate(page)
+  if self.disabled or not page then
+    return
+  end
+
+  self.page = page
+  self.turned_at = self.env:clock()
+
+  if not self:linked_entry() then
+    return
+  end
+
+  -- Once every interval while paging, measured from the last report that got through — or
+  -- from opening the book, before there has been one.
+  local since = self.last_report_at or self.opened_at or self.turned_at
+  if self.env:clock() - since >= self:interval_seconds() then
+    self:report_if_moved()
+  end
+end
+
+-- Closing is the end of a stretch of reading; where the reader got to is what the shelf
+-- should say. Then nothing is remembered about this document, because the next one is not it.
+function App:onCloseDocument()
+  self:report_if_moved()
+  self.page = nil
+  self.turned_at = nil
+  self.last_reported_page = nil
+  self.last_report_at = nil
+  self.entry_status = nil
+end
+
+-- Falling asleep with the book open still counts.
+function App:onSuspend()
+  self:report_if_moved()
+end
+
+function App:onNetworkConnected()
+  self:send_pending()
+end
+
+-- The menu's "sync now": the position as it stands, whatever the interval says, with a word
+-- back either way.
+function App:sync_now()
+  if not self:linked_entry() then
+    return self.env:notify("This document is not linked to a book on your shelf.")
+  end
+
+  local page = self.page or (self.env.document or {}).page
+  if not page then
+    return
+  end
+
+  if self:report(page, self.turned_at or self.env:clock()) then
+    self.env:notify(string.format("Reported %s%% to ReadingTracker", App.trim(self:percent_of(page))))
+  end
+end
+
+-- A report is worth making only when there is somewhere new to report: a page turned since
+-- opening, and not the one already reported.
+function App:report_if_moved()
+  if self.disabled or not self:linked_entry() or not self.page or not self.turned_at then
+    return
+  end
+
+  if self.page == self.last_reported_page then
+    return
+  end
+
+  self:report(self.page, self.turned_at)
+end
+
+-- Sends where the reader is — or, when it cannot, keeps it to send later. Returns whether it
+-- got through. Offline is silent and never asks for wifi: the next chance will do, and the
+-- server only ever needs the latest position.
+function App:report(page, at)
+  local percent = self:percent_of(page)
+
+  if not self.env:is_online() then
+    self:keep_pending(percent, at)
+    return false
+  end
+
+  local answer, err = self.client:report_bookmark(self:linked_entry(), percent, App.iso(at))
+  if err then
+    self:keep_pending(percent, at)
+    self:complain(err)
+    return false
+  end
+
+  self:sent(page, answer)
+  return true
+end
+
+-- A position kept from an earlier session, sent with the time it was read at rather than now.
+function App:send_pending()
+  local pending = self.env:read_setting(App.PENDING)
+  if self.disabled or not pending or not self:linked_entry() or not self.env:is_online() then
+    return
+  end
+
+  local answer, err = self.client:report_bookmark(self:linked_entry(), pending.percent, App.iso(pending.at))
+  if err then
+    return self:complain(err)
+  end
+
+  self:sent(nil, answer)
+end
+
+function App:sent(page, answer)
+  self.env:save_setting(App.PENDING, nil)
+  self.env:flush_settings()
+  self.last_reported_page = page or self.last_reported_page
+  self.last_report_at = self.env:clock()
+  if type(answer) == "table" and type(answer.entry) == "table" then
+    self.entry_status = answer.entry.status
+  end
+end
+
+-- Only the latest position matters, so a newer one replaces an older one that never went.
+function App:keep_pending(percent, at)
+  self.env:save_setting(App.PENDING, { percent = percent, at = at })
+  self.env:flush_settings()
+end
+
+function App:interval_seconds()
+  local minutes = tonumber(self.env:read_preference(App.INTERVAL)) or App.DEFAULT_INTERVAL_MINUTES
+  return math.max(1, minutes) * 60
+end
+
+-- Where a page is in the document, to two decimals: the one measurement the device has that
+-- means the same on every device and at every font size.
+function App:percent_of(page)
+  local count = (self.env.document or {}).page_count
+  if not count or count <= 0 then
+    return 0
+  end
+  local percent = page / count * 100
+  return math.floor(math.min(100, math.max(0, percent)) * 100 + 0.5) / 100
+end
+
+function App.iso(seconds)
+  return os.date("!%Y-%m-%dT%H:%M:%SZ", seconds)
+end
+
+function App.trim(number)
+  local text = string.format("%.2f", number):gsub("0+$", ""):gsub("%.$", "")
+  return text
 end
 
 -- Problems ------------------------------------------------------------------------------------

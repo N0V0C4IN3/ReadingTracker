@@ -6,7 +6,9 @@
 -- builds from the real KOReader and that spec/support/fake_env.lua fakes for the tests.
 
 local _ = require("gettext")
+local DataStorage = require("datastorage")
 local Dispatcher = require("dispatcher")
+local LuaSettings = require("luasettings")
 local UIManager = require("ui/uimanager")
 local NetworkMgr = require("ui/network/manager")
 local Trapper = require("ui/trapper")
@@ -15,6 +17,7 @@ local InfoMessage = require("ui/widget/infomessage")
 local Menu = require("ui/widget/menu")
 local MultiInputDialog = require("ui/widget/multiinputdialog")
 local Notification = require("ui/widget/notification")
+local SpinWidget = require("ui/widget/spinwidget")
 local Screen = require("device").screen
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local logger = require("logger")
@@ -45,6 +48,8 @@ end
 
 function ReadingTracker:init()
   self.config = load_config()
+  -- The plugin's own settings, across documents: the sync interval and the like.
+  self.preferences = LuaSettings:open(DataStorage:getSettingsDir() .. "/readingtracker.lua")
   self.app = App.new(self:buildEnv())
   self.ui.menu:registerToMainMenu(self)
   self:onDispatcherRegisterActions()
@@ -55,6 +60,12 @@ function ReadingTracker:onDispatcherRegisterActions()
     category = "none",
     event = "ReadingTrackerUnlink",
     title = _("ReadingTracker: unlink this document"),
+    reader = true,
+  })
+  Dispatcher:registerAction("readingtracker_sync", {
+    category = "none",
+    event = "ReadingTrackerSync",
+    title = _("ReadingTracker: sync now"),
     reader = true,
   })
 end
@@ -95,6 +106,15 @@ function ReadingTracker:buildEnv()
     if settings then
       settings:flush()
     end
+  end
+
+  function env:read_preference(key)
+    return plugin.preferences:readSetting(key)
+  end
+
+  function env:save_preference(key, value)
+    plugin.preferences:saveSetting(key, value)
+    plugin.preferences:flush()
   end
 
   function env:notify(text)
@@ -298,9 +318,65 @@ function ReadingTracker:onReaderReady()
   end)
 end
 
+-- A page turn, in either of the two forms KOReader sends it: PageUpdate for paged documents,
+-- PosUpdate for reflowable ones. The app decides whether it is time to report; the decision is
+-- taken a moment later so turning pages quickly never queues a report per page.
+function ReadingTracker:onPageUpdate(page)
+  self:pageTurned(page)
+end
+
+function ReadingTracker:onPosUpdate(_, page)
+  self:pageTurned(page)
+end
+
+function ReadingTracker:pageTurned(page)
+  if not self.config or not page then
+    return
+  end
+
+  if self.pending_turn then
+    UIManager:unschedule(self.pending_turn)
+  end
+
+  self.pending_turn = function()
+    self.pending_turn = nil
+    Trapper:wrap(function() self.app:onPageUpdate(page) end)
+  end
+  UIManager:scheduleIn(2, self.pending_turn)
+end
+
+function ReadingTracker:onCloseDocument()
+  if not self.config then
+    return
+  end
+  if self.pending_turn then
+    UIManager:unschedule(self.pending_turn)
+    self.pending_turn = nil
+  end
+  self.app:onCloseDocument()
+end
+
+function ReadingTracker:onSuspend()
+  if self.config then
+    self.app:onSuspend()
+  end
+end
+
+function ReadingTracker:onNetworkConnected()
+  if self.config and self.ui.document then
+    Trapper:wrap(function() self.app:onNetworkConnected() end)
+  end
+end
+
 function ReadingTracker:onReadingTrackerUnlink()
   if self.ui.document then
     self.app:unlink()
+  end
+end
+
+function ReadingTracker:onReadingTrackerSync()
+  if self.ui.document and self:configured() then
+    Trapper:wrap(function() self.app:sync_now() end)
   end
 end
 
@@ -341,6 +417,38 @@ function ReadingTracker:menuItems()
       text = _("Unlink this document"),
       enabled_func = function() return has_document and self.app:linked_entry() ~= nil end,
       callback = function() self.app:unlink() end,
+    },
+    {
+      text = _("Sync now"),
+      enabled_func = function() return has_document and self.app:linked_entry() ~= nil end,
+      callback = function() self:onReadingTrackerSync() end,
+    },
+    {
+      text_func = function()
+        local minutes = tonumber(self.preferences:readSetting(App.INTERVAL)) or App.DEFAULT_INTERVAL_MINUTES
+        return _("Report while reading every: ") .. minutes .. _(" min")
+      end,
+      keep_menu_open = true,
+      callback = function(menu_instance)
+        UIManager:show(SpinWidget:new {
+          title_text = _("Report while reading every"),
+          info_text = _("Where you are is also reported whenever you close the book or the device sleeps."),
+          value = tonumber(self.preferences:readSetting(App.INTERVAL)) or App.DEFAULT_INTERVAL_MINUTES,
+          value_min = 1,
+          value_max = 120,
+          value_step = 1,
+          value_hold_step = 5,
+          unit = _("min"),
+          ok_text = _("Set"),
+          callback = function(spin)
+            self.preferences:saveSetting(App.INTERVAL, spin.value)
+            self.preferences:flush()
+            if menu_instance then
+              menu_instance:updateItems()
+            end
+          end,
+        })
+      end,
     },
     {
       text = _("Check setup"),

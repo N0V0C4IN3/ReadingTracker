@@ -22,6 +22,9 @@ function FakeEnv.new(options)
   env.stored = {}
   env.flushed = 0
 
+  -- The plugin's own settings, across documents: the sync interval and the like.
+  env.preferences = options.preferences or {}
+
   env.document = {
     file = options.file or "/mnt/us/documents/book.epub",
     title = options.title or "The Left Hand of Darkness",
@@ -64,6 +67,23 @@ end
 
 function FakeEnv:flush_settings()
   self.flushed = self.flushed + 1
+end
+
+function FakeEnv:read_preference(key)
+  return self.preferences[key]
+end
+
+function FakeEnv:save_preference(key, value)
+  self.preferences[key] = value
+end
+
+-- Spec helpers for time and reading: the clock only moves when a spec moves it.
+function FakeEnv:advance(seconds)
+  self.now = self.now + seconds
+end
+
+function FakeEnv:turn_to(page)
+  self.document.page = page
 end
 
 function FakeEnv:notify(text)
