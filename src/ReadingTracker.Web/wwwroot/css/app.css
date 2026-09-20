@@ -1186,6 +1186,17 @@ button.danger:hover:not(:disabled) {
 .quote__text {
     margin: 0;
     font-style: italic;
+    quotes: "C" "D";
+}
+
+/* Typographer's quotes round the words, hung so the text still aligns with what is above. */
+.quote__text::before {
+    content: open-quote;
+    margin-left: -0.45em;
+}
+
+.quote__text::after {
+    content: close-quote;
 }
 
 /* The quote itself is what is set large; the name is a footnote, upright and smaller. */
@@ -2245,9 +2256,187 @@ button.danger:hover:not(:disabled) {
     color: var(--warn);
 }
 
-.pill--neverused {
+.pill--neverused,
+.pill--faint {
     background: var(--fill);
     color: var(--ink-soft);
+}
+
+.pill--bad {
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
+/* Import ------------------------------------------------------------------ */
+
+/*
+    The way in is one big target: a sheer card with the file picker behind it, so the whole card
+    is the button. The real input is visually hidden but still the thing focused and clicked, so
+    the keyboard and a screen reader see an ordinary file field.
+*/
+.import__drop {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.4rem 1.5rem;
+    border: 1px dashed var(--line-strong);
+    border-radius: var(--radius);
+    background: var(--card-sheer);
+    cursor: pointer;
+    transition: border-color var(--quick) var(--ease), background-color var(--quick) var(--ease);
+}
+
+.import__drop:hover,
+.import__drop:focus-within {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+}
+
+.import__drop:focus-within {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.import__drop-glyph {
+    display: grid;
+    place-items: center;
+    width: 2.8rem;
+    height: 2.8rem;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.import__drop-glyph svg {
+    width: 1.4rem;
+    height: 1.4rem;
+}
+
+.import__drop-text strong {
+    display: block;
+    font-weight: 650;
+}
+
+.import__drop-text span {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+}
+
+.import__summary,
+.import__progress {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+}
+
+.import__count {
+    margin: 0;
+    color: var(--ink-soft);
+}
+
+.import__count strong {
+    color: var(--ink);
+    font-weight: 650;
+}
+
+.import__statuses {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+/* The books, one ruled row each — a ledger to check over, not cards to browse. */
+.import__rows {
+    margin: 0 0 1.2rem;
+    padding: 0;
+    list-style: none;
+    border-top: 1px solid var(--line);
+}
+
+.import__row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+    gap: 0.2rem 1rem;
+    align-items: baseline;
+    padding: 0.5rem 0.2rem;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.92rem;
+}
+
+.import__title {
+    font-weight: 600;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.import__by {
+    color: var(--ink-soft);
+    font-size: 0.85rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.import__status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    justify-self: end;
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-soft);
+    white-space: nowrap;
+}
+
+.import__note {
+    white-space: normal;
+    font-size: 0.8rem;
+}
+
+.import__row--failed .import__title {
+    color: var(--ink-soft);
+}
+
+@media (max-width: 560px) {
+    .import__row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .import__status {
+        justify-self: start;
+        white-space: normal;
+    }
+}
+
+.import__actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.import__actions .hint {
+    flex-basis: 100%;
+}
+
+/* A link dressed as the one filled action. */
+.import__shelf {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.45rem 1.25rem;
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.import__shelf:hover {
+    background: var(--accent-hover);
 }
 
 /*

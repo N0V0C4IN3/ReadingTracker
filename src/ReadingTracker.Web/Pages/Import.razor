@@ -1,0 +1,231 @@
+@page "/import"
+@using ReadingTracker.Web.Services
+@inject GatewayCatalogClient Catalog
+@inject GatewayLibraryClient Library
+
+@*
+    Bringing a shelf over from Hardcover. Its export (Settings → Export) is a CSV; this reads it
+    in the browser, shows what it would do, and then does it one book at a time through the same
+    doors a reader uses by hand — see LibraryImporter. Nothing leaves the browser but the books.
+
+    The Gateway paces searches per reader (ADR-0013), so a shelf of fifty takes a few minutes.
+    The page counts up as it goes and says when it is waiting, rather than sitting on a spinner.
+*@
+
+<PageTitle>Import · ReadingTracker</PageTitle>
+
+<AuthorizeView>
+    <Authorizing>
+        <Settling />
+    </Authorizing>
+    <NotAuthorized>
+        <p class="notice">Sign in to import your books.</p>
+    </NotAuthorized>
+    <Authorized>
+        <section class="import">
+            <div class="shelf__heading">
+                <h1>Import from Hardcover</h1>
+                <p class="muted">
+                    In Hardcover, go to Settings → Export and download the CSV. Every book on it lands
+                    on your shelf at the same status, finished on the same day. Books already here
+                    are left alone; ratings and reviews have no home here and stay behind.
+                </p>
+            </div>
+
+            @if (_books is null)
+            {
+                <label class="import__drop">
+                    <InputFile OnChange="ReadAsync" accept=".csv,text/csv" class="visually-hidden" />
+                    <span class="import__drop-glyph" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+                    </span>
+                    <span class="import__drop-text"><strong>Choose the export</strong><span>hardcover-export-….csv</span></span>
+                </label>
+
+                @if (_readingProblem is { } problem)
+                {
+                    <p class="notice notice--bad" role="alert">@problem</p>
+                }
+            }
+            else if (_results is null)
+            {
+                <div class="import__summary">
+                    <p class="import__count"><strong>@_books.Count</strong> books in the file</p>
+                    <ul class="import__statuses">
+                        @foreach (var (status, count) in ByStatus)
+                        {
+                            <li><span class="pill pill--faint">@Label(status) · @count</span></li>
+                        }
+                    </ul>
+                </div>
+
+                <ul class="import__rows">
+                    @foreach (var book in _books)
+                    {
+                        <li class="import__row">
+                            <span class="import__title">@book.Title</span>
+                            <span class="import__by">@string.Join(", ", book.Authors)</span>
+                            <span class="import__status">@Label(book.Status)@(book.FinishedOn is { } day ? $" · {day:d MMM yyyy}" : "")</span>
+                        </li>
+                    }
+                </ul>
+
+                <div class="import__actions">
+                    <button type="button" class="button--primary" @onclick="ImportAsync">Import @_books.Count books</button>
+                    <button type="button" class="link-button" @onclick="Reset">Choose another file</button>
+                    <p class="hint">Takes a few minutes: the library looks each book up in turn.</p>
+                </div>
+            }
+            else
+            {
+                <div class="import__progress" role="status" aria-live="polite">
+                    <p class="import__count">
+                        @if (_done)
+                        {
+                            <strong>Done.</strong> <text>@Count(ImportOutcome.Added) added, @Count(ImportOutcome.AlreadyOnShelf) already here@(Count(ImportOutcome.Failed) is > 0 and var failed ? $", {failed} could not be" : "").</text>
+                        }
+                        else
+                        {
+                            <strong>@_results.Count of @_books.Count</strong> <text>· @(_waiting ?? _current)</text>
+                        }
+                    </p>
+                    <div class="progress__track" aria-hidden="true">
+                        <div class="progress__fill" style="width: @(_books.Count == 0 ? 0 : _results.Count * 100 / _books.Count)%"></div>
+                    </div>
+                </div>
+
+                <ul class="import__rows">
+                    @foreach (var result in _results)
+                    {
+                        <li class="import__row import__row--@result.Outcome.ToString().ToLowerInvariant()">
+                            <span class="import__title">@result.Book.Title</span>
+                            <span class="import__by">@string.Join(", ", result.Book.Authors)</span>
+                            <span class="import__status">
+                                <span class="pill @PillFor(result.Outcome)">@Describe(result.Outcome)</span>
+                                @if (result.Note is { } note)
+                                {
+                                    <span class="import__note">@note</span>
+                                }
+                            </span>
+                        </li>
+                    }
+                </ul>
+
+                @if (_done)
+                {
+                    <div class="import__actions">
+                        <a class="button--primary import__shelf" href="/">See your shelf</a>
+                        <button type="button" class="link-button" @onclick="Reset">Import another file</button>
+                    </div>
+                }
+            }
+        </section>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private const long MostBytes = 5 * 1024 * 1024;
+
+    private IReadOnlyList<ImportedBook>? _books;
+    private string? _readingProblem;
+    private List<ImportResult>? _results;
+    private string? _current;
+    private string? _waiting;
+    private bool _done;
+
+    private IEnumerable<(string Status, int Count)> ByStatus =>
+        (_books ?? [])
+            .GroupBy(book => book.Status)
+            .Select(group => (group.Key, group.Count()))
+            .OrderByDescending(pair => pair.Item2);
+
+    private async Task ReadAsync(InputFileChangeEventArgs e)
+    {
+        _readingProblem = null;
+
+        try
+        {
+            using var reader = new StreamReader(e.File.OpenReadStream(MostBytes));
+            var text = await reader.ReadToEndAsync();
+            var books = HardcoverExport.Parse(text);
+
+            if (books.Count == 0)
+            {
+                _readingProblem = "There are no books in that file.";
+                return;
+            }
+
+            _books = books;
+        }
+        catch (NotAHardcoverExport problem)
+        {
+            _readingProblem = problem.Message;
+        }
+        catch (IOException)
+        {
+            _readingProblem = "That file is too large to be a Hardcover export.";
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        if (_books is null)
+        {
+            return;
+        }
+
+        var importer = new LibraryImporter(Catalog, Library, Task.Delay);
+        importer.Waiting += message =>
+        {
+            _waiting = message;
+            StateHasChanged();
+        };
+
+        _results = [];
+        _done = false;
+
+        foreach (var book in _books)
+        {
+            _current = book.Title;
+            _waiting = null;
+            StateHasChanged();
+
+            _results.Add(await importer.ImportAsync(book, CancellationToken.None));
+        }
+
+        _current = null;
+        _waiting = null;
+        _done = true;
+    }
+
+    private void Reset()
+    {
+        _books = null;
+        _results = null;
+        _readingProblem = null;
+        _done = false;
+    }
+
+    private int Count(ImportOutcome outcome) => _results?.Count(result => result.Outcome == outcome) ?? 0;
+
+    private static string Label(string status) => status switch
+    {
+        "WantToRead" => "Want to read",
+        "OnHold" => "On hold",
+        _ => status,
+    };
+
+    private static string Describe(ImportOutcome outcome) => outcome switch
+    {
+        ImportOutcome.Added => "Added",
+        ImportOutcome.AlreadyOnShelf => "Already here",
+        _ => "Could not",
+    };
+
+    private static string PillFor(ImportOutcome outcome) => outcome switch
+    {
+        ImportOutcome.Added => "pill--syncing",
+        ImportOutcome.AlreadyOnShelf => "pill--faint",
+        _ => "pill--bad",
+    };
+}

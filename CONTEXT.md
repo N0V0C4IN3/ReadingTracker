@@ -47,3 +47,11 @@ _Avoid_: Position, Current page, Progress (that is Amount read), Last synced
 **ReadingStatus**:
 The current state of a LibraryEntry: `Want to Read`, `Reading`, `Finished`, `On Hold`, or `Dropped`. A LibraryEntry has exactly one current ReadingStatus at a time; it does not itself carry history — history lives in ReadingSessions.
 _Avoid_: State (too generic)
+
+**Finished on**:
+The day a Reader finished a Book, kept on the LibraryEntry: stamped when the ReadingStatus becomes `Finished`, or stated outright by the Reader when they know the real day (an import from elsewhere does), and let go of when the Book is no longer `Finished`. A day, not an instant — it is how a Reader remembers it — and the ReadingGoal counts by the year it falls in.
+_Avoid_: Completed, Read date, Date finished (Hardcover's name for it), FinishedAt
+
+**ReadingGoal**:
+How many Books a Reader means to finish in a calendar year. Set by the Reader, one per year, and only ever the target: how many they have finished is counted from their LibraryEntries' Finished on, never stored, so the two cannot disagree. A year with no ReadingGoal still has a count.
+_Avoid_: Challenge (Goodreads' word), Target, Quota

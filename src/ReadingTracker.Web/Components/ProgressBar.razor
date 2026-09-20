@@ -18,7 +18,8 @@
     Read-only, and absent until a device has said anything.
 
     A Finished book is past all of this: the status is the fact, whatever the sessions add up
-    to, so the figure says Read and the bar is full. The sessions are still there in History.
+    to, so the figure says Read and the bar is full, and where a device last was is not worth a
+    line. The sessions are still there in History.
 *@
 
 <div class="progress">
@@ -81,7 +82,7 @@
         <div class="progress__track" aria-hidden="true"></div>
     }
 
-    @if (Bookmark is { } bookmark)
+    @if (!Finished && Bookmark is { } bookmark)
     {
         <p class="progress__device">
             On your device: <strong>@Trim(bookmark.Percent)%</strong>

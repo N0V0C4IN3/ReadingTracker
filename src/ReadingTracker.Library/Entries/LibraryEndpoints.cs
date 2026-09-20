@@ -136,6 +136,7 @@ public static class LibraryEndpoints
             HttpRequest request,
             ReadingLibrary library,
             CatalogClient catalog,
+            TimeProvider clock,
             CancellationToken cancellationToken) =>
         {
             if (Reader.From(request) is not { } readerId)
@@ -148,13 +149,96 @@ public static class LibraryEndpoints
                 return UnknownReadingStatus(body.Status);
             }
 
-            var entry = await library.SetStatusAsync(readerId, entryId, status, cancellationToken);
+            if (body.FinishedOn is { } finishedOn)
+            {
+                if (status != ReadingStatus.Finished)
+                {
+                    return Results.ValidationProblem(new Dictionary<string, string[]>
+                    {
+                        ["finishedOn"] = ["A day finished only goes with the Finished status."],
+                    });
+                }
+
+                if (finishedOn > DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime).AddDays(1))
+                {
+                    // A day's grace, because the reader's today may already be the server's tomorrow.
+                    return Results.ValidationProblem(new Dictionary<string, string[]>
+                    {
+                        ["finishedOn"] = ["That day has not happened yet."],
+                    });
+                }
+            }
+
+            var entry = await library.SetStatusAsync(readerId, entryId, status, body.FinishedOn, cancellationToken);
 
             return entry is null
                 ? Results.NotFound()
                 : Results.Ok(await DescribeAsync(library, catalog, entry, cancellationToken));
         })
         .WithName("SetReadingStatus");
+
+        // The yearly goal: how many books the reader means to finish this year, beside how many
+        // they have. The count comes back even with no goal set, so the shelf can say "3 finished
+        // this year" before there is anything to measure it against.
+        endpoints.MapGet("/api/library/goals/{year:int}", async (
+            int year,
+            HttpRequest request,
+            ReadingLibrary library,
+            CancellationToken cancellationToken) =>
+        {
+            if (Reader.From(request) is not { } readerId)
+            {
+                return NotSaidWhoIsAsking();
+            }
+
+            var (books, finished) = await library.GoalAsync(readerId, year, cancellationToken);
+
+            return Results.Ok(new ReadingGoalResponse(year, books, finished));
+        })
+        .WithName("GetReadingGoal");
+
+        endpoints.MapPut("/api/library/goals/{year:int}", async (
+            int year,
+            SetGoalRequest body,
+            HttpRequest request,
+            ReadingLibrary library,
+            CancellationToken cancellationToken) =>
+        {
+            if (Reader.From(request) is not { } readerId)
+            {
+                return NotSaidWhoIsAsking();
+            }
+
+            if (body.Books is not (>= 1 and <= 1000))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["books"] = ["A goal is between 1 and 1000 books."],
+                });
+            }
+
+            var (books, finished) = await library.SetGoalAsync(readerId, year, body.Books.Value, cancellationToken);
+
+            return Results.Ok(new ReadingGoalResponse(year, books, finished));
+        })
+        .WithName("SetReadingGoal");
+
+        endpoints.MapDelete("/api/library/goals/{year:int}", async (
+            int year,
+            HttpRequest request,
+            ReadingLibrary library,
+            CancellationToken cancellationToken) =>
+        {
+            if (Reader.From(request) is not { } readerId)
+            {
+                return NotSaidWhoIsAsking();
+            }
+
+            await library.ClearGoalAsync(readerId, year, cancellationToken);
+
+            return Results.NoContent();
+        })
+        .WithName("ClearReadingGoal");
 
         endpoints.MapPut("/api/library/{entryId:guid}/tracking-method", async (
             Guid entryId,
@@ -533,7 +617,12 @@ public static class LibraryEndpoints
 
     private sealed record AddToLibraryRequest(Guid BookId);
 
-    private sealed record SetStatusRequest(string? Status);
+    private sealed record SetStatusRequest(string? Status, DateOnly? FinishedOn);
+
+    private sealed record SetGoalRequest(int? Books);
+
+    /// <summary>A year's goal, or null for none, beside how many books were finished in it.</summary>
+    private sealed record ReadingGoalResponse(int Year, int? Books, int Finished);
 
     /// <param name="PageCountOverride">This reader's own page count, null when they set none.</param>
     /// <param name="EffectivePageCount">
@@ -547,6 +636,7 @@ public static class LibraryEndpoints
         string Status,
         string TrackingMethod,
         DateTimeOffset AddedAt,
+        DateOnly? FinishedOn,
         int? PageCountOverride,
         int? EffectivePageCount,
         BookDetailsResponse? Book,
@@ -563,6 +653,7 @@ public static class LibraryEndpoints
                 entry.Status.ToString(),
                 entry.TrackingMethod.ToString(),
                 entry.AddedAt,
+                entry.FinishedOn,
                 entry.PageCountOverride,
                 entry.EffectivePageCount(book?.TotalPages),
                 book is null ? null : BookDetailsResponse.From(book),

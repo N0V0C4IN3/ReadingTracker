@@ -46,6 +46,14 @@ public sealed class LibraryEntry
     public DateTimeOffset AddedAt { get; init; }
 
     /// <summary>
+    /// The day the reader finished the book: stamped when it is marked Finished, or the day they
+    /// say it was (an import knows the real one), and let go of when the book is un-finished. A
+    /// day rather than an instant, because "finished on the 9th" is how a reader remembers it,
+    /// and the yearly goal counts by the year it falls in.
+    /// </summary>
+    public DateOnly? FinishedOn { get; set; }
+
+    /// <summary>
     /// Where this reader currently is in the book, as a percentage, as last reported by a device
     /// — the "where", where sessions are the "how much". Null until a device has said. It is a
     /// report of a position and never a source of truth for how much has been read: moving it

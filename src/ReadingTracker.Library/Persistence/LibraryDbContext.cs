@@ -16,6 +16,8 @@ public sealed class LibraryDbContext(DbContextOptions<LibraryDbContext> options)
 
     public DbSet<ReadingSession> ReadingSessions => Set<ReadingSession>();
 
+    public DbSet<ReadingGoal> ReadingGoals => Set<ReadingGoal>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema(Schema);
@@ -32,6 +34,15 @@ public sealed class LibraryDbContext(DbContextOptions<LibraryDbContext> options)
 
             // A book appears once in a reader's library — but two readers may each have it.
             entry.HasIndex(e => new { e.ReaderId, e.BookId }).IsUnique();
+
+            // The yearly goal counts a reader's books by the day they were finished.
+            entry.HasIndex(e => new { e.ReaderId, e.FinishedOn });
+        });
+
+        modelBuilder.Entity<ReadingGoal>(goal =>
+        {
+            // One goal per reader per year, and that pair is the whole identity.
+            goal.HasKey(g => new { g.ReaderId, g.Year });
         });
 
         modelBuilder.Entity<ReadingSession>(session =>
