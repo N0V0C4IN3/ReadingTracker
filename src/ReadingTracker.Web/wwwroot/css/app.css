@@ -1795,6 +1795,14 @@ button.danger:hover:not(:disabled) {
     color: var(--ink-faint);
 }
 
+/* When a finished book was finished: a date under the label, quieter still, the same small size. */
+.progress__when {
+    margin-top: 0.3rem;
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-soft);
+}
+
 /* Full width, under the title and the figure both. Named explicitly: the wrapper is display:
    contents, so the card's own "everything else spans" rule does not reach this far down. */
 .progress__track {
@@ -2065,6 +2073,18 @@ button.danger:hover:not(:disabled) {
     text-transform: none;
     font-size: 0.85rem;
     color: var(--ink-soft);
+}
+
+/*
+    The status headings down the whole shelf. The cards keep their gap from the column; the
+    heading only needs a little more air above it than a card would, so each group reads as one.
+*/
+.entries > .group--shelf {
+    margin: 0.9rem 0 0;
+}
+
+.entries > .group--shelf:first-child {
+    margin-top: 0;
 }
 
 /* The line under the field while searching: what the shelf holds, and where the library stands. */
