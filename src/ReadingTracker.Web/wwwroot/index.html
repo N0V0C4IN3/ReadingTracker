@@ -45,6 +45,19 @@
     <link rel="prefetch" href="covers/8242253-M.jpg" />
     <link rel="prefetch" href="covers/181493-M.jpg" />
     <link rel="preload" id="webassembly" />
+    <!-- The reader's theme, if they chose one, stamped before the stylesheet is applied so the page
+         never paints in the other theme first. Kept in this browser only: it is a preference about
+         this screen, not about the reader. -->
+    <script>
+        (function () {
+            try {
+                var theme = localStorage.getItem("readingtracker.theme");
+                if (theme === "light" || theme === "dark") {
+                    document.documentElement.setAttribute("data-theme", theme);
+                }
+            } catch (e) { /* no storage here: the system's theme, then */ }
+        })();
+    </script>
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <!-- No link to ReadingTracker.Web.styles.css: that bundle is only built when a component
@@ -97,6 +110,23 @@
     <script>
         window.readingTracker = {
             prefersStillness: () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+
+            // The theme as chosen here: "light", "dark", or "system" for no choice at all.
+            theme: () => document.documentElement.getAttribute("data-theme") || "system",
+            setTheme: theme => {
+                if (theme === "light" || theme === "dark") {
+                    document.documentElement.setAttribute("data-theme", theme);
+                } else {
+                    document.documentElement.removeAttribute("data-theme");
+                }
+                try {
+                    if (theme === "light" || theme === "dark") {
+                        localStorage.setItem("readingtracker.theme", theme);
+                    } else {
+                        localStorage.removeItem("readingtracker.theme");
+                    }
+                } catch (e) { /* remembered for this page only */ }
+            },
 
             // Resolves once every jacket in the deck has settled — arrived, or given up — so they
             // can be shown as one picture instead of appearing in whatever order the network

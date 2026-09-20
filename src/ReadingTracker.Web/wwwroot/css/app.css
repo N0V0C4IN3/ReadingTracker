@@ -76,8 +76,15 @@
     --quick: 160ms;
 }
 
+/*
+    The dark set, twice over: once for a reader whose system is dark and who has not said
+    otherwise, once for a reader who chose dark here whatever their system says. The tokens are
+    the same lines both times, so the two can never drift; a choice of light is the first rule's
+    :not() and nothing more. The choice is stamped on <html> as data-theme before first paint
+    — see index.html — so the page never flashes the other theme on the way in.
+*/
 @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
         color-scheme: dark;
 
         --ink: #ededea;
@@ -109,6 +116,39 @@
         --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 10px 26px rgb(0 0 0 / 32%);
         --shadow-lifted: 0 1px 2px rgb(0 0 0 / 45%), 0 16px 36px rgb(0 0 0 / 42%);
     }
+}
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --ink: #ededea;
+    --ink-soft: #a6aba8;
+    --ink-faint: #7c817f;
+    --page: #111314;
+    --card: #1c1f21;
+    --card-translucent: rgb(35 39 41 / 66%);
+    --card-shelf: rgb(35 39 41 / 41%);
+    --card-sheer: rgb(35 39 41 / 42%);
+    --card-raised: rgb(28 31 33 / 72%);
+    --line: rgb(255 255 255 / 8%);
+    --line-strong: rgb(255 255 255 / 16%);
+    --fill: rgb(255 255 255 / 8%);
+    --fill-hover: rgb(255 255 255 / 14%);
+    --accent: #8ec5a4;
+    --accent-hover: #a3d4b6;
+    --accent-soft: rgb(142 197 164 / 15%);
+    --accent-ink: #0f2318;
+    --danger: #e28a7c;
+    --danger-soft: rgb(226 138 124 / 14%);
+    --danger-fill: rgb(226 138 124 / 18%);
+    --warn: #e6b260;
+    --warn-hover: #f0c47c;
+    --warn-soft: rgb(230 178 96 / 16%);
+    --wash-accent: rgb(142 197 164 / 17%);
+    --wash-warm: rgb(230 178 96 / 13%);
+    --wash-cool: rgb(120 160 210 / 13%);
+    --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 10px 26px rgb(0 0 0 / 32%);
+    --shadow-lifted: 0 1px 2px rgb(0 0 0 / 45%), 0 16px 36px rgb(0 0 0 / 42%);
 }
 
 *,
@@ -383,6 +423,44 @@ header > a:hover {
 .account__row:hover:not(:disabled) {
     background: var(--fill);
     text-decoration: none;
+}
+
+/*
+    The theme, as three small choices in a row under their own rule: what the system says, light,
+    dark. The chosen one is filled like a tab; the rest are quiet.
+*/
+.account__theme {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-top: 0.35rem;
+    padding: 0.5rem 0.55rem 0.2rem;
+    border-top: 1px solid var(--line);
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+}
+
+.account__theme-label {
+    margin-right: auto;
+}
+
+.account__theme button {
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ink-soft);
+    font-size: 0.78rem;
+    font-weight: 550;
+}
+
+.account__theme button[aria-pressed="true"] {
+    background: var(--accent);
+    color: var(--accent-ink);
+}
+
+.account__theme button:hover:not(:disabled):not([aria-pressed="true"]) {
+    background: var(--fill);
+    color: var(--ink);
 }
 
 /* Signing out sits apart from the pages, under a rule. */

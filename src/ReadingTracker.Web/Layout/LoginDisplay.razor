@@ -4,6 +4,7 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IOptions<DevSignInOptions> DevSignIn
 @inject GatewayDevicesClient Devices
+@inject IJSRuntime JS
 
 @*
     Who is signed in, and the way in or out.
@@ -55,6 +56,13 @@
                         }
                     </a>
                     <a class="account__row" role="menuitem" href="import" @onclick="Close">Import</a>
+                    <div class="account__theme" role="group" aria-label="Theme">
+                        <span class="account__theme-label">Theme</span>
+                        @foreach (var (theme, label) in Themes)
+                        {
+                            <button type="button" aria-pressed="@(theme == _theme ? "true" : "false")" @onclick="() => SetThemeAsync(theme)">@label</button>
+                        }
+                    </div>
                     <div class="account__out">
                         <button type="button" class="account__row" role="menuitem" @onclick="SignOut">Sign out</button>
                     </div>
@@ -79,8 +87,34 @@
     private IReadOnlyList<Device>? _devices;
     private bool _askedForDevices;
 
+    private static readonly (string Theme, string Label)[] Themes =
+    [
+        ("system", "System"),
+        ("light", "Light"),
+        ("dark", "Dark"),
+    ];
+
+    /// <summary>
+    /// The theme as this browser has it. index.html stamps the choice before first paint and
+    /// keeps it; this only reads it when the menu opens and writes it when a choice is made,
+    /// so the page and the menu can never disagree about which is on.
+    /// </summary>
+    private string _theme = "system";
+
+    private async Task SetThemeAsync(string theme)
+    {
+        _theme = theme;
+        await JS.InvokeVoidAsync("readingTracker.setTheme", theme);
+    }
+
     private async Task Toggle()
     {
+        if (!_open)
+        {
+            // Read before the menu shows, so its first frame already marks the right one.
+            _theme = await JS.InvokeAsync<string>("readingTracker.theme");
+        }
+
         _open = !_open;
 
         if (_open && !_askedForDevices)
