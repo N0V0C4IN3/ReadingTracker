@@ -49,8 +49,10 @@
     --danger: #a3392b;
     --danger-soft: rgb(163 57 43 / 10%);
     --danger-fill: rgb(163 57 43 / 14%);
-    /* For a thing that has gone quiet: neither fine nor broken, so neither the accent nor danger. */
+    /* The amber: for a thing that has gone quiet — neither fine nor broken, so neither the accent
+       nor danger — and for a book read to the end, warm the way an old jacket is. */
     --warn: #8a6a2a;
+    --warn-hover: #74581f;
     --warn-soft: rgb(212 160 84 / 18%);
     /* The page's washes: the accent and two neighbours, an amber and a blue, all as tints. Kept
        this pale on purpose — they are what the sheer cards are sheer against, not a picture. */
@@ -99,6 +101,7 @@
         --danger-soft: rgb(226 138 124 / 14%);
         --danger-fill: rgb(226 138 124 / 18%);
         --warn: #e6b260;
+        --warn-hover: #f0c47c;
         --warn-soft: rgb(230 178 96 / 16%);
         --wash-accent: rgb(142 197 164 / 17%);
         --wash-warm: rgb(230 178 96 / 13%);
@@ -1288,6 +1291,27 @@ button.danger:hover:not(:disabled) {
 .entry--parked .entry__cover {
     filter: grayscale(1);
     opacity: 0.8;
+}
+
+/*
+    Read to the end: the card's accent turns to the amber and the cover goes warm and a little
+    faded, like a jacket that has been on the shelf a while. Colour is a book alive, grey one set
+    aside, warm one done — the same trick as parked, so a reader who has learnt one has learnt
+    the other. The figure is a word rather than a number, so it is set a size down from one.
+*/
+.entry--finished {
+    --accent: var(--warn);
+    --accent-hover: var(--warn-hover);
+    --accent-soft: var(--warn-soft);
+}
+
+.entry--finished .entry__cover {
+    filter: sepia(0.75) saturate(0.7) contrast(0.92);
+}
+
+.entry--finished .progress__figure strong {
+    font-size: 1.15rem;
+    letter-spacing: -0.01em;
 }
 
 /*

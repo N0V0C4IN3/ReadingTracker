@@ -541,10 +541,14 @@
     /// <summary>Whether a search is on — anything in the box narrows the shelf and offers the library.</summary>
     private bool Searching => !string.IsNullOrWhiteSpace(_query);
 
-    /// <summary>The shelf under the current status tab (client-side, so switching tabs is instant).</summary>
+    /// <summary>
+    /// The shelf under the current status tab (client-side, so switching tabs is instant). The
+    /// whole shelf puts the books being read first; a tab already is one status, so it keeps
+    /// Library's newest-first order.
+    /// </summary>
     private IReadOnlyList<LibraryEntry> StatusFiltered =>
         _entries is null ? [] :
-        _filter is null ? _entries :
+        _filter is null ? ShelfOrder.ReadingFirst(_entries) :
         _entries.Where(entry => entry.Status == _filter).ToArray();
 
     /// <summary>

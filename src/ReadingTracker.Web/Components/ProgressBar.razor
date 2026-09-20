@@ -16,10 +16,25 @@
     The Bookmark — where a device last said the reader is (ADR-0015) — is a different fact from
     the total and is shown as one: a mark on the track and a line beneath it, never the figure.
     Read-only, and absent until a device has said anything.
+
+    A Finished book is past all of this: the status is the fact, whatever the sessions add up
+    to, so the figure says Read and the bar is full. The sessions are still there in History.
 *@
 
 <div class="progress">
-    @if (Progress is not { } progress)
+    @if (Finished)
+    {
+        <div class="progress__figure">
+            <strong>Read</strong>
+            <span>@(EffectivePageCount is { } total ? $"all {total} pages" : "cover to cover")</span>
+        </div>
+        <div class="progress__track" role="progressbar"
+             aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"
+             aria-label="Finished">
+            <div class="progress__fill" style="width: 100%"></div>
+        </div>
+    }
+    else if (Progress is not { } progress)
     {
         <div class="progress__figure progress__figure--none">
             <strong aria-hidden="true">—</strong>
@@ -87,6 +102,9 @@
 
     [Parameter]
     public Bookmark? Bookmark { get; set; }
+
+    [Parameter]
+    public bool Finished { get; set; }
 
     /// <summary>
     /// What the reader has read, in words, under the percentage. Against a known length it is
