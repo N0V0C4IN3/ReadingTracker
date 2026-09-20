@@ -277,6 +277,16 @@ the services, the settings file for the frontend — and neither signs in and lo
 gap is the deployment-shaped version of the one [#59](https://github.com/N0V0C4IN3/ReadingTracker/issues/59)
 describes.
 
+**The Funnel ingress goes dark.** Seen once so far: after the tailscale sidecar lost its control
+connection (`PollNetMap: unexpected EOF` in its log), Tailscale's ingress relays stopped forwarding
+to the node while everything on the Pi reported healthy — `tailscale funnel status` still said
+"Funnel on", and the hostname still answered from the Pi itself because MagicDNS resolves it to
+the tailnet address, not the ingress. Visitors got a failed TLS handshake and the frontend said
+ReadingTracker could not be reached. `docker compose -f docker-compose.pi.yml restart tailscale`
+fixed it in seconds. The `funnel-watch` service in the compose file now does that unattended: it
+probes `/health` through public DNS (so through the ingress) once a minute and restarts the sidecar
+after three misses; `docker compose logs funnel-watch` shows every miss and restart.
+
 **A silent broker.** `/health` does not cover RabbitMQ, deliberately: a service that cannot reach
 the broker is still able to serve every request a reader makes, so reporting it unhealthy would
 take a working service out of rotation over a degraded feature. The cost is that a broken
