@@ -1152,9 +1152,29 @@ button.danger:hover:not(:disabled) {
     color: var(--ink-soft);
 }
 
-.pitch strong {
+.quote {
+    margin: 0;
+}
+
+.quote__text {
+    margin: 0;
+    font-style: italic;
+}
+
+/* The quote itself is what is set large; the name is a footnote, upright and smaller. */
+.quote__author {
+    margin-top: 0.7rem;
+    font-size: 0.7em;
+    letter-spacing: 0.02em;
     color: var(--ink);
-    font-weight: 650;
+}
+
+.quote__author cite {
+    font-style: normal;
+}
+
+.quote__author::before {
+    content: "— ";
 }
 
 /* Shelf ------------------------------------------------------------------- */

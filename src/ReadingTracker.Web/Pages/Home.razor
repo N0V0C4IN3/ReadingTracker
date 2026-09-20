@@ -476,12 +476,15 @@
             <CoverFlow Dressed="ShowWelcome" />
         </section>
 
+        @*
+            Under the way in, not a second pitch — the card has said what this is — but a line
+            someone once said about reading, a different one each visit.
+        *@
         <section class="pitch">
-            <p>
-                Your shelf holds <strong>what you are reading</strong>, what you have finished and what
-                you have put down. Log a stretch of reading and it works out <strong>how far through
-                you are</strong> — in pages or in percent, whichever you think in.
-            </p>
+            <blockquote class="quote">
+                <p class="quote__text">@_quote.Text</p>
+                <footer class="quote__author"><cite>@_quote.Author</cite></footer>
+            </blockquote>
         </section>
         </div>
     </NotAuthorized>
@@ -496,6 +499,9 @@
     private bool _welcomeDressed;
 
     private void ShowWelcome() => _welcomeDressed = true;
+
+    /// <summary>Drawn once per visit, so the words do not change under a reader's eyes.</summary>
+    private readonly Quote _quote = Quotes.Pick(Random.Shared);
 
     /// <summary>The reader's own clock: this runs in their browser, so it is their time of day.</summary>
     private static string Greeting => DateTime.Now.Hour switch
