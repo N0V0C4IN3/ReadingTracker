@@ -21,18 +21,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: leafo/gh-actions-lua@v11
-        with:
-          luaVersion: "luajit-2.1"
-
-      - uses: leafo/gh-actions-luarocks@v5
-
-      - name: Install busted
-        run: luarocks install busted
-
+      # The same image spec/run.sh uses locally, so CI and a developer's machine run one and
+      # the same busted on one and the same LuaJIT. (luarocks straight on a runner's LuaJIT
+      # trips over its own manifest — "main function has more than 65536 constants".)
       - name: Test
         working-directory: readingtracker.koplugin
-        run: busted
+        run: sh spec/run.sh
 
       # Everything a Kindle needs and nothing it does not: no specs, no Docker runner, no
       # reader's own config (gitignored, but excluded again here so a stray copy never ships).
