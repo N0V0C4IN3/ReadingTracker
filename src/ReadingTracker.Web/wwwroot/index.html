@@ -45,6 +45,20 @@
     <link rel="prefetch" href="covers/8242253-M.jpg" />
     <link rel="prefetch" href="covers/181493-M.jpg" />
     <link rel="preload" id="webassembly" />
+    <!-- The reader's theme — dark unless they switched it — stamped before the stylesheet is
+         applied so the page never paints in the other theme first. Kept in this browser only: it
+         is a preference about this screen, not about the reader. -->
+    <script>
+        (function () {
+            var theme = "dark";
+            try {
+                if (localStorage.getItem("readingtracker.theme") === "light") {
+                    theme = "light";
+                }
+            } catch (e) { /* no storage here: dark, then */ }
+            document.documentElement.setAttribute("data-theme", theme);
+        })();
+    </script>
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <!-- No link to ReadingTracker.Web.styles.css: that bundle is only built when a component
@@ -97,6 +111,15 @@
     <script>
         window.readingTracker = {
             prefersStillness: () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+
+            // Whether the page is dark, and the switch for it.
+            isDark: () => document.documentElement.getAttribute("data-theme") !== "light",
+            setDark: dark => {
+                document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+                try {
+                    localStorage.setItem("readingtracker.theme", dark ? "dark" : "light");
+                } catch (e) { /* remembered for this page only */ }
+            },
 
             // Resolves once every jacket in the deck has settled — arrived, or given up — so they
             // can be shown as one picture instead of appearing in whatever order the network
