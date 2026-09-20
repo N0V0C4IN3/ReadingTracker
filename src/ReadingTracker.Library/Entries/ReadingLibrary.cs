@@ -34,10 +34,17 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
     /// reader's library — including when it is in someone else's, which is not this reader's
     /// business to know about.
     /// </summary>
+    /// <summary>
+    /// Moves a book to <paramref name="status"/>. Arriving at Finished stamps the day — today, or
+    /// <paramref name="finishedOn"/> when the reader says which day it was; saying a day for a
+    /// book already Finished corrects it. Leaving Finished lets the day go: a book being read
+    /// again has not been finished yet.
+    /// </summary>
     public async Task<LibraryEntry?> SetStatusAsync(
         string readerId,
         Guid entryId,
         ReadingStatus status,
+        DateOnly? finishedOn,
         CancellationToken cancellationToken)
     {
         var entry = await database.LibraryEntries
@@ -52,11 +59,20 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
 
         if (previous == status)
         {
-            // Nothing changed, so there is nothing to save and nothing to announce.
+            if (status == ReadingStatus.Finished && finishedOn is { } corrected && corrected != entry.FinishedOn)
+            {
+                entry.FinishedOn = corrected;
+                await database.SaveChangesAsync(cancellationToken);
+            }
+
+            // Nothing else changed, so there is nothing to announce.
             return entry;
         }
 
         entry.Status = status;
+        entry.FinishedOn = status == ReadingStatus.Finished
+            ? finishedOn ?? DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime)
+            : null;
         await database.SaveChangesAsync(cancellationToken);
 
         await events.PublishAsync(
@@ -70,6 +86,52 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
             cancellationToken);
 
         return entry;
+    }
+
+    /// <summary>
+    /// The reader's goal for a year, if they set one, beside how many books they finished in it.
+    /// The count is there whether or not there is a goal: a year of reading is worth knowing
+    /// about even when nothing was promised.
+    /// </summary>
+    public async Task<(int? Books, int Finished)> GoalAsync(string readerId, int year, CancellationToken cancellationToken)
+    {
+        var goal = await database.ReadingGoals
+            .FirstOrDefaultAsync(g => g.ReaderId == readerId && g.Year == year, cancellationToken);
+
+        return (goal?.Books, await FinishedInAsync(readerId, year, cancellationToken));
+    }
+
+    public async Task<(int? Books, int Finished)> SetGoalAsync(string readerId, int year, int books, CancellationToken cancellationToken)
+    {
+        var goal = await database.ReadingGoals
+            .FirstOrDefaultAsync(g => g.ReaderId == readerId && g.Year == year, cancellationToken);
+
+        if (goal is null)
+        {
+            database.ReadingGoals.Add(new ReadingGoal { ReaderId = readerId, Year = year, Books = books });
+        }
+        else
+        {
+            goal.Books = books;
+        }
+
+        await database.SaveChangesAsync(cancellationToken);
+
+        return (books, await FinishedInAsync(readerId, year, cancellationToken));
+    }
+
+    public async Task ClearGoalAsync(string readerId, int year, CancellationToken cancellationToken) =>
+        await database.ReadingGoals
+            .Where(g => g.ReaderId == readerId && g.Year == year)
+            .ExecuteDeleteAsync(cancellationToken);
+
+    private Task<int> FinishedInAsync(string readerId, int year, CancellationToken cancellationToken)
+    {
+        var from = new DateOnly(year, 1, 1);
+        var to = new DateOnly(year + 1, 1, 1);
+
+        return database.LibraryEntries
+            .CountAsync(e => e.ReaderId == readerId && e.FinishedOn >= from && e.FinishedOn < to, cancellationToken);
     }
 
     /// <summary>
