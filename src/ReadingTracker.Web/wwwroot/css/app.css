@@ -1434,7 +1434,7 @@ button.danger:hover:not(:disabled) {
 .quote__text {
     margin: 0;
     font-style: italic;
-    quotes: "C" "D";
+    quotes: "\201C" "\201D";
 }
 
 /* Typographer's quotes round the words, hung so the text still aligns with what is above. */
