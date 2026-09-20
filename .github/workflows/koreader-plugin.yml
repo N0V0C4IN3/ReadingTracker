@@ -1,0 +1,56 @@
+name: KOReader plugin
+
+# The plugin is Lua, tested with busted on LuaJIT — what KOReader runs — and shipped as a zip
+# of its folder. Only the plugin's own files matter to it, so nothing here runs for a change to
+# the services.
+on:
+  push:
+    branches: [master]
+    tags: ["plugin-v*"]
+    paths: ["readingtracker.koplugin/**", ".github/workflows/koreader-plugin.yml"]
+  pull_request:
+    paths: ["readingtracker.koplugin/**", ".github/workflows/koreader-plugin.yml"]
+
+jobs:
+  test-and-package:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: leafo/gh-actions-lua@v11
+        with:
+          luaVersion: "luajit-2.1"
+
+      - uses: leafo/gh-actions-luarocks@v5
+
+      - name: Install busted
+        run: luarocks install busted
+
+      - name: Test
+        working-directory: readingtracker.koplugin
+        run: busted
+
+      # Everything a Kindle needs and nothing it does not: no specs, no Docker runner, no
+      # reader's own config (gitignored, but excluded again here so a stray copy never ships).
+      - name: Package
+        run: |
+          zip -r readingtracker.koplugin.zip readingtracker.koplugin \
+            -x 'readingtracker.koplugin/spec/*' \
+               'readingtracker.koplugin/.busted' \
+               'readingtracker.koplugin/.gitignore' \
+               'readingtracker.koplugin/readingtracker_config.lua'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: readingtracker.koplugin
+          path: readingtracker.koplugin.zip
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/plugin-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: readingtracker.koplugin.zip

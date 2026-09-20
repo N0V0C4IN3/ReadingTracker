@@ -1,0 +1,4 @@
+# Shell scripts and the Lua the Kindle runs must stay LF whatever the checkout: sh trips on a
+# carriage return, and a plugin file edited on Windows would otherwise ship with them.
+*.sh text eol=lf
+readingtracker.koplugin/** text eol=lf
