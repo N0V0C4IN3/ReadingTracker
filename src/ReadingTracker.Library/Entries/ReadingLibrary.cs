@@ -199,6 +199,7 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
             OccurredAt = (occurredAt ?? now).ToUniversalTime(),
             DurationMinutes = durationMinutes,
             LoggedAt = now,
+            Source = SessionSource.Reader,
         };
 
         database.ReadingSessions.Add(session);
@@ -211,10 +212,126 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
         }
 
         await database.SaveChangesAsync(cancellationToken);
+        await AnnounceIfChangedAsync(entry, previousStatus, now, cancellationToken);
 
-        if (previousStatus != entry.Status)
+        return (session, null);
+    }
+
+    /// <summary>
+    /// A device says where the reader is, and this works out what that means (ADR-0015). The
+    /// Bookmark moves to <paramref name="percent"/> whatever happens. Forward of where it was —
+    /// or, the first time, forward of what the reader had already read — the difference is a
+    /// session the device is credited with; backward, or no further, is not reading and records
+    /// nothing. A book the reader had only meant to read, put down, or given up on is plainly
+    /// being read again, so it moves to Reading; a Finished one stays Finished, since a re-read
+    /// is sessions and not a status.
+    /// </summary>
+    public async Task<(ReadingSession? Session, BookmarkProblem? Problem)> ReportBookmarkAsync(
+        string readerId,
+        Guid entryId,
+        decimal percent,
+        DateTimeOffset? occurredAt,
+        int? catalogPageCount,
+        CancellationToken cancellationToken)
+    {
+        if (percent is < 0m or > 100m)
         {
-            await events.PublishAsync(
+            return (null, BookmarkProblem.NotAPercentage);
+        }
+
+        var entry = await FindAsync(readerId, entryId, cancellationToken);
+
+        if (entry is null)
+        {
+            return (null, BookmarkProblem.NoSuchEntry);
+        }
+
+        var now = clock.GetUtcNow();
+        var reportedAt = (occurredAt ?? now).ToUniversalTime();
+        var previousBookmark = entry.BookmarkPercent;
+        var baseline = previousBookmark ?? await AmountReadAsPercentAsync(entry, catalogPageCount, cancellationToken);
+
+        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+
+        // Moved only from where it was read: a report that raced another for the same book —
+        // two devices, or one retrying a request that had not actually failed — finds the
+        // Bookmark already gone and is not applied, so the difference is credited once.
+        var moved = await database.LibraryEntries
+            .Where(e => e.Id == entry.Id && e.BookmarkPercent == previousBookmark)
+            .ExecuteUpdateAsync(
+                set => set
+                    .SetProperty(e => e.BookmarkPercent, percent)
+                    .SetProperty(e => e.BookmarkReportedAt, reportedAt),
+                cancellationToken);
+
+        if (moved == 0)
+        {
+            return (null, BookmarkProblem.ReportedMeanwhile);
+        }
+
+        ReadingSession? session = null;
+
+        if (percent > baseline)
+        {
+            session = new ReadingSession
+            {
+                Id = Guid.CreateVersion7(),
+                LibraryEntryId = entry.Id,
+                Amount = percent - baseline,
+                Unit = TrackingMethod.Percentage,
+                OccurredAt = reportedAt,
+                LoggedAt = now,
+                Source = SessionSource.Device,
+            };
+
+            database.ReadingSessions.Add(session);
+        }
+
+        // What the update just wrote, so the tracked entry — and the answer built from it —
+        // agrees with the row.
+        entry.BookmarkPercent = percent;
+        entry.BookmarkReportedAt = reportedAt;
+
+        var previousStatus = entry.Status;
+
+        if (entry.Status is ReadingStatus.WantToRead or ReadingStatus.OnHold or ReadingStatus.Dropped)
+        {
+            entry.Status = ReadingStatus.Reading;
+        }
+
+        await database.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        await AnnounceIfChangedAsync(entry, previousStatus, now, cancellationToken);
+
+        return (session, null);
+    }
+
+    /// <summary>
+    /// What the reader had read before any device said anything, as the baseline a first report
+    /// is measured against — so hand-logged reading is neither counted twice nor thrown away.
+    /// Zero when it cannot be expressed as a percentage: pages logged and no page count known.
+    /// Never past the whole book, which is where the derived total stops too.
+    /// </summary>
+    private async Task<decimal> AmountReadAsPercentAsync(
+        LibraryEntry entry,
+        int? catalogPageCount,
+        CancellationToken cancellationToken)
+    {
+        var totals = (await TotalsAsync([entry.Id], cancellationToken)).GetValueOrDefault(entry.Id, ReadingTotals.Nothing);
+
+        return totals.In(TrackingMethod.Percentage, entry.EffectivePageCount(catalogPageCount)) is { } read
+            ? Math.Min(read, 100m)
+            : 0m;
+    }
+
+    private Task AnnounceIfChangedAsync(
+        LibraryEntry entry,
+        ReadingStatus previousStatus,
+        DateTimeOffset now,
+        CancellationToken cancellationToken) =>
+        previousStatus == entry.Status
+            ? Task.CompletedTask
+            : events.PublishAsync(
                 new ReadingStatusChanged(
                     entry.Id,
                     entry.ReaderId,
@@ -223,10 +340,6 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
                     entry.Status.ToString(),
                     now),
                 cancellationToken);
-        }
-
-        return (session, null);
-    }
 
     /// <summary>
     /// Changes a session the reader already logged. The correction is stated in

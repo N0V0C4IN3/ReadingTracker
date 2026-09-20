@@ -5,6 +5,7 @@ using System.Text.Json;
 namespace ReadingTracker.Web.Services;
 
 /// <summary>A LibraryEntry as the Gateway (by way of Library) describes it.</summary>
+/// <param name="Bookmark">Where a device last said the reader is; null when no device has said.</param>
 public sealed record LibraryEntry(
     Guid Id,
     Guid BookId,
@@ -14,7 +15,16 @@ public sealed record LibraryEntry(
     int? PageCountOverride,
     int? EffectivePageCount,
     BookDetails? Book,
-    Progress? Progress);
+    Progress? Progress,
+    Bookmark? Bookmark);
+
+/// <summary>
+/// Where the reader is in a book, as a percentage, as last reported by a device (ADR-0015). A
+/// position, not a total: it can move backwards, and it is shown beside the progress rather than
+/// as it. Read-only here — setting it by hand would make it a second source of truth for
+/// progress, which is exactly what it is not.
+/// </summary>
+public sealed record Bookmark(decimal Percent, DateTimeOffset ReportedAt);
 
 public sealed record BookDetails(
     string Title,
@@ -36,10 +46,12 @@ public sealed record Progress(decimal? AmountRead, string? Unit, int? PercentCom
 /// because it is the record of what the reader actually entered; Library sends both so a client
 /// never has to work the conversion out for itself.
 /// </summary>
+/// <param name="Source">"Reader" for a session typed in, "Device" for one a device reported.</param>
 public sealed record ReadingSessionView(
     Guid Id,
     decimal Amount,
     string Unit,
+    string Source,
     DateTimeOffset OccurredAt,
     int? DurationMinutes,
     DisplayedAmount? Displayed);
