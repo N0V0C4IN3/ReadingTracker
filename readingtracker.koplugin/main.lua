@@ -368,6 +368,14 @@ function ReadingTracker:onNetworkConnected()
   end
 end
 
+-- KOReader's own "you reached the end" hook; its action setting is left to it, this only asks
+-- the shelf's question.
+function ReadingTracker:onEndOfBook()
+  if self.config and self.ui.document then
+    Trapper:wrap(function() self.app:onEndOfBook() end)
+  end
+end
+
 function ReadingTracker:onReadingTrackerUnlink()
   if self.ui.document then
     self.app:unlink()
@@ -422,6 +430,17 @@ function ReadingTracker:menuItems()
       text = _("Sync now"),
       enabled_func = function() return has_document and self.app:linked_entry() ~= nil end,
       callback = function() self:onReadingTrackerSync() end,
+    },
+    {
+      text = _("Mark as finished"),
+      enabled_func = function()
+        return has_document and self.app:linked_entry() ~= nil and self.app.entry_status ~= "Finished"
+      end,
+      callback = function()
+        if self:configured() then
+          Trapper:wrap(function() self.app:mark_finished() end)
+        end
+      end,
     },
     {
       text_func = function()

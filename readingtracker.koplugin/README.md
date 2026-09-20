@@ -27,8 +27,11 @@ cannot do one of those.
   in the menu). ReadingTracker turns each report into a reading session and shows the position
   on your shelf card. A report that cannot be sent is kept and sent at the next chance, with the
   time you actually read.
+- **Reaching the last page** asks, once, whether to mark the book finished — the same question
+  the web app asks at 100%. Never asked about a book already finished; a re-read just logs
+  sessions.
 - The menu shows what the document is linked to, lets you link it to a different book, unlink
-  it, or sync now.
+  it, sync now, or mark it finished.
 
 Nothing is sent while the device is offline; the plugin tries again at the next chance and
 never turns wifi on by itself.

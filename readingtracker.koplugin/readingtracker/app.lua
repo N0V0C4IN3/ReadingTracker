@@ -62,6 +62,7 @@ function App:onReaderReady()
   self.last_reported_page = nil
   self.last_report_at = nil
   self.entry_status = nil
+  self.asked_to_finish = false
 
   if self:linked_entry() then
     -- A position from last time that never got through gets its chance now.
@@ -368,6 +369,66 @@ function App:onCloseDocument()
   self.last_reported_page = nil
   self.last_report_at = nil
   self.entry_status = nil
+  self.asked_to_finish = false
+end
+
+-- Finishing -----------------------------------------------------------------------------------
+
+-- The last page. Reported first, so the shelf shows the end whatever comes of the question;
+-- then, once per opening, the question the web app asks at 100% — never taken for the reader,
+-- since people stop before the end matter, and never for a book already Finished, since a
+-- re-read is sessions and not a status.
+function App:onEndOfBook()
+  if self.disabled or not self:linked_entry() or self.asked_to_finish then
+    return
+  end
+
+  if not self.env:is_online() then
+    -- The position is kept for later like any other; the question waits for a time the
+    -- answer could get through.
+    self:report_if_moved()
+    return
+  end
+
+  if not self:report_if_moved() and not self.entry_status then
+    return
+  end
+
+  if self.entry_status == "Finished" then
+    return
+  end
+
+  self.asked_to_finish = true
+  self.env:prompt({
+    text = string.format("That's all of %s — mark it as finished?", self:linked_title()),
+    choices = {
+      { id = "yes", label = "Mark it finished" },
+      { id = "no", label = "Not yet" },
+    },
+  }, function(answer)
+    if answer == "yes" then
+      self:mark_finished()
+    end
+  end)
+end
+
+-- Also the menu's "mark as finished".
+function App:mark_finished()
+  if not self:linked_entry() then
+    return self.env:notify("This document is not linked to a book on your shelf.")
+  end
+
+  local entry, err = self.client:set_status(self:linked_entry(), "Finished")
+  if err then
+    return self:complain(err)
+  end
+
+  self.entry_status = entry.status or "Finished"
+  self.env:notify("Marked as finished")
+end
+
+function App:linked_title()
+  return self.env:read_setting(App.ENTRY_TITLE) or "this book"
 end
 
 -- Falling asleep with the book open still counts.
@@ -400,14 +461,14 @@ end
 -- opening, and not the one already reported.
 function App:report_if_moved()
   if self.disabled or not self:linked_entry() or not self.page or not self.turned_at then
-    return
+    return false
   end
 
   if self.page == self.last_reported_page then
-    return
+    return false
   end
 
-  self:report(self.page, self.turned_at)
+  return self:report(self.page, self.turned_at)
 end
 
 -- Sends where the reader is — or, when it cannot, keeps it to send later. Returns whether it
