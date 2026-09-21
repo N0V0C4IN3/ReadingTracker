@@ -55,8 +55,6 @@ public sealed class Book
     /// </summary>
     public DateTimeOffset? DetailsLookedAt { get; set; }
 
-    public BookDetails Details => new(Description, Publisher, PublishedDate, Categories);
-
     public void Fill(BookDetails details, DateTimeOffset lookedAt)
     {
         Description = details.Description;

@@ -26,17 +26,17 @@ public sealed record ProviderSearch(SearchStatus Status, IReadOnlyList<BookSearc
 }
 
 /// <summary>
-/// What a provider said when asked about one of its own volumes: the details, when it
-/// still has the volume; <see cref="SearchStatus.Completed"/> with nothing when it no longer
-/// does; <see cref="SearchStatus.ProvidersUnavailable"/> when it could not be reached.
+/// What a provider said when asked about one of its own volumes: the details, when it still
+/// has the volume; nothing, when it no longer does; or, <see cref="Unreachable"/>, no answer at
+/// all — which is the one of the three that is not worth remembering.
 /// </summary>
-public sealed record ProviderDetails(SearchStatus Status, BookDetails? Details)
+public sealed record ProviderDetails(BookDetails? Details, bool Unreachable)
 {
-    public static ProviderDetails Found(BookDetails details) => new(SearchStatus.Completed, details);
+    public static ProviderDetails Found(BookDetails details) => new(details, Unreachable: false);
 
-    public static ProviderDetails NotFound { get; } = new(SearchStatus.Completed, null);
+    public static ProviderDetails NotFound { get; } = new(null, Unreachable: false);
 
-    public static ProviderDetails Unavailable { get; } = new(SearchStatus.ProvidersUnavailable, null);
+    public static ProviderDetails Unavailable { get; } = new(null, Unreachable: true);
 }
 
 /// <summary>

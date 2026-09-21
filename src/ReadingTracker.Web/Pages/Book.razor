@@ -87,8 +87,10 @@
                     <p class="hint book__note">The book's details could not be fetched just now. They will be here next time.</p>
                 }
 
+                var facts = EditionFacts(entry).ToList();
+
                 <p class="book__edition">
-                    @foreach (var (fact, at) in EditionFacts(entry).Select((fact, at) => (fact, at)))
+                    @foreach (var (fact, at) in facts.Select((fact, at) => (fact, at)))
                     {
                         @if (at > 0)
                         {
@@ -98,7 +100,7 @@
                     }
                     @if (_book is { ProviderUrl: { } providerUrl, ProviderName: { } providerName })
                     {
-                        @if (EditionFacts(entry).Any())
+                        @if (facts.Count > 0)
                         {
                             <span class="book__dot" aria-hidden="true">·</span>
                         }
@@ -191,21 +193,9 @@
     private string? Byline(LibraryEntry entry)
     {
         var authors = entry.Book is { Authors.Count: > 0 } book ? string.Join(", ", book.Authors) : null;
-        var imprint = (_book?.Publisher, _book?.PublishedYear) switch
-        {
-            ({ } publisher, { } year) => $"{publisher}, {year}",
-            ({ } publisher, null) => publisher,
-            (null, { } year) => year,
-            _ => null,
-        };
+        var byline = string.Join(" · ", new[] { authors, _book?.Imprint }.OfType<string>());
 
-        return (authors, imprint) switch
-        {
-            ({ } by, { } from) => $"{by} · {from}",
-            ({ } by, null) => by,
-            (null, { } from) => from,
-            _ => null,
-        };
+        return byline.Length == 0 ? null : byline;
     }
 
     private void SignIn() => Navigation.NavigateToLogin("authentication/login");

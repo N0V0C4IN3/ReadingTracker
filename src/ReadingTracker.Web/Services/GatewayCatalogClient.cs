@@ -45,6 +45,15 @@ public sealed record CatalogBook(
     public string? PublishedYear =>
         PublishedDate is { Length: >= 4 } date && date[..4].All(char.IsAsciiDigit) ? date[..4] : null;
 
+    /// <summary>Who put the book out and when — "Del Rey, 2014" — as much of it as the provider knew.</summary>
+    public string? Imprint => (Publisher, PublishedYear) switch
+    {
+        ({ } publisher, { } year) => $"{publisher}, {year}",
+        ({ } publisher, null) => publisher,
+        (null, { } year) => year,
+        _ => null,
+    };
+
     /// <summary>The description's paragraphs, in order; none when there is no description.</summary>
     public IReadOnlyList<string> Paragraphs =>
         Description?.Split("\n\n", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? [];
@@ -246,7 +255,12 @@ public sealed class GatewayCatalogClient(HttpClient httpClient)
             return (null, BookUnavailable.NotFound);
         }
 
-        response.EnsureSuccessStatusCode();
+        // The Gateway answering for a Catalog it could not reach — 502, 503 — is the same thing
+        // to the page as not reaching the Gateway: the book half has nothing to show, and says so.
+        if (!response.IsSuccessStatusCode)
+        {
+            return (null, BookUnavailable.GatewayUnreachable);
+        }
 
         var book = await response.Content.ReadFromJsonAsync<CatalogBook>(cancellationToken);
 

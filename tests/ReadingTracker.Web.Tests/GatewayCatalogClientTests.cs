@@ -250,6 +250,18 @@ public sealed class GatewayCatalogClientTests
     }
 
     [Fact]
+    public async Task Reports_when_the_gateway_could_not_reach_catalog_for_a_book()
+    {
+        var (client, gateway) = CreateClient();
+        gateway.Respond = _ => new HttpResponseMessage(HttpStatusCode.BadGateway);
+
+        var (book, problem) = await client.GetBookAsync(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Null(book);
+        Assert.Equal(BookUnavailable.GatewayUnreachable, problem);
+    }
+
+    [Fact]
     public async Task Reports_when_a_book_lookup_cannot_reach_the_gateway()
     {
         var (client, gateway) = CreateClient();

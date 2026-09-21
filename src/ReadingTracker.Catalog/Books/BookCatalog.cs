@@ -144,7 +144,7 @@ public sealed class BookCatalog(
 
         var answer = await providers.FindDetailsAsync(book.Source, book.ExternalId, cancellationToken);
 
-        if (answer.Status is SearchStatus.ProvidersUnavailable)
+        if (answer.Unreachable)
         {
             return new BookLookup(book, PageFor(book), DetailsUnavailable: true);
         }

@@ -128,7 +128,9 @@ public sealed class OpenLibraryProvider(HttpClient httpClient) : IBookProvider
             subjects);
     }
 
-    public Uri PageFor(string externalId) => new(httpClient.BaseAddress ?? new Uri("https://openlibrary.org/"), Path(externalId));
+    // The site, not the API's base address: those are the same host today, but a reader is
+    // being sent to a page, and a proxy in front of the API is no place to send them.
+    public Uri PageFor(string externalId) => new($"https://openlibrary.org/{Path(externalId)}");
 
     private async Task<OpenLibraryRecord?> FetchAsync(string key, CancellationToken cancellationToken)
     {
