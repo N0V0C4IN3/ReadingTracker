@@ -1,0 +1,79 @@
+@using ReadingTracker.Web.Services
+
+@*
+    Pages a day for the last three weeks, as a row of thin bars: a habit at a glance. The
+    series is DailyPages'; this only draws it. One labelled maximum on a recessive grid is all
+    the scale a reader needs to tell a big day from a small one; days without reading are quiet
+    stubs, so the row reads as days rather than as gaps; each bar says its day and figure on
+    hover or tap. The whole thing is also said in one sentence for anyone not looking at it.
+*@
+
+@if (Sessions is { } sessions)
+{
+    var series = DailyPages.Of(sessions, EffectivePageCount, DateOnly.FromDateTime(DateTime.Now), TimeZoneInfo.Local);
+    var max = series.Max;
+
+    <figure class="chart">
+        <figcaption class="group chart__eyebrow">Pages a day <span>· last three weeks</span></figcaption>
+
+        <p class="visually-hidden">@Summary(series)</p>
+
+        <div class="chart__plot">
+            @if (max > 0)
+            {
+                <span class="chart__max" aria-hidden="true">@Figures.Trim(max)</span>
+            }
+            <ol class="chart__bars">
+                @foreach (var day in series.Days)
+                {
+                    var height = max > 0 ? day.Pages / max * 100 : 0;
+
+                    <li class="chart__bar @(day.Pages > 0 ? null : "chart__bar--none")"
+                        style="--h: @(height.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture))%"
+                        tabindex="0"
+                        aria-label="@Label(day)">
+                        <span class="chart__tip" aria-hidden="true">@Label(day)</span>
+                    </li>
+                }
+            </ol>
+        </div>
+
+        <div class="chart__axis" aria-hidden="true">
+            <span>@series.Days[0].Day.ToString("d MMM")</span>
+            <span>Today</span>
+        </div>
+
+        @if (series.LeftOut > 0)
+        {
+            <p class="hint">
+                @(series.LeftOut == 1 ? "One session logged in percent is" : $"{series.LeftOut} sessions logged in percent are")
+                left out: set a page count to include @(series.LeftOut == 1 ? "it" : "them").
+            </p>
+        }
+        else if (max == 0)
+        {
+            <p class="hint">Nothing logged in the last three weeks.</p>
+        }
+    </figure>
+}
+
+@code {
+    /// <summary>The entry's sessions; null while they are still being fetched, when there is nothing to draw.</summary>
+    [Parameter]
+    public IReadOnlyList<ReadingSessionView>? Sessions { get; set; }
+
+    [Parameter]
+    public int? EffectivePageCount { get; set; }
+
+    private static string Label(DayPages day)
+    {
+        var when = day.Day == DateOnly.FromDateTime(DateTime.Now) ? "Today" : day.Day.ToString("d MMM");
+
+        return day.Pages > 0 ? $"{when} · {Figures.Trim(day.Pages)} {(day.Pages == 1 ? "page" : "pages")}" : $"{when} · nothing";
+    }
+
+    private static string Summary(DailyPages series) =>
+        series.ReadingDays == 0
+            ? "No pages read in the last three weeks."
+            : $"About {Math.Round(series.Total)} pages read over {series.ReadingDays} {(series.ReadingDays == 1 ? "day" : "days")} in the last three weeks, at most {Math.Round(series.Max)} in a day.";
+}
