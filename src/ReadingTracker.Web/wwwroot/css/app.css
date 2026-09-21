@@ -570,11 +570,23 @@ header > a:first-child:hover {
     margin-bottom: 0;
 }
 
+/* Read more, and Show less: a small outlined pill, visibly a button at rest and not only under the pointer,
+   since it sits in running text where a bare word would pass for part of it. */
 .book__more {
-    padding-left: 0;
+    margin-top: 0.2rem;
+    padding: 0.3rem 0.85rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    background: var(--fill);
+    color: var(--ink);
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     font-size: 0.8rem;
     font-weight: 600;
+}
+
+.book__more:hover:not(:disabled) {
+    background: var(--fill-hover);
+    border-color: var(--ink-faint);
 }
 
 .book__note {
@@ -3299,7 +3311,9 @@ button.danger:hover:not(:disabled) {
     them is only the mesh, so they are sheer everywhere and blur nothing — see .entry.
 */
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-    header {
+    /* The account menu hangs off the header and is the same material: a raised, blurred sheet. */
+    header,
+    .account__menu {
         background: var(--card-raised);
         -webkit-backdrop-filter: var(--blur);
         backdrop-filter: var(--blur);
