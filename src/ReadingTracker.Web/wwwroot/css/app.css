@@ -639,6 +639,84 @@ header > a:first-child:hover {
     margin-top: 0.2rem;
 }
 
+/* On the card the button sits in a row of link-buttons and is inset to match them; here it leads. */
+.reading__actions .button--log {
+    margin-left: 0;
+}
+
+/*
+    The pace stripe: four figures ruled above and below, each with its label in small capitals
+    beneath — the same voice as the progress figure, one size down, because these are the
+    reader's numbers about the reader's reading. Two across on a phone.
+*/
+.stripe {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin: 0.3rem 0 0;
+    border-block: 1px solid var(--line);
+}
+
+.stripe__figure {
+    display: flex;
+    flex-direction: column-reverse;
+    min-width: 0;
+    margin: 0;
+    padding: 0.6rem 0.7rem;
+    border-left: 1px solid var(--line);
+}
+
+.stripe__figure:first-child {
+    padding-left: 0;
+    border-left: 0;
+}
+
+.stripe__figure dd {
+    margin: 0;
+}
+
+.stripe__figure strong {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+}
+
+.stripe__accent {
+    color: var(--accent);
+}
+
+.stripe__figure dt {
+    margin-top: 0.25rem;
+    font-size: 0.66rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    line-height: 1.25;
+    color: var(--ink-faint);
+}
+
+/* Nothing to report is not a number, and is not weighted like one. */
+.stripe__figure--none strong {
+    color: var(--ink-faint);
+    font-weight: 500;
+}
+
+@media (max-width: 560px) {
+    .stripe {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .stripe__figure:nth-child(3) {
+        padding-left: 0;
+        border-left: 0;
+    }
+
+    .stripe__figure:nth-child(n + 3) {
+        border-top: 1px solid var(--line);
+    }
+}
+
 /* The things done once, at the foot, past everything read daily. */
 .reading__foot {
     display: flex;

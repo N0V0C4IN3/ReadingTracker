@@ -1,0 +1,121 @@
+@using ReadingTracker.Web.Services
+
+@*
+    Four figures in a ruled row: how much is read, how fast, for how long, and when it will be
+    done at that speed. The reader's own numbers, worked out from their sessions by ReadingPace;
+    this only says them. A figure that cannot be given is a dash with the reason under it, in
+    the place the figure would go, so the row keeps its shape and the reader knows what would
+    make the number appear.
+
+    A definition list, read label then figure; shown figure then label, which is how a stripe
+    of numbers is scanned.
+*@
+
+@if (Sessions is { } sessions)
+{
+    var pace = ReadingPace.Of(Entry, sessions, DateOnly.FromDateTime(DateTime.Now), TimeZoneInfo.Local);
+    var finished = Entry.Status == "Finished";
+
+    <dl class="stripe">
+        @if (finished)
+        {
+            <div class="stripe__figure">
+                <dt>@(pace.PageCount is { } all ? $"all {all} pages" : "read")</dt>
+                <dd><strong class="stripe__accent">100%</strong></dd>
+            </div>
+        }
+        else if (Entry.Progress is { PercentComplete: { } percent })
+        {
+            <div class="stripe__figure">
+                <dt>@(pace.PagesRead is { } read && pace.PageCount is { } of ? $"{Trim(read)} of {of} pages" : "read")</dt>
+                <dd><strong class="stripe__accent">@percent%</strong></dd>
+            </div>
+        }
+        else
+        {
+            <div class="stripe__figure stripe__figure--none">
+                <dt>@(Entry.Progress is null ? "nothing logged yet" : Entry.Progress.AmountRead is null ? "set a page count" : "no page count")</dt>
+                <dd><strong aria-hidden="true">—</strong></dd>
+            </div>
+        }
+
+        @if (pace.PagesADay is { } rate)
+        {
+            <div class="stripe__figure">
+                <dt>pages a day</dt>
+                <dd><strong>@Rate(rate)</strong></dd>
+            </div>
+        }
+        else
+        {
+            <div class="stripe__figure stripe__figure--none">
+                <dt>@Because(pace.NoRateBecause)</dt>
+                <dd><strong aria-hidden="true">—</strong></dd>
+            </div>
+        }
+
+        <div class="stripe__figure">
+            <dt>@(finished ? (pace.DaysReading == 1 ? "day it took" : "days it took") : (pace.DaysReading == 1 ? "day reading" : "days reading"))</dt>
+            <dd><strong>@pace.DaysReading</strong></dd>
+        </div>
+
+        @if (finished && Entry.FinishedOn is { } finishedOn)
+        {
+            <div class="stripe__figure">
+                <dt>finished</dt>
+                <dd><strong>@Day(finishedOn)</strong></dd>
+            </div>
+        }
+        else if (pace.FinishOn is { } finishOn)
+        {
+            <div class="stripe__figure">
+                <dt>finish at this pace</dt>
+                <dd><strong>@Day(finishOn)</strong></dd>
+            </div>
+        }
+        else
+        {
+            <div class="stripe__figure stripe__figure--none">
+                <dt>@(finished ? "finished" : Because(pace.NoForecastBecause))</dt>
+                <dd><strong aria-hidden="true">—</strong></dd>
+            </div>
+        }
+    </dl>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public required LibraryEntry Entry { get; set; }
+
+    /// <summary>The entry's sessions; null while they are still being fetched, when there is nothing to say yet.</summary>
+    [Parameter]
+    public IReadOnlyList<ReadingSessionView>? Sessions { get; set; }
+
+    /// <summary>Why a figure is missing, in the few words there is room for under a dash.</summary>
+    private static string Because(PaceGap? gap) => gap switch
+    {
+        PaceGap.NotStarted => "nothing logged yet",
+        PaceGap.StartedToday => "from tomorrow",
+        PaceGap.NotInPages => "logged in percent",
+        PaceGap.NoPageCount => "no page count",
+        PaceGap.Finished => "finished",
+        _ => "",
+    };
+
+    /// <summary>A rate under ten keeps a decimal — 3.5 a day is a real difference from 3 — and past it rounds.</summary>
+    private static string Rate(decimal pagesADay) =>
+        pagesADay < 10 ? pagesADay.ToString("0.#") : Math.Round(pagesADay).ToString("0");
+
+    private static string Trim(decimal value) =>
+        value == decimal.Truncate(value) ? decimal.Truncate(value).ToString() : value.ToString("0.#");
+
+    /// <summary>Today by name, this year's days without the year, and the year only when it is another one.</summary>
+    private static string Day(DateOnly day)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Now);
+
+        return day == today
+            ? "Today"
+            : day.Year == today.Year ? day.ToString("d MMM") : day.ToString("d MMM yyyy");
+    }
+}
