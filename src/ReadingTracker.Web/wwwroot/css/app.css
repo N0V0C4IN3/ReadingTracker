@@ -717,6 +717,124 @@ header > a:first-child:hover {
     }
 }
 
+/*
+    Pages a day, as bars. Thin, rounded at the top, on the accent — the reading's own colour —
+    with a day of nothing as a stub in the grid's grey, so the row is twenty-one days and not a
+    few bars with holes. One line marks the maximum and names it; nothing else is labelled,
+    because a habit is read as a shape, and each bar says its own figure when asked.
+*/
+.chart {
+    margin: 0.9rem 0 0;
+}
+
+.chart__eyebrow {
+    margin: 0 0 0.55rem;
+}
+
+.chart__eyebrow span {
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--ink-soft);
+}
+
+.chart__plot {
+    position: relative;
+    height: 3.25rem;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line-strong);
+}
+
+.chart__max {
+    position: absolute;
+    right: 0;
+    top: -0.05rem;
+    transform: translateY(-100%);
+    font-size: 0.65rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-faint);
+}
+
+.chart__bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 100%;
+    margin: 0;
+    padding: 0.25rem 0 0;
+    list-style: none;
+}
+
+.chart__bar {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    height: max(var(--h), 2px);
+    border-radius: 2px 2px 0 0;
+    background: var(--accent);
+    opacity: 0.85;
+    cursor: default;
+    outline-offset: 2px;
+}
+
+.chart__bar--none {
+    background: var(--fill-hover);
+    opacity: 1;
+}
+
+.chart__bar:hover,
+.chart__bar:focus-visible {
+    opacity: 1;
+}
+
+/* The bar's day and figure, above it, only while it is pointed at or focused. */
+.chart__tip {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 0.35rem);
+    transform: translateX(-50%);
+    padding: 0.2rem 0.5rem;
+    border-radius: var(--radius-sm);
+    background: var(--ink);
+    color: var(--page);
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 120ms var(--ease);
+    z-index: 1;
+}
+
+.chart__bar:hover .chart__tip,
+.chart__bar:focus-visible .chart__tip {
+    opacity: 1;
+}
+
+/* The first and last bars' tips would hang past the plot; keep them inside it. */
+.chart__bar:first-child .chart__tip {
+    left: 0;
+    transform: none;
+}
+
+.chart__bar:last-child .chart__tip {
+    left: auto;
+    right: 0;
+    transform: none;
+}
+
+.chart__axis {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.25rem;
+    font-size: 0.65rem;
+    color: var(--ink-faint);
+}
+
+.chart .hint {
+    margin-top: 0.5rem;
+}
+
 /* The things done once, at the foot, past everything read daily. */
 .reading__foot {
     display: flex;

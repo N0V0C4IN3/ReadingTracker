@@ -56,8 +56,8 @@ public sealed record ReadingPace(
         TimeZoneInfo zone)
     {
         var started = sessions.Count == 0
-            ? DayOf(entry.AddedAt, zone)
-            : sessions.Min(session => DayOf(session.OccurredAt, zone));
+            ? ReaderDays.Of(entry.AddedAt, zone)
+            : sessions.Min(session => ReaderDays.Of(session.OccurredAt, zone));
 
         var finished = entry.Status == "Finished";
         var measuredTo = finished ? entry.FinishedOn ?? today : today;
@@ -109,7 +109,4 @@ public sealed record ReadingPace(
 
         return today.AddDays(days);
     }
-
-    private static DateOnly DayOf(DateTimeOffset instant, TimeZoneInfo zone) =>
-        DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, zone).DateTime);
 }
