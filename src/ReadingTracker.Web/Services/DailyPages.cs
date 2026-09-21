@@ -36,7 +36,7 @@ public sealed record DailyPages(IReadOnlyList<DayPages> Days, int LeftOut)
 
         foreach (var session in sessions)
         {
-            var day = DayOf(session.OccurredAt, zone);
+            var day = ReaderDays.Of(session.OccurredAt, zone);
 
             // Outside the window is neither drawn nor worth mentioning.
             if (day < first || day > today)
@@ -69,7 +69,4 @@ public sealed record DailyPages(IReadOnlyList<DayPages> Days, int LeftOut)
         "Percentage" when effectivePageCount is { } total => session.Amount * total / 100,
         _ => null,
     };
-
-    private static DateOnly DayOf(DateTimeOffset instant, TimeZoneInfo zone) =>
-        DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, zone).DateTime);
 }
