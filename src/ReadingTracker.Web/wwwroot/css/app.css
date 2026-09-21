@@ -535,6 +535,11 @@ header > a:first-child:hover {
     .import-badge__dot {
         animation: none;
     }
+
+    .book__text,
+    .book__about p {
+        transition: none;
+    }
 }
 
 /*
@@ -665,6 +670,9 @@ header > a:first-child:hover {
 
 .book__about p {
     margin: 0 0 0.7rem;
+    transition:
+        margin 420ms var(--ease-out),
+        text-indent 420ms var(--ease-out);
 }
 
 .book__about p:last-child {
@@ -677,13 +685,38 @@ header > a:first-child:hover {
     paragraphs run on without space between them while folded, marked by an indent instead,
     because a gap that fell inside the seven lines would make one book's fold taller than
     another's; unfolded, they get their space back.
+
+    Read more opens the fold rather than replacing it: the box is seven lines tall folded and as
+    tall as the text open, and glides between the two (interpolate-size is what lets a height
+    travel to auto; a browser without it snaps, which is what it did before). The clamp itself
+    cannot glide, so it is timed: lifted at once on the way open, so the text under the fold is
+    there for the box to reveal, and put back only once the box has closed on the way shut, so
+    the text is never cut to seven lines with the box still tall around it. The paragraphs'
+    space and indent travel with the height, so the whole passage settles rather than jumps.
+
+    The same display, folded and open: the clamp needs -webkit-box, and a box that changed its
+    display mid-glide would not glide.
 */
-.book__about--folded .book__text {
+.book__text {
     display: -webkit-box;
     -webkit-box-orient: vertical;
+    overflow: hidden;
+    interpolate-size: allow-keywords;
+    height: auto;
+    transition:
+        height 420ms var(--ease-out),
+        -webkit-line-clamp 0s allow-discrete,
+        line-clamp 0s allow-discrete;
+}
+
+.book__about--folded .book__text {
     -webkit-line-clamp: 7;
     line-clamp: 7;
-    overflow: hidden;
+    height: 7lh;
+    transition:
+        height 360ms var(--ease-out),
+        -webkit-line-clamp 0s 360ms allow-discrete,
+        line-clamp 0s 360ms allow-discrete;
 }
 
 .book__about--folded p {
@@ -2254,7 +2287,7 @@ button.danger:hover:not(:disabled) {
 
 .status-select {
     font-size: 0.85rem;
-    font-weight: 600;
+    font-weight: 700;
     padding: 0.3rem 0.5rem;
 }
 
@@ -3591,19 +3624,52 @@ button.danger:hover:not(:disabled) {
     }
 
     /*
-        The page's head has no room for the status beside the title on a phone — the chips
-        under the title were stacking one to a line to make way for it — so it drops to a line
-        of its own under the head, still at the right, where the eye left it.
+        The status stays beside the title on a phone, as on a desk, but the head becomes a grid
+        for it: with the status taking a column the title's column is narrow, and the chips,
+        which sat under the title in its column, were stacking one to a line. Here they leave
+        the title's column and take the head's full width beneath the cover, which is where a
+        row of chips has room. The cover keeps the title and the authors beside it.
     */
     .book__head {
-        flex-wrap: wrap;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        column-gap: 0.9rem;
+        row-gap: 0;
+        align-items: start;
+    }
+
+    .book__ident {
+        display: contents;
+    }
+
+    .book__cover {
+        grid-column: 1;
+        grid-row: 1 / 3;
+    }
+
+    .book__title {
+        grid-column: 2;
+        grid-row: 1;
+        font-size: 1.35rem;
+    }
+
+    /* Under the status as well as the title: only the title has to share its line. */
+    .book__authors {
+        grid-column: 2 / -1;
+        grid-row: 2;
+        font-size: 0.92rem;
     }
 
     .book__status {
-        flex-basis: 100%;
-        display: flex;
-        justify-content: flex-end;
-        margin-top: 0.1rem;
+        grid-column: 3;
+        grid-row: 1;
+        margin: 0;
+    }
+
+    .book__categories {
+        grid-column: 1 / -1;
+        grid-row: 3;
+        margin-top: 0.75rem;
     }
 
     .field label {
