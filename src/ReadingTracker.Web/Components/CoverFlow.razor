@@ -28,7 +28,7 @@
          @ontouchmove="DragMove"
          @ontouchend="DragEnd"
          @ontouchcancel="DragEnd">
-        @foreach (var (book, position) in Wall.Select((book, at) => (book, at)))
+        @foreach (var (book, position) in Jackets.Wall.Select((book, at) => (book, at)))
         {
             var place = Place(position);
 
@@ -109,51 +109,6 @@
     /// <summary>How many jacket designs the stylesheet draws.</summary>
     private const int CoverTones = 6;
 
-    /// <summary>
-    /// The books in the deck: long out of copyright, with Open Library's cover for each.
-    ///
-    /// The ids are written down rather than looked up. A welcome screen that has to search an API
-    /// before it knows what to draw is a welcome screen that waits — and Open Library rate limits
-    /// a run of searches, so the wait is not hypothetical. Fetching seventeen known images is a
-    /// different thing from asking seventeen questions first.
-    ///
-    /// The jackets themselves are served from wwwroot/covers rather than from Open Library, and
-    /// the ids survive only as the filenames, which is where each one came from. Fetching them
-    /// live was measured at roughly two seconds apiece: covers.openlibrary.org answers most ids
-    /// with a 302 to archive.org, which then pulls the jpeg out of a zip. Seventeen of those, on
-    /// the screen a signed-out reader sees first and lands back on after signing out, routinely
-    /// spent the whole cap below waiting. They are 312 KB together and they never change.
-    ///
-    /// Every title here has been checked to have a cover. That is the curation the drawn jackets
-    /// underneath cannot do for us: one drawn jacket in a deck of photographed ones does not read
-    /// as a considered fallback, it reads as a broken image. Anna Karenina was dropped for exactly
-    /// this reason — Open Library has no cover for it.
-    ///
-    /// wwwroot/index.html prefetches these same covers while the runtime is still starting, so
-    /// that by the time this renders they are already in the cache. Keep the two lists in step —
-    /// an id only in one place costs that jacket its head start rather than breaking anything.
-    /// </summary>
-    private static readonly (string Title, string Author, int CoverId)[] Wall =
-    [
-        ("Frankenstein", "Mary Shelley", 12356249),
-        ("Middlemarch", "George Eliot", 252882),
-        ("Moby-Dick", "Herman Melville", 10544254),
-        ("Jane Eyre", "Charlotte Brontë", 8235363),
-        ("The Odyssey", "Homer", 12474938),
-        ("Dracula", "Bram Stoker", 12216503),
-        ("Persuasion", "Jane Austen", 12824691),
-        ("Walden", "H. D. Thoreau", 11248037),
-        // Not 9009316, whose cover art reads "THE TIME MASCHINE" in display type.
-        ("The Time Machine", "H. G. Wells", 6907719),
-        ("Wuthering Heights", "Emily Brontë", 12818862),
-        ("Crime and Punishment", "F. Dostoevsky", 13116014),
-        ("The Awakening", "Kate Chopin", 8750241),
-        ("Great Expectations", "Charles Dickens", 13322313),
-        ("Dubliners", "James Joyce", 8216412),
-        ("The Iliad", "Homer", 12621988),
-        ("North and South", "E. Gaskell", 8242253),
-        ("The Turn of the Screw", "Henry James", 181493),
-    ];
 
     /// <summary>
     /// How long the deck will wait for the last jacket before showing the ones it has.
@@ -172,14 +127,18 @@
     [Parameter]
     public EventCallback Dressed { get; set; }
 
-    private int _at;
+    /// <summary>
+    /// Which book is at the front. Picked at random once, when the deck is built, so the screen
+    /// opens on a different jacket each visit — the way the quote under it is a different line.
+    /// </summary>
+    private int _at = Jackets.PickFront(Random.Shared);
     private bool _dressed;
     private System.Timers.Timer? _turn;
 
     /// <summary>Where the finger currently dragging the deck was last accounted for, if any.</summary>
     private double? _dragFrom;
 
-    private (string Title, string Author, int CoverId) Front => Wall[_at];
+    private (string Title, string Author, int CoverId) Front => Jackets.Wall[_at];
 
     protected override async Task OnAfterRenderAsync(bool first)
     {
@@ -302,7 +261,7 @@
     /// </summary>
     private void Turn(int places)
     {
-        var length = Wall.Length;
+        var length = Jackets.Wall.Length;
 
         _at = ((_at + places) % length + length) % length;
     }
@@ -331,8 +290,8 @@
     /// </summary>
     private Slot Place(int position)
     {
-        var raw = (position - _at + Wall.Length) % Wall.Length;
-        var offset = raw > Wall.Length / 2 ? raw - Wall.Length : raw;
+        var raw = (position - _at + Jackets.Wall.Length) % Jackets.Wall.Length;
+        var offset = raw > Jackets.Wall.Length / 2 ? raw - Jackets.Wall.Length : raw;
         var away = Math.Abs(offset);
         var lean = Math.Sign(offset);
 
@@ -346,7 +305,7 @@
             Turn: lean * -64,
             Scale: 1 - Math.Min(away, 5) * 0.04,
             Fade: away <= 3 ? 1 : Math.Max(0, 1 - (away - 3) * 0.5),
-            Layer: Wall.Length - away,
+            Layer: Jackets.Wall.Length - away,
             // Anything still on screen is something a reader can aim at, and nothing else is: the
             // far side of the deck is drawn at zero opacity, and an invisible button is a trap.
             Lit: away <= 4);
