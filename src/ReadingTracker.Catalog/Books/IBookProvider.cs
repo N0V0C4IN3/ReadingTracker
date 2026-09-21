@@ -5,6 +5,9 @@ namespace ReadingTracker.Catalog.Books;
 /// </summary>
 public interface IBookProvider
 {
+    /// <summary>Which provider this is, so a Book can be taken back to the one that described it.</summary>
+    BookSource Source { get; }
+
     Task<IReadOnlyList<BookSearchResult>> SearchByIsbnAsync(string isbn, CancellationToken cancellationToken);
 
     /// <summary>
@@ -27,4 +30,14 @@ public interface IBookProvider
         string query,
         SearchWindow window,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The longer details of one volume this provider described earlier, by the id it gave it.
+    /// Null when the provider no longer has that volume — an answer, as opposed to the
+    /// exception an unreachable provider throws.
+    /// </summary>
+    Task<BookDetails?> FindDetailsAsync(string externalId, CancellationToken cancellationToken);
+
+    /// <summary>The page a reader can be sent to for this volume, on the provider's own site.</summary>
+    Uri PageFor(string externalId);
 }

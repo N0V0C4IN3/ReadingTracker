@@ -11,6 +11,11 @@ namespace ReadingTracker.Catalog.Books;
 /// <param name="TotalPages">Page count, where the provider knows it.</param>
 /// <param name="Source">Which provider produced this result.</param>
 /// <param name="ExternalId">The provider's own identifier for the volume.</param>
+/// <param name="Details">
+/// The longer details, when the provider's search carries them; null when it does not, in
+/// which case they are looked for later, by <paramref name="ExternalId"/>, the first time
+/// somebody asks.
+/// </param>
 public sealed record BookSearchResult(
     string Title,
     IReadOnlyList<string> Authors,
@@ -18,4 +23,5 @@ public sealed record BookSearchResult(
     string? CoverUrl,
     int? TotalPages,
     BookSource Source,
-    string? ExternalId);
+    string? ExternalId,
+    BookDetails? Details = null);

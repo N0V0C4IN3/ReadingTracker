@@ -1,4 +1,6 @@
+using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 
@@ -17,6 +19,8 @@ public sealed class OpenLibraryOptions
 /// </summary>
 public sealed class OpenLibraryProvider(HttpClient httpClient) : IBookProvider
 {
+    public BookSource Source => BookSource.OpenLibrary;
+
     public async Task<IReadOnlyList<BookSearchResult>> SearchByIsbnAsync(
         string isbn,
         CancellationToken cancellationToken)
@@ -92,6 +96,72 @@ public sealed class OpenLibraryProvider(HttpClient httpClient) : IBookProvider
             ],
             cancellationToken);
 
+    /// <summary>
+    /// Open Library's id for a book is a key — <c>/works/OL…W</c> from a search, <c>/books/OL…M</c>
+    /// from an ISBN lookup — and the record behind it is at that key. An edition's record
+    /// names its publisher and date but often leaves the description and subjects to the work
+    /// it belongs to, so an edition without them is followed to its work.
+    /// </summary>
+    public async Task<BookDetails?> FindDetailsAsync(string externalId, CancellationToken cancellationToken)
+    {
+        var record = await FetchAsync(externalId, cancellationToken);
+
+        if (record is null)
+        {
+            return null;
+        }
+
+        var description = record.Description;
+        var subjects = record.Subjects;
+
+        if ((description is null || subjects is null) && record.Works?.FirstOrDefault()?.Key is { } workKey)
+        {
+            var work = await FetchAsync(workKey, cancellationToken);
+            description ??= work?.Description;
+            subjects ??= work?.Subjects;
+        }
+
+        return BookDetails.Cleaned(
+            TextOf(description),
+            record.Publishers?.FirstOrDefault(),
+            record.PublishDate ?? record.FirstPublishDate,
+            subjects);
+    }
+
+    // The site, not the API's base address: those are the same host today, but a reader is
+    // being sent to a page, and a proxy in front of the API is no place to send them.
+    public Uri PageFor(string externalId) => new($"https://openlibrary.org/{Path(externalId)}");
+
+    private async Task<OpenLibraryRecord?> FetchAsync(string key, CancellationToken cancellationToken)
+    {
+        using var response = await httpClient.GetAsync($"{Path(key)}.json", cancellationToken);
+
+        // A key Open Library no longer has is an answer, unlike a failure to reach it at all.
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<OpenLibraryRecord>(cancellationToken);
+    }
+
+    /// <summary>A key relative to the site, whether or not it was stored with its leading slash.</summary>
+    private static string Path(string key) => key.TrimStart('/');
+
+    /// <summary>
+    /// Open Library writes a description either as a bare string or as a typed text object
+    /// with the string under "value"; both are the same description.
+    /// </summary>
+    private static string? TextOf(JsonElement? description) => description switch
+    {
+        { ValueKind: JsonValueKind.String } text => text.GetString(),
+        { ValueKind: JsonValueKind.Object } typed when typed.TryGetProperty("value", out var value)
+            && value.ValueKind == JsonValueKind.String => value.GetString(),
+        _ => null,
+    };
+
     private async Task<IReadOnlyList<BookSearchResult>> SearchAsync(
         IReadOnlyList<string> terms,
         CancellationToken cancellationToken)
@@ -133,4 +203,15 @@ public sealed class OpenLibraryProvider(HttpClient httpClient) : IBookProvider
     private sealed record OpenLibraryAuthor(string? Name);
 
     private sealed record OpenLibraryCover(string? Small, string? Medium, string? Large);
+
+    /// <summary>A work or an edition record; the fields either may carry.</summary>
+    private sealed record OpenLibraryRecord(
+        JsonElement? Description,
+        IReadOnlyList<string>? Subjects,
+        IReadOnlyList<string>? Publishers,
+        [property: JsonPropertyName("publish_date")] string? PublishDate,
+        [property: JsonPropertyName("first_publish_date")] string? FirstPublishDate,
+        IReadOnlyList<OpenLibraryWorkReference>? Works);
+
+    private sealed record OpenLibraryWorkReference(string? Key);
 }
