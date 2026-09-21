@@ -1,0 +1,149 @@
+@page "/shelf/{EntryId:guid}"
+@using ReadingTracker.Web.Services
+@inject GatewayLibraryClient Library
+@inject NavigationManager Navigation
+
+@*
+    The Book page: one LibraryEntry in full. Reached from the cover or title of a shelf card,
+    and only for a book on the reader's shelf — a search result has no page, and an entry that
+    is not theirs or is gone says so rather than bouncing them back to the shelf, so a dead link
+    reads as dead.
+
+    One column, at most 640px, the same on a phone and on a desk. The book half first — cover,
+    title, authors, the edition line — because that is what somebody came for; the reading half
+    follows below it.
+*@
+
+<PageTitle>@(_entry?.Book?.Title ?? "Your shelf") · ReadingTracker</PageTitle>
+
+<AuthorizeView>
+    <Authorizing>
+        <Settling />
+    </Authorizing>
+    <NotAuthorized>
+        <section class="book">
+            <a class="book__back" href="">← Your shelf</a>
+            <p class="notice">Sign in to see this book. You will be brought back here.</p>
+            <button type="button" class="button--primary" @onclick="SignIn">Sign in</button>
+        </section>
+    </NotAuthorized>
+    <Authorized>
+        <section class="book">
+            <a class="book__back" href="">← Your shelf</a>
+
+            @if (_entry is { } entry)
+            {
+                <div class="book__head">
+                    <div class="book__cover">
+                        @if (entry.Book?.CoverUrl is { } cover)
+                        {
+                            <img src="@cover" alt="" />
+                        }
+                        else
+                        {
+                            <div class="entry__cover-placeholder" aria-hidden="true">@Initial(entry)</div>
+                        }
+                    </div>
+                    <div class="book__ident">
+                        <h1 class="book__title">@(entry.Book?.Title ?? "(catalog unreachable)")</h1>
+                        @if (entry.Book is { Authors.Count: > 0 } book)
+                        {
+                            <p class="book__authors">@string.Join(", ", book.Authors)</p>
+                        }
+                        <p class="book__edition">
+                            @foreach (var (fact, at) in EditionFacts(entry).Select((fact, at) => (fact, at)))
+                            {
+                                @if (at > 0)
+                                {
+                                    <span class="book__dot" aria-hidden="true">·</span>
+                                }
+                                <span>@fact</span>
+                            }
+                        </p>
+                    </div>
+                </div>
+            }
+            else if (_problem is LibraryUnavailable.NotSignedIn)
+            {
+                <p class="notice">Your session has ended. <a href="authentication/login">Sign in again</a> to see this book.</p>
+            }
+            else if (_problem is LibraryUnavailable.GatewayUnreachable)
+            {
+                <p class="notice notice--bad">ReadingTracker could not be reached just now. Try again shortly.</p>
+            }
+            else if (_answered)
+            {
+                <h1 class="book__title">Not on your shelf</h1>
+                <p class="muted">There is no book at this address on your shelf — it may have been removed, or the link was never yours.</p>
+                <p><a href="">Back to your shelf</a></p>
+            }
+            else
+            {
+                <Settling />
+            }
+        </section>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    [Parameter]
+    public Guid EntryId { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private LibraryEntry? _entry;
+    private LibraryUnavailable? _problem;
+    private bool _asked;
+
+    /// <summary>
+    /// Whether Library has answered. Between asking and answering the page settles rather than
+    /// saying "not on your shelf" for a book that is about to appear.
+    /// </summary>
+    private bool _answered;
+
+    /// <summary>Asked for once somebody is signed in; before that the answer would be a 401.</summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_asked || AuthState is not { } pending || (await pending).User.Identity?.IsAuthenticated is not true)
+        {
+            return;
+        }
+
+        _asked = true;
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// The shelf listing is the one way to an entry, and it is light: Library answers with what
+    /// the cards need and no more, so asking for the whole shelf to find one book costs what
+    /// opening the shelf costs.
+    /// </summary>
+    private async Task LoadAsync()
+    {
+        var (entries, problem) = await Library.GetEntriesAsync(null, CancellationToken.None);
+
+        _problem = problem;
+        _entry = entries?.FirstOrDefault(entry => entry.Id == EntryId);
+        _answered = true;
+    }
+
+    private void SignIn() => Navigation.NavigateToLogin("authentication/login");
+
+    private static string Initial(LibraryEntry entry) =>
+        (entry.Book?.Title ?? "?").Trim() is { Length: > 0 } title ? title[..1].ToUpperInvariant() : "?";
+
+    /// <summary>The edition line: what is known of the copy, in the order a jacket flap says it.</summary>
+    private static IEnumerable<string> EditionFacts(LibraryEntry entry)
+    {
+        if (entry.EffectivePageCount is { } pages)
+        {
+            yield return entry.PageCountOverride is not null ? $"{pages} pages (your count)" : $"{pages} pages";
+        }
+
+        if (entry.Book?.Isbn is { Length: > 0 } isbn)
+        {
+            yield return $"ISBN {isbn}";
+        }
+    }
+}

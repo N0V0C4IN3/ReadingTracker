@@ -18,7 +18,9 @@
     in hand are the ones in colour.
 *@
 <article class="entry @(_working ? "entry--working" : null) @(Parked ? "entry--parked" : null) @(Finished ? "entry--finished" : null)" style="--at:@At">
-    <div class="entry__cover">
+    @* The cover and the title are the way to the book's own page; the rest of the card stays
+       what it was, controls and all, so the link never gets in the way of a tap on them. *@
+    <a class="entry__cover" href="@PageHref" tabindex="-1" aria-hidden="true">
         @if (Entry.Book?.CoverUrl is { } cover)
         {
             <img src="@cover" alt="" loading="lazy" />
@@ -29,7 +31,7 @@
                would read as one. *@
             <div class="entry__cover-placeholder" aria-hidden="true">@Initial</div>
         }
-    </div>
+    </a>
 
     @*
         A grid: the title and authors on the left of the first row and the progress figure on
@@ -39,7 +41,7 @@
     *@
     <div class="entry__body">
         <div class="entry__head">
-            <h3 class="entry__title">@(Entry.Book?.Title ?? "(catalog unreachable)")</h3>
+            <h3 class="entry__title"><a href="@PageHref">@(Entry.Book?.Title ?? "(catalog unreachable)")</a></h3>
 
             @if (Entry.Book is { Authors.Count: > 0 } book)
             {
@@ -335,6 +337,9 @@
     public int At { get; set; }
 
     private bool Parked => Entry.Status is "OnHold" or "Dropped";
+
+    /// <summary>The book's own page.</summary>
+    private string PageHref => $"shelf/{Entry.Id}";
 
     /// <summary>
     /// Whether reading can be logged against this book: only while it is being read or waiting

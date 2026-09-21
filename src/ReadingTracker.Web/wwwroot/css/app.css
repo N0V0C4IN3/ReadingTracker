@@ -478,6 +478,95 @@ header > a:first-child:hover {
     }
 }
 
+/*
+    The Book page: one column, the width of a comfortable line, the same on a phone and on a
+    desk. The book half sits at the top like the head of a shelf card grown up — a cover the
+    size of a thumb beside the title — and the reading half follows.
+*/
+.book {
+    max-width: 40rem;
+    margin: 0 auto;
+}
+
+.book__back {
+    display: inline-block;
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+    text-decoration: none;
+}
+
+.book__back:hover {
+    color: var(--ink);
+}
+
+.book__head {
+    display: flex;
+    gap: 1.1rem;
+    align-items: flex-start;
+}
+
+.book__cover {
+    flex: 0 0 auto;
+    width: 4.5rem;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+
+.book__cover img {
+    display: block;
+    width: 100%;
+}
+
+.book__ident {
+    min-width: 0;
+}
+
+.book__title {
+    font-size: 1.55rem;
+    line-height: 1.15;
+    text-wrap: balance;
+}
+
+.book__authors {
+    margin: 0.3rem 0 0;
+    font-size: 1rem;
+    color: var(--ink-soft);
+}
+
+.book__edition {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.15rem 0.45rem;
+    margin: 0.55rem 0 0;
+    font-size: 0.82rem;
+    color: var(--ink-faint);
+    font-variant-numeric: tabular-nums;
+}
+
+.book__edition:empty {
+    display: none;
+}
+
+/* The cover and title on a shelf card are links now, but not links that look like the web:
+   the title keeps its colour and only underlines when asked. */
+.entry__title a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.entry__title a:hover,
+.entry__title a:focus-visible {
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}
+
+a.entry__cover {
+    display: block;
+}
+
 /* The reader, as one round initial at the end of the bar. */
 .account {
     position: relative;
