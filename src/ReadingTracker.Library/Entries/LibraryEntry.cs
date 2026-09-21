@@ -29,8 +29,12 @@ public sealed class LibraryEntry
     /// <summary>Whose library this is. Supplied by the Gateway (ADR-0007).</summary>
     public required string ReaderId { get; init; }
 
-    /// <summary>Identifies a Book in Catalog. Library stores no copy of the book's details.</summary>
-    public Guid BookId { get; init; }
+    /// <summary>
+    /// Identifies a Book in Catalog. Library stores no copy of the book's details. Settable
+    /// because the reader may have shelved the wrong edition: pointing the entry at the right
+    /// Book keeps everything they have done with it, where a new entry would not.
+    /// </summary>
+    public Guid BookId { get; set; }
 
     public ReadingStatus Status { get; set; }
 
