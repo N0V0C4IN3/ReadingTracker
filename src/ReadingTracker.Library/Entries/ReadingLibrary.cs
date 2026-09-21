@@ -207,6 +207,49 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
         return entry;
     }
 
+    /// <summary>
+    /// Points an entry at a different Book: the reader shelved one edition and is reading
+    /// another, with a different length. Everything they have done stays with the entry —
+    /// status, when it was finished, every session, the device linked to it — and only what
+    /// the pages are counted against changes. A page count they set for the old edition goes
+    /// with it; it was a correction to a book they no longer have. The caller must have
+    /// confirmed with Catalog that the Book exists. Not there, or not theirs: null, null.
+    /// </summary>
+    public async Task<(LibraryEntry? Entry, AddToLibraryFailure? Failure)> ChangeBookAsync(
+        string readerId,
+        Guid entryId,
+        Guid bookId,
+        CancellationToken cancellationToken)
+    {
+        var entry = await FindAsync(readerId, entryId, cancellationToken);
+
+        if (entry is null)
+        {
+            return (null, null);
+        }
+
+        if (entry.BookId == bookId)
+        {
+            return (entry, null);
+        }
+
+        entry.BookId = bookId;
+        entry.PageCountOverride = null;
+
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            // The reader already has that Book on another entry; the unique index said so.
+            database.Entry(entry).State = EntityState.Detached;
+            return (null, AddToLibraryFailure.AlreadyInLibrary);
+        }
+
+        return (entry, null);
+    }
+
     public Task<LibraryEntry?> FindAsync(string readerId, Guid entryId, CancellationToken cancellationToken) =>
         database.LibraryEntries
             .FirstOrDefaultAsync(entry => entry.Id == entryId && entry.ReaderId == readerId, cancellationToken);

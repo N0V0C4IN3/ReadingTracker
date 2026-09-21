@@ -279,6 +279,21 @@ public sealed class GatewayLibraryClient(HttpClient httpClient)
                 cancellationToken),
             cancellationToken);
 
+    /// <summary>
+    /// Points an entry at a different Book — the edition the reader actually has. Status,
+    /// sessions and the device link stay with the entry; only the length changes.
+    /// </summary>
+    public Task<LibraryChange<LibraryEntry>> ChangeBookAsync(
+        Guid entryId,
+        Guid bookId,
+        CancellationToken cancellationToken) =>
+        ChangeAsync<LibraryEntry>(
+            client => client.PutAsJsonAsync(
+                $"api/library/{entryId}/book",
+                new { bookId },
+                cancellationToken),
+            cancellationToken);
+
     public Task<LibraryChange<IReadOnlyList<ReadingSessionView>>> GetSessionsAsync(
         Guid entryId,
         CancellationToken cancellationToken) =>

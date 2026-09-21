@@ -1751,6 +1751,49 @@ button.danger:hover:not(:disabled) {
     margin-top: 0.25rem;
 }
 
+/*
+    Finding the right edition, inside Settings: the search on its own line under the label, and
+    the library's answer as the same compact cards the shelf's search uses, one to a row since
+    the panel is narrower than the page.
+*/
+.field--edition {
+    align-items: flex-start;
+}
+
+.edition__search {
+    flex: 1 1 100%;
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.edition__search input {
+    flex: 1 1 12rem;
+    min-width: 0;
+}
+
+.field--edition .hint {
+    flex-basis: 100%;
+    margin: 0;
+}
+
+.editions {
+    flex: 1 1 100%;
+    /* A flex item's minimum is its content's width, and a title with nowrap is wide: without
+       this the list grows past the panel and the button on each card goes with it. */
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.editions > .lib-card {
+    max-width: 100%;
+}
+
 /* Progress ---------------------------------------------------------------- */
 
 /* Not a box of its own: its two pieces take their places in the card's grid. */

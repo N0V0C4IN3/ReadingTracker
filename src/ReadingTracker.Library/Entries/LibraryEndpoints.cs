@@ -309,6 +309,62 @@ public static class LibraryEndpoints
         })
         .WithName("SetPageCount");
 
+        endpoints.MapPut("/api/library/{entryId:guid}/book", async (
+            Guid entryId,
+            ChangeBookRequest body,
+            HttpRequest request,
+            ReadingLibrary library,
+            CatalogClient catalog,
+            CancellationToken cancellationToken) =>
+        {
+            if (Reader.From(request) is not { } readerId)
+            {
+                return NotSaidWhoIsAsking();
+            }
+
+            // As when adding: an entry must never point at nothing, so the Book is confirmed
+            // first, and without Catalog there is no telling unknown from unreachable.
+            CatalogBook? book;
+
+            try
+            {
+                book = await catalog.FindBookAsync(body.BookId, cancellationToken);
+            }
+            catch (HttpRequestException)
+            {
+                return Results.Problem(
+                    title: "The catalog is temporarily unavailable",
+                    detail: "The book could not be confirmed just now. Try again shortly.",
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+
+            if (book is null)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    [nameof(body.BookId)] = ["No such book in the catalog."],
+                });
+            }
+
+            var (entry, failure) = await library.ChangeBookAsync(readerId, entryId, body.BookId, cancellationToken);
+
+            if (failure is AddToLibraryFailure.AlreadyInLibrary)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    [nameof(body.BookId)] = ["That edition is already on your shelf as its own entry."],
+                });
+            }
+
+            if (entry is null)
+            {
+                return Results.NotFound();
+            }
+
+            return Results.Ok(await DescribeAsync(library, entry, book, cancellationToken));
+        })
+        .WithName("ChangeBook");
+
         endpoints.MapPost("/api/library/{entryId:guid}/sessions", async (
             Guid entryId,
             SessionRequest body,
@@ -742,6 +798,8 @@ public static class LibraryEndpoints
 
     /// <summary>Null <paramref name="TotalPages"/> clears the override, going back to Catalog's count.</summary>
     private sealed record SetPageCountRequest(int? TotalPages);
+
+    private sealed record ChangeBookRequest(Guid BookId);
 
     /// <summary>
     /// A stretch of reading as the reader describes it, whether they are logging it for the
