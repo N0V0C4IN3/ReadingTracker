@@ -535,6 +535,11 @@ header > a:first-child:hover {
     .import-badge__dot {
         animation: none;
     }
+
+    .book__text,
+    .book__about p {
+        transition: none;
+    }
 }
 
 /*
@@ -615,7 +620,14 @@ header > a:first-child:hover {
 }
 
 .book__ident {
+    flex: 1 1 0;
     min-width: 0;
+}
+
+/* The status at the head's right end, level with the title, as it is on the card. */
+.book__status {
+    flex: 0 0 auto;
+    margin-left: auto;
 }
 
 .book__title {
@@ -658,6 +670,9 @@ header > a:first-child:hover {
 
 .book__about p {
     margin: 0 0 0.7rem;
+    transition:
+        margin 420ms var(--ease-out),
+        text-indent 420ms var(--ease-out);
 }
 
 .book__about p:last-child {
@@ -670,13 +685,38 @@ header > a:first-child:hover {
     paragraphs run on without space between them while folded, marked by an indent instead,
     because a gap that fell inside the seven lines would make one book's fold taller than
     another's; unfolded, they get their space back.
+
+    Read more opens the fold rather than replacing it: the box is seven lines tall folded and as
+    tall as the text open, and glides between the two (interpolate-size is what lets a height
+    travel to auto; a browser without it snaps, which is what it did before). The clamp itself
+    cannot glide, so it is timed: lifted at once on the way open, so the text under the fold is
+    there for the box to reveal, and put back only once the box has closed on the way shut, so
+    the text is never cut to seven lines with the box still tall around it. The paragraphs'
+    space and indent travel with the height, so the whole passage settles rather than jumps.
+
+    The same display, folded and open: the clamp needs -webkit-box, and a box that changed its
+    display mid-glide would not glide.
 */
-.book__about--folded .book__text {
+.book__text {
     display: -webkit-box;
     -webkit-box-orient: vertical;
+    overflow: hidden;
+    interpolate-size: allow-keywords;
+    height: auto;
+    transition:
+        height 420ms var(--ease-out),
+        -webkit-line-clamp 0s allow-discrete,
+        line-clamp 0s allow-discrete;
+}
+
+.book__about--folded .book__text {
     -webkit-line-clamp: 7;
     line-clamp: 7;
-    overflow: hidden;
+    height: 7lh;
+    transition:
+        height 360ms var(--ease-out),
+        -webkit-line-clamp 0s 360ms allow-discrete,
+        line-clamp 0s 360ms allow-discrete;
 }
 
 .book__about--folded p {
@@ -740,29 +780,17 @@ header > a:first-child:hover {
 }
 
 /*
-    The reading half: the same grid as a shelf card's body, so the progress bar's pieces land
-    where they do on the card — the figure top right, beside the status; the bar across; the
-    device line beneath — and every panel full width under them.
+    The reading half: a column, the pace stripe first — its top rule is the line between the
+    book and the reading — the device line under it, and every panel full width after them.
+    The status is not here: it is up in the head, level with the title, the same place it has
+    on the card.
 */
 .reading {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    column-gap: 1rem;
+    grid-template-columns: minmax(0, 1fr);
     row-gap: 0.6rem;
     align-items: start;
-    margin-top: 1.4rem;
-    padding-top: 1.1rem;
-    border-top: 1px solid var(--line);
-}
-
-.reading > * {
-    grid-column: 1 / -1;
-}
-
-.reading__status {
-    grid-column: 1;
-    grid-row: 1;
-    align-self: center;
+    margin-top: 1.6rem;
 }
 
 .reading__actions {
@@ -2208,9 +2236,10 @@ button.danger:hover:not(:disabled) {
 }
 
 /*
-    Title and authors top left, the progress figure top right, the bar across beneath them, and
+    Title and authors top left, the status top right, then the progress on a line of its own —
+    the figure at its left end, what it counts at its right — the bar across beneath, and
     everything after that full width — see ShelfEntry.razor. minmax(0, 1fr) rather than 1fr so
-    a long title wraps instead of pushing the figure off the card.
+    a long title wraps instead of pushing the status off the card.
 */
 .entry__body {
     flex: 1 1 auto;
@@ -2243,7 +2272,13 @@ button.danger:hover:not(:disabled) {
     font-size: 0.9rem;
 }
 
+/* Top right of the card, level with the title: where a book stands is the one control worth
+   reading before the reading itself, and up here it is out of the row of actions. */
 .entry__status {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    align-self: start;
     display: flex;
     align-items: center;
     gap: 0.85rem;
@@ -2252,6 +2287,7 @@ button.danger:hover:not(:disabled) {
 
 .status-select {
     font-size: 0.85rem;
+    font-weight: 700;
     padding: 0.3rem 0.5rem;
 }
 
@@ -2267,10 +2303,37 @@ button.danger:hover:not(:disabled) {
 /* Pulled out to the card's edge, so a row of quiet actions lines up with the title above it. */
 .entry__actions {
     display: flex;
-    gap: 0.15rem;
+    gap: 0.2rem;
     flex-wrap: wrap;
-    margin-left: -0.6rem;
+    margin: 0.1rem 0 0 -0.6rem;
     font-size: 0.85rem;
+}
+
+/*
+    On the card the log is a word in the accent among quiet words, not a filled button: the
+    card's loud thing is the figure, and a fill under it made the foot of the card heavier than
+    its head. It keeps the pen, and its own colour, so it still reads as the one that does
+    something. On a phone it is the big button again — see the phone rules.
+*/
+.entry__actions .button--log {
+    margin: 0;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.9rem;
+    background: none;
+    box-shadow: none;
+    color: var(--accent);
+}
+
+.entry__actions .button--log:hover:not(:disabled) {
+    background: var(--accent-soft);
+}
+
+.entry__actions .button--log--open {
+    background: var(--accent-soft);
+}
+
+.entry__actions .link-button {
+    font-size: 0.9rem;
 }
 
 .entry__reasons {
@@ -2338,18 +2401,21 @@ button.danger:hover:not(:disabled) {
 }
 
 /*
-    The headline number, top right of the card, with what it is a number of in small capitals
-    beneath. Accent, because it is the one fact on the card that changes as the reader reads.
+    The headline number, on a line of its own under the title, with what it is a number of at
+    the far end of the same line, as a caption. Accent, because it is the one fact on the card
+    that changes as the reader reads. Full width, so on the card it falls under the title and
+    the status both and the bar beneath it runs the same span.
 */
 .progress__figure {
-    grid-column: 2;
-    grid-row: 1;
+    grid-column: 1 / -1;
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    text-align: right;
-    max-width: 8.5rem;
+    align-items: baseline;
+    gap: 0.6rem;
     line-height: 1.05;
+}
+
+.progress__figure strong {
+    margin-right: auto;
 }
 
 .progress__figure strong {
@@ -2366,20 +2432,21 @@ button.danger:hover:not(:disabled) {
 }
 
 .progress__figure span {
-    margin-top: 0.2rem;
-    font-size: 0.68rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font-size: 0.85rem;
     line-height: 1.25;
+    text-align: right;
+    color: var(--ink-soft);
+}
+
+/* When a finished book was finished: a date after the label, quieter still, a size down. */
+.progress__when {
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
     color: var(--ink-faint);
 }
 
-/* When a finished book was finished: a date under the label, quieter still, the same small size. */
-.progress__when {
-    margin-top: 0.3rem;
-    font-size: 0.72rem;
-    font-variant-numeric: tabular-nums;
-    color: var(--ink-soft);
+.progress__when::before {
+    content: "· ";
 }
 
 /* Full width, under the title and the figure both. Named explicitly: the wrapper is display:
@@ -3556,6 +3623,55 @@ button.danger:hover:not(:disabled) {
         padding: 0.9rem;
     }
 
+    /*
+        The status stays beside the title on a phone, as on a desk, but the head becomes a grid
+        for it: with the status taking a column the title's column is narrow, and the chips,
+        which sat under the title in its column, were stacking one to a line. Here they leave
+        the title's column and take the head's full width beneath the cover, which is where a
+        row of chips has room. The cover keeps the title and the authors beside it.
+    */
+    .book__head {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        column-gap: 0.9rem;
+        row-gap: 0;
+        align-items: start;
+    }
+
+    .book__ident {
+        display: contents;
+    }
+
+    .book__cover {
+        grid-column: 1;
+        grid-row: 1 / 3;
+    }
+
+    .book__title {
+        grid-column: 2;
+        grid-row: 1;
+        font-size: 1.35rem;
+    }
+
+    /* Under the status as well as the title: only the title has to share its line. */
+    .book__authors {
+        grid-column: 2 / -1;
+        grid-row: 2;
+        font-size: 0.92rem;
+    }
+
+    .book__status {
+        grid-column: 3;
+        grid-row: 1;
+        margin: 0;
+    }
+
+    .book__categories {
+        grid-column: 1 / -1;
+        grid-row: 3;
+        margin-top: 0.75rem;
+    }
+
     .field label {
         min-width: 5rem;
     }
@@ -3632,6 +3748,13 @@ button.danger:hover:not(:disabled) {
         padding: 0.7rem 1rem;
         font-size: 1.02rem;
         border-radius: 12px;
+        background: var(--accent);
+        color: var(--accent-ink);
+        box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
+    }
+
+    .entry__actions .button--log:hover:not(:disabled) {
+        background: var(--accent-hover);
     }
 
     .entry__actions .link-button + .link-button::before {
