@@ -48,87 +48,92 @@
 
             @if (_entry is { } entry)
             {
-                <div class="book__head">
-                    <div class="book__cover">
-                        @if (entry.Book?.CoverUrl is { } cover)
-                        {
-                            <img src="@cover" alt="" />
-                        }
-                        else
-                        {
-                            <div class="entry__cover-placeholder" aria-hidden="true">@Initial(entry)</div>
-                        }
-                    </div>
-                    <div class="book__ident">
-                        <h1 class="book__title">@(entry.Book?.Title ?? "(catalog unreachable)")</h1>
-                        @if (Byline(entry) is { } byline)
-                        {
-                            <p class="book__authors">@byline</p>
-                        }
-                        @if (_book is { Categories.Count: > 0 } placed)
-                        {
-                            <ul class="book__categories" aria-label="Categories">
-                                @foreach (var category in placed.Categories)
-                                {
-                                    <li class="chip chip--tag">@category</li>
-                                }
-                            </ul>
-                        }
-                    </div>
-                </div>
-
-                @if (_book is { Paragraphs.Count: > 0 } described)
-                {
-                    @*
-                        Folded, the description is the same height on every book: a fixed number of
-                        lines, cut with an ellipsis wherever the cut falls (the stylesheet does both).
-                        Read more unfolds the whole of it, and it folds back.
-                    *@
-                    <div class="book__about @(_readingMore ? null : "book__about--folded")">
-                        <div class="book__text">
-                            @foreach (var paragraph in described.Paragraphs)
-                            {
-                                <p>@paragraph</p>
-                            }
-                        </div>
-                        @if (Unfolds(described))
-                        {
-                            <button type="button" class="link-button book__more" @onclick="() => _readingMore = !_readingMore">
-                                @(_readingMore ? "Show less" : "Read more")
-                            </button>
-                        }
-                    </div>
-                }
-                else if (_book is { DetailsUnavailable: true } || _bookProblem is BookUnavailable.GatewayUnreachable)
-                {
-                    <p class="hint book__note">The book's details could not be fetched just now. They will be here next time.</p>
-                }
-
-                var facts = EditionFacts(entry).ToList();
-
-                <p class="book__edition">
-                    @foreach (var (fact, at) in facts.Select((fact, at) => (fact, at)))
-                    {
-                        @if (at > 0)
-                        {
-                            <span class="book__dot" aria-hidden="true">·</span>
-                        }
-                        <span>@fact</span>
-                    }
-                    @if (_book is { ProviderUrl: { } providerUrl, ProviderName: { } providerName })
-                    {
-                        @if (facts.Count > 0)
-                        {
-                            <span class="book__dot" aria-hidden="true">·</span>
-                        }
-                        <a href="@providerUrl" target="_blank" rel="noopener">@providerName ↗</a>
-                    }
-                </p>
-
+                @*
+                    The reading half draws the head, so the status can stand at its right end,
+                    level with the title: the status is one of the changes the reading half owns.
+                *@
                 <BookReading Entry="entry"
                              OnChanged="Changed"
                              OnRemoved="Removed"
-                             OnSignedOut="SignedOut" />
+                             OnSignedOut="SignedOut">
+                    <Head>
+                        <div class="book__cover">
+                            @if (entry.Book?.CoverUrl is { } cover)
+                            {
+                                <img src="@cover" alt="" />
+                            }
+                            else
+                            {
+                                <div class="entry__cover-placeholder" aria-hidden="true">@Initial(entry)</div>
+                            }
+                        </div>
+                        <div class="book__ident">
+                            <h1 class="book__title">@(entry.Book?.Title ?? "(catalog unreachable)")</h1>
+                            @if (Byline(entry) is { } byline)
+                            {
+                                <p class="book__authors">@byline</p>
+                            }
+                            @if (_book is { Categories.Count: > 0 } placed)
+                            {
+                                <ul class="book__categories" aria-label="Categories">
+                                    @foreach (var category in placed.Categories)
+                                    {
+                                        <li class="chip chip--tag">@category</li>
+                                    }
+                                </ul>
+                            }
+                        </div>
+                    </Head>
+                    <ChildContent>
+                    @if (_book is { Paragraphs.Count: > 0 } described)
+                    {
+                        @*
+                            Folded, the description is the same height on every book: a fixed number of
+                            lines, cut with an ellipsis wherever the cut falls (the stylesheet does both).
+                            Read more unfolds the whole of it, and it folds back.
+                        *@
+                        <div class="book__about @(_readingMore ? null : "book__about--folded")">
+                            <div class="book__text">
+                                @foreach (var paragraph in described.Paragraphs)
+                                {
+                                    <p>@paragraph</p>
+                                }
+                            </div>
+                            @if (Unfolds(described))
+                            {
+                                <button type="button" class="link-button book__more" @onclick="() => _readingMore = !_readingMore">
+                                    @(_readingMore ? "Show less" : "Read more")
+                                </button>
+                            }
+                        </div>
+                    }
+                    else if (_book is { DetailsUnavailable: true } || _bookProblem is BookUnavailable.GatewayUnreachable)
+                    {
+                        <p class="hint book__note">The book's details could not be fetched just now. They will be here next time.</p>
+                    }
+
+                    @{ var facts = EditionFacts(entry).ToList(); }
+
+                    <p class="book__edition">
+                        @foreach (var (fact, at) in facts.Select((fact, at) => (fact, at)))
+                        {
+                            @if (at > 0)
+                            {
+                                <span class="book__dot" aria-hidden="true">·</span>
+                            }
+                            <span>@fact</span>
+                        }
+                        @if (_book is { ProviderUrl: { } providerUrl, ProviderName: { } providerName })
+                        {
+                            @if (facts.Count > 0)
+                            {
+                                <span class="book__dot" aria-hidden="true">·</span>
+                            }
+                            <a href="@providerUrl" target="_blank" rel="noopener">@providerName ↗</a>
+                        }
+                    </p>
+                    </ChildContent>
+                </BookReading>
             }
             else if (_problem is LibraryUnavailable.NotSignedIn)
             {

@@ -4,20 +4,32 @@
 @*
     The reading half of the Book page: everything the reader has done with this book and
     everything they can do to it — the same panels as the shelf card, wired to the same changes,
-    with the room a page has that a card does not. The status and the figure head it, the bar
-    runs under them, and the line saying where the e-reader last was comes with the bar; the
-    log form opens under its button; Settings and Remove sit at the foot, where a page keeps
-    the things done once.
+    with the room a page has that a card does not. The figure heads it with its caption at the
+    line's end, the bar runs under them, and the line saying where the e-reader last was comes
+    with the bar; the log form opens under its button; Settings and Remove sit at the foot,
+    where a page keeps the things done once.
+
+    The status is a change this half owns but does not sit here: it stands at the right end of
+    the page's head, level with the title, the way it does on the card. So the page hands the
+    head over — the cover and the title — and this draws it with the status beside it, then the
+    rest of the page's own content, then the reading.
 
     Unlike the card, the sessions are always wanted here — the page draws them — so they are
     loaded with the page and kept fresh through every change.
 *@
 
-<div class="reading @(Working ? "entry--working" : null) @(Parked ? "entry--parked" : null) @(Finished ? "entry--finished" : null)">
-    <div class="reading__status">
+<div class="book__head">
+    @Head
+    @* Where the book stands colours the select, and the page's own cover and title stay as
+       they are, so the standing is scoped to the select alone. *@
+    <div class="book__status @Standing">
         <StatusSelect Entry="Entry" Disabled="Working" OnPick="ChangeStatusAsync" />
     </div>
+</div>
 
+@ChildContent
+
+<div class="reading @(Working ? "entry--working" : null) @Standing">
     <ProgressBar Progress="Entry.Progress"
                  TrackingMethod="@Entry.TrackingMethod"
                  EffectivePageCount="Entry.EffectivePageCount"
@@ -107,6 +119,14 @@
 </div>
 
 @code {
+    /// <summary>The page's head — the cover and the title — drawn here so the status can stand beside it.</summary>
+    [Parameter, EditorRequired]
+    public required RenderFragment Head { get; set; }
+
+    /// <summary>The rest of the page's own content, between the head and the reading.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
     private enum Panel { None, Log, Settings, Remove, Finished }
 
     private Panel _panel = Panel.None;
@@ -118,6 +138,9 @@
     protected override bool HistoryShowing => true;
 
     private string Title => Entry.Book?.Title ?? "this book";
+
+    /// <summary>The classes that colour a book set aside or read to the end — see the card.</summary>
+    private string? Standing => Parked ? "entry--parked" : Finished ? "entry--finished" : null;
 
     protected override Task OnInitializedAsync() => LoadSessionsAsync();
 
