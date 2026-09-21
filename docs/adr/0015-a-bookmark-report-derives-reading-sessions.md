@@ -39,9 +39,25 @@ EPUB has its own page numbers that change with the font; the percentage is the o
 the device actually has, and the Library already converts between units on the way out.
 
 **Merging consecutive device reports into one session** — a report within half an hour of the
-last extending it rather than adding to it — was considered and deferred. One report is one
-session for now; the plugin only ever says where it is, so merging can be added later without
-touching it. The history will look like a polling interval until then, which is accepted.
+last extending it rather than adding to it — was considered and deferred at first. One report was
+one session; the plugin only ever says where it is, so merging could be added later without
+touching it. The history looked like a polling interval until then, which was accepted.
+
+## Revisited: reports within a sitting are one session
+
+It was not accepted for long. The plugin reports every five minutes while the reader pages, so an
+evening's reading was a dozen device sessions of a percent or two each, which the web app showed
+as 0.3 pages, or 0 pages, one after another. The deferred option is now taken, as first
+described: a report that moves the Bookmark forward within **half an hour** of where the last
+device-reported session left off extends that session — its amount grows by the difference and
+its duration becomes the time from the session's first report to this one — rather than adding a
+new one. A report after a longer gap starts a new session; so does a late-synced report dated
+before the last session began, and a report on an entry whose last device session the reader has
+since corrected into pages, which is theirs now and is not written on. The plugin is untouched.
+
+The duration undercounts by the minutes before the first report of a sitting, and is left null
+until a second report gives it one. Half an hour is long enough to make a cup of tea and short
+enough that morning and evening stay two sittings; it is a constant in Library, not a setting.
 
 ## Consequences
 

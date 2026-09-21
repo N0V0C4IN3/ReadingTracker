@@ -323,13 +323,23 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
     }
 
     /// <summary>
+    /// How long after a device's last word a report is still the same sitting. A plugin reports
+    /// every few minutes while the reader pages, and at each close and sleep; every one of
+    /// those as its own session made an evening's reading a dozen rows of a percent each. A
+    /// report within this of the last device session extends it instead. Half an hour is long
+    /// enough to make a cup of tea and short enough that morning and evening stay two sittings.
+    /// </summary>
+    private static readonly TimeSpan SittingGap = TimeSpan.FromMinutes(30);
+
+    /// <summary>
     /// A device says where the reader is, and this works out what that means (ADR-0015). The
     /// Bookmark moves to <paramref name="percent"/> whatever happens. Forward of where it was —
     /// or, the first time, forward of what the reader had already read — the difference is a
-    /// session the device is credited with; backward, or no further, is not reading and records
-    /// nothing. A book the reader had only meant to read, put down, or given up on is plainly
-    /// being read again, so it moves to Reading; a Finished one stays Finished, since a re-read
-    /// is sessions and not a status.
+    /// session the device is credited with, or is added to the session it is still reporting
+    /// on when it comes within <see cref="SittingGap"/> of the last; backward, or no further, is
+    /// not reading and records nothing. A book the reader had only meant to read, put down, or
+    /// given up on is plainly being read again, so it moves to Reading; a Finished one stays
+    /// Finished, since a re-read is sessions and not a status.
     /// </summary>
     public async Task<(ReadingSession? Session, BookmarkProblem? Problem)> ReportBookmarkAsync(
         string readerId,
@@ -378,18 +388,37 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
 
         if (percent > baseline)
         {
-            session = new ReadingSession
-            {
-                Id = Guid.CreateVersion7(),
-                LibraryEntryId = entry.Id,
-                Amount = percent - baseline,
-                Unit = TrackingMethod.Percentage,
-                OccurredAt = reportedAt,
-                LoggedAt = now,
-                Source = SessionSource.Device,
-            };
+            var sitting = await database.ReadingSessions
+                .Where(s => s.LibraryEntryId == entry.Id && s.Source == SessionSource.Device)
+                .OrderByDescending(s => s.OccurredAt)
+                .FirstOrDefaultAsync(cancellationToken);
 
-            database.ReadingSessions.Add(session);
+            if (sitting is not null && Continues(sitting, reportedAt))
+            {
+                // The same stretch of reading, still going: the session grows, and now has a
+                // length — from its first report to this one, which undercounts the minutes
+                // before the first report and is honest about the rest.
+                sitting.Amount += percent - baseline;
+                sitting.DurationMinutes = Math.Max(
+                    sitting.DurationMinutes ?? 0,
+                    (int)Math.Round((reportedAt - sitting.OccurredAt).TotalMinutes));
+                session = sitting;
+            }
+            else
+            {
+                session = new ReadingSession
+                {
+                    Id = Guid.CreateVersion7(),
+                    LibraryEntryId = entry.Id,
+                    Amount = percent - baseline,
+                    Unit = TrackingMethod.Percentage,
+                    OccurredAt = reportedAt,
+                    LoggedAt = now,
+                    Source = SessionSource.Device,
+                };
+
+                database.ReadingSessions.Add(session);
+            }
         }
 
         // What the update just wrote, so the tracked entry — and the answer built from it —
@@ -409,6 +438,22 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
         await AnnounceIfChangedAsync(entry, previousStatus, now, cancellationToken);
 
         return (session, null);
+    }
+
+    /// <summary>
+    /// Whether a report at <paramref name="reportedAt"/> is the same sitting as
+    /// <paramref name="sitting"/>: no earlier than it began — a late-synced report from before
+    /// it is its own reading — and within <see cref="SittingGap"/> of where it left off. A
+    /// device session the reader has since corrected into pages is theirs now, in their unit,
+    /// and is not written on.
+    /// </summary>
+    private static bool Continues(ReadingSession sitting, DateTimeOffset reportedAt)
+    {
+        var leftOffAt = sitting.OccurredAt.AddMinutes(sitting.DurationMinutes ?? 0);
+
+        return sitting.Unit == TrackingMethod.Percentage
+            && reportedAt >= sitting.OccurredAt
+            && reportedAt - leftOffAt <= SittingGap;
     }
 
     /// <summary>

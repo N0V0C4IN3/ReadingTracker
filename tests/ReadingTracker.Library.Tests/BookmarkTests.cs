@@ -78,11 +78,13 @@ public sealed class BookmarkTests(LibraryApiFixture fixture)
     {
         var client = fixture.ClientFor("to-and-fro-reader");
         var entryId = await fixture.AddBookAsync(client, 300);
-        await ReportAsync(client, entryId, 30);
+        // An hour between reports: separate sittings, each its own session.
+        var sat = new DateTimeOffset(2026, 9, 21, 9, 0, 0, TimeSpan.FromHours(3));
+        await ReportAsync(client, entryId, 30, occurredAt: sat);
 
-        var forward = await ReportAndReadAsync(client, entryId, 45);
-        var backward = await ReportAndReadAsync(client, entryId, 20);
-        var forwardAgain = await ReportAndReadAsync(client, entryId, 32);
+        var forward = await ReportAndReadAsync(client, entryId, 45, occurredAt: sat.AddHours(1));
+        var backward = await ReportAndReadAsync(client, entryId, 20, occurredAt: sat.AddHours(2));
+        var forwardAgain = await ReportAndReadAsync(client, entryId, 32, occurredAt: sat.AddHours(3));
 
         Assert.Equal(15, forward.Session!.Amount);
         // Flipping back is not reading; the Bookmark follows, the total does not.
@@ -92,6 +94,80 @@ public sealed class BookmarkTests(LibraryApiFixture fixture)
         // Reading on from where the device now is: measured from the Bookmark, not the total.
         Assert.Equal(12, forwardAgain.Session!.Amount);
         Assert.Equal(57, forwardAgain.Entry.Progress!.PercentComplete);
+    }
+
+    [Fact]
+    public async Task A_report_within_half_an_hour_of_the_last_extends_that_session()
+    {
+        var client = fixture.ClientFor("paging-reader");
+        var entryId = await fixture.AddBookAsync(client, 300);
+        var sat = new DateTimeOffset(2026, 9, 21, 20, 0, 0, TimeSpan.FromHours(3));
+
+        var first = await ReportAndReadAsync(client, entryId, 30, occurredAt: sat);
+        var second = await ReportAndReadAsync(client, entryId, 31.5m, occurredAt: sat.AddMinutes(5));
+        var third = await ReportAndReadAsync(client, entryId, 34, occurredAt: sat.AddMinutes(12));
+
+        // One session, grown twice, dated when it began and as long as it has gone on.
+        var session = Assert.Single(await SessionsAsync(client, entryId));
+        Assert.Equal(first.Session!.Id, session.Id);
+        Assert.Equal(34, session.Amount);
+        Assert.Equal(sat, session.OccurredAt);
+        Assert.Equal(12, session.DurationMinutes);
+        Assert.Equal("Device", session.Source);
+        // Each answer carries the session as it now stands.
+        Assert.Equal(31.5m, second.Session!.Amount);
+        Assert.Equal(34, third.Session!.Amount);
+        Assert.Equal(34, third.Entry.Progress!.PercentComplete);
+    }
+
+    [Fact]
+    public async Task A_report_after_a_longer_gap_starts_a_new_session()
+    {
+        var client = fixture.ClientFor("morning-and-evening-reader");
+        var entryId = await fixture.AddBookAsync(client, 300);
+        var morning = new DateTimeOffset(2026, 9, 21, 8, 0, 0, TimeSpan.FromHours(3));
+
+        await ReportAsync(client, entryId, 10, occurredAt: morning);
+        await ReportAsync(client, entryId, 14, occurredAt: morning.AddMinutes(20));
+        var evening = await ReportAndReadAsync(client, entryId, 20, occurredAt: morning.AddMinutes(51));
+
+        var sessions = await SessionsAsync(client, entryId);
+        Assert.Equal(2, sessions.Count);
+        // The morning sitting left off at 08:20; 08:51 is past half an hour from there.
+        Assert.Equal(6, evening.Session!.Amount);
+        Assert.Null(evening.Session.DurationMinutes);
+        Assert.Contains(sessions, s => s.Amount == 14 && s.DurationMinutes == 20);
+    }
+
+    [Fact]
+    public async Task A_late_report_from_before_the_sitting_began_is_its_own_reading()
+    {
+        var client = fixture.ClientFor("late-syncing-paging-reader");
+        var entryId = await fixture.AddBookAsync(client, 300);
+        var sat = new DateTimeOffset(2026, 9, 21, 20, 0, 0, TimeSpan.FromHours(3));
+
+        await ReportAsync(client, entryId, 30, occurredAt: sat);
+        // A report that got through late, about reading from before the one above.
+        var earlier = await ReportAndReadAsync(client, entryId, 33, occurredAt: sat.AddMinutes(-10));
+
+        Assert.Equal(2, (await SessionsAsync(client, entryId)).Count);
+        Assert.Equal(3, earlier.Session!.Amount);
+        Assert.Equal(sat.AddMinutes(-10), earlier.Session.OccurredAt);
+    }
+
+    [Fact]
+    public async Task A_device_never_extends_what_the_reader_logged_by_hand()
+    {
+        var client = fixture.ClientFor("hand-then-device-reader");
+        var entryId = await fixture.AddBookAsync(client, 300);
+        await LogAsync(client, entryId, 30);
+
+        var reported = await ReportAndReadAsync(client, entryId, 15);
+
+        var sessions = await SessionsAsync(client, entryId);
+        Assert.Equal(2, sessions.Count);
+        Assert.Equal("Device", reported.Session!.Source);
+        Assert.Contains(sessions, s => s.Source == "Reader" && s.Amount == 30);
     }
 
     [Theory]
@@ -241,10 +317,11 @@ public sealed class BookmarkTests(LibraryApiFixture fixture)
     {
         var client = fixture.ClientFor("catalog-flaky-reader");
         var entryId = await fixture.AddBookAsync(client, 200);
-        await ReportAsync(client, entryId, 30);
+        var sat = new DateTimeOffset(2026, 9, 21, 9, 0, 0, TimeSpan.FromHours(3));
+        await ReportAsync(client, entryId, 30, occurredAt: sat);
         fixture.Catalog.Respond = _ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
 
-        var answer = await ReportAndReadAsync(client, entryId, 45);
+        var answer = await ReportAndReadAsync(client, entryId, 45, occurredAt: sat.AddHours(1));
 
         // Once the Bookmark exists the page count is not needed: the difference is percent to percent.
         Assert.Equal(15, answer.Session!.Amount);
