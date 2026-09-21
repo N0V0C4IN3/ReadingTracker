@@ -723,8 +723,11 @@
         }
     }
 
-    private async Task LoadShelfAsync() =>
+    private async Task LoadShelfAsync()
+    {
         (_entries, _problem) = await Gateway.GetEntriesAsync(null, CancellationToken.None);
+        Memory.Keep(_entries);
+    }
 
     /// <summary>
     /// Switching tabs no longer fetches: the whole shelf is already here, so the status filter is
