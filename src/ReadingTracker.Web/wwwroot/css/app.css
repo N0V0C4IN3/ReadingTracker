@@ -25,26 +25,30 @@
     */
     color-scheme: light;
 
-    --ink: #17191a;
-    --ink-soft: #5b6160;
-    --ink-faint: #8b918f;
-    --page: #f3f2ee;
-    --card: #ffffff;
-    --card-translucent: rgb(255 255 255 / 70%);
+    /* Linen: the ground is oat and taupe rather than white, and the ink is warmed to match it, so
+       the light theme reads as cloth rather than as a screen. The green is the same on either
+       ground. Chosen over cream (paper, but brighter), sage (green on green), stone (grey) and
+       fog (blue-grey) — those are on the prototype/light-palettes branch, not here. */
+    --ink: #26231f;
+    --ink-soft: #66615a;
+    --ink-faint: #948e86;
+    --page: #e7e2da;
+    --card: #f4f1eb;
+    --card-translucent: rgb(244 241 235 / 70%);
     /* The shelf's cards, a good deal sheerer than a control: they are the largest surfaces on the
        page, and at the control's opacity a column of them reads as a wall rather than as glass. */
-    --card-shelf: rgb(255 255 255 / 45%);
+    --card-shelf: rgb(244 241 235 / 45%);
     /* Sheerer than a card, for the search panel: it is a place to type rather than
        something to read, so it can let more of the page through than the shelf does. */
-    --card-sheer: rgb(255 255 255 / 50%);
-    --card-raised: rgb(253 253 251 / 72%);
+    --card-sheer: rgb(244 241 235 / 50%);
+    --card-raised: rgb(242 239 232 / 72%);
     /* The account menu: frosted glass. Sheer enough that the shelf under it shows as shapes, and
        blurred (--blur-soft) enough that none of it can be read. */
-    --card-frosted: rgb(253 253 251 / 50%);
-    --line: rgb(0 0 0 / 7%);
-    --line-strong: rgb(0 0 0 / 14%);
-    --fill: rgb(20 30 25 / 6%);
-    --fill-hover: rgb(20 30 25 / 11%);
+    --card-frosted: rgb(242 239 232 / 50%);
+    --line: rgb(40 30 20 / 8%);
+    --line-strong: rgb(40 30 20 / 16%);
+    --fill: rgb(40 32 22 / 6%);
+    --fill-hover: rgb(40 32 22 / 11%);
     --accent: #2f6b4f;
     --accent-hover: #275b43;
     --accent-soft: rgb(47 107 79 / 11%);
@@ -59,9 +63,9 @@
     --warn-soft: rgb(212 160 84 / 18%);
     /* The page's washes: the accent and two neighbours, an amber and a blue, all as tints. Kept
        this pale on purpose — they are what the sheer cards are sheer against, not a picture. */
-    --wash-accent: rgb(47 107 79 / 17%);
-    --wash-warm: rgb(212 160 84 / 15%);
-    --wash-cool: rgb(86 132 176 / 13%);
+    --wash-accent: rgb(47 107 79 / 14%);
+    --wash-warm: rgb(212 160 84 / 12%);
+    --wash-cool: rgb(86 132 176 / 12%);
     --radius: 16px;
     --radius-sm: 10px;
     --blur: saturate(180%) blur(20px);
