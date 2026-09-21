@@ -38,6 +38,9 @@
        something to read, so it can let more of the page through than the shelf does. */
     --card-sheer: rgb(255 255 255 / 50%);
     --card-raised: rgb(253 253 251 / 72%);
+    /* The account menu: the raised material, but dense enough to hide what is under it. It cannot
+       blur — see the Translucency section — so the tint has to do the whole job. */
+    --card-frosted: rgb(253 253 251 / 93%);
     --line: rgb(0 0 0 / 7%);
     --line-strong: rgb(0 0 0 / 14%);
     --fill: rgb(20 30 25 / 6%);
@@ -96,6 +99,7 @@
         --card-shelf: rgb(35 39 41 / 41%);
         --card-sheer: rgb(35 39 41 / 42%);
         --card-raised: rgb(28 31 33 / 72%);
+        --card-frosted: rgb(28 31 33 / 93%);
         --line: rgb(255 255 255 / 8%);
         --line-strong: rgb(255 255 255 / 16%);
         --fill: rgb(255 255 255 / 8%);
@@ -130,6 +134,7 @@
     --card-shelf: rgb(35 39 41 / 41%);
     --card-sheer: rgb(35 39 41 / 42%);
     --card-raised: rgb(28 31 33 / 72%);
+    --card-frosted: rgb(28 31 33 / 93%);
     --line: rgb(255 255 255 / 8%);
     --line-strong: rgb(255 255 255 / 16%);
     --fill: rgb(255 255 255 / 8%);
@@ -3311,10 +3316,20 @@ button.danger:hover:not(:disabled) {
     them is only the mesh, so they are sheer everywhere and blur nothing — see .entry.
 */
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-    /* The account menu hangs off the header and is the same material: a raised, blurred sheet. */
-    header,
-    .account__menu {
+    header {
         background: var(--card-raised);
+        -webkit-backdrop-filter: var(--blur);
+        backdrop-filter: var(--blur);
+    }
+
+    /* The account menu hangs off the header and wants to be the same material, but it cannot be:
+       it is inside the header, and an element with a backdrop filter is the backdrop root for
+       everything in it. The menu's filter can only sample the header's own box, and below the
+       header that is nothing — so the page behind the menu came through untouched, and the
+       72% tint alone left the shelf's text legible under the menu. The blur stays, for the strip
+       that does overlap the header; the tint is made dense enough to hide the rest by itself. */
+    .account__menu {
+        background: var(--card-frosted);
         -webkit-backdrop-filter: var(--blur);
         backdrop-filter: var(--blur);
     }
