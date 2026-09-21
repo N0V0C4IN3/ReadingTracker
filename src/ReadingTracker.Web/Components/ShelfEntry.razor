@@ -75,7 +75,7 @@
             </button>
         </div>
 
-        @if (Reasons.Count > 0)
+        @if (Reasons.Count > 0 && !_correcting)
         {
             <ul class="entry__reasons" role="alert">
                 @foreach (var reason in Reasons)
@@ -97,9 +97,11 @@
         {
             <SessionHistory Sessions="Sessions"
                             Unit="@Entry.TrackingMethod"
+                            EffectivePageCount="Entry.EffectivePageCount"
+                            Reasons="Reasons"
                             OnCorrect="CorrectAsync"
                             OnDelete="DeleteSessionAsync"
-                            OnEditingChanged="ClearReasons" />
+                            OnEditingChanged="EditingChanged" />
         }
 
         @if (_panel == Panel.Settings)
@@ -138,6 +140,9 @@
 
     private Panel _panel = Panel.None;
 
+    /// <summary>Whether a correction form is open in the history, which then shows the reasons itself.</summary>
+    private bool _correcting;
+
     /// <summary>The book's own page.</summary>
     private string PageHref => $"shelf/{Entry.Id}";
 
@@ -156,6 +161,12 @@
     private void Close()
     {
         _panel = Panel.None;
+        ClearReasons();
+    }
+
+    private void EditingChanged(bool correcting)
+    {
+        _correcting = correcting;
         ClearReasons();
     }
 

@@ -34,7 +34,7 @@
         </div>
     }
 
-    @if (Reasons.Count > 0)
+    @if (Reasons.Count > 0 && !_correcting)
     {
         <ul class="entry__reasons" role="alert">
             @foreach (var reason in Reasons)
@@ -61,6 +61,23 @@
     }
 
     <PagesChart Sessions="Sessions" EffectivePageCount="Entry.EffectivePageCount" />
+
+    <section class="history">
+        <h2 class="group history__eyebrow">
+            History
+            @if (Sessions is { Count: > 0 } logged)
+            {
+                <span>· @Days(logged) · @(logged.Count == 1 ? "1 session" : $"{logged.Count} sessions")</span>
+            }
+        </h2>
+        <SessionHistory Sessions="Sessions"
+                        Unit="@Entry.TrackingMethod"
+                        EffectivePageCount="Entry.EffectivePageCount"
+                        Reasons="Reasons"
+                        OnCorrect="CorrectAsync"
+                        OnDelete="DeleteSessionAsync"
+                        OnEditingChanged="EditingChanged" />
+    </section>
 
     <div class="reading__foot">
         <button type="button" class="link-button" @onclick="() => Toggle(Panel.Settings)" disabled="@Working">
@@ -94,6 +111,9 @@
 
     private Panel _panel = Panel.None;
 
+    /// <summary>Whether a correction form is open in the history, which then shows the reasons itself.</summary>
+    private bool _correcting;
+
     /// <summary>Always: the page draws the sessions, so a change to them is always worth re-reading.</summary>
     protected override bool HistoryShowing => true;
 
@@ -111,6 +131,19 @@
     {
         _panel = Panel.None;
         ClearReasons();
+    }
+
+    private void EditingChanged(bool correcting)
+    {
+        _correcting = correcting;
+        ClearReasons();
+    }
+
+    private static string Days(IReadOnlyList<ReadingSessionView> sessions)
+    {
+        var days = sessions.Select(session => ReaderDays.Of(session.OccurredAt, TimeZoneInfo.Local)).Distinct().Count();
+
+        return days == 1 ? "1 day" : $"{days} days";
     }
 
     protected override void Logged() => Close();
