@@ -157,6 +157,17 @@
     box-sizing: border-box;
 }
 
+/*
+    Nothing is ever wider than the screen. The body's clip below is for the hero; this one is for
+    the viewport, which on a phone is the thing that matters: anything that pokes past the right
+    edge — a tooltip laid out at opacity 0 was enough — and iOS lets the whole page pan across to
+    it, sliding the sticky header out of line and leaving a strip of nothing beside it. The page
+    that let it happen is fixed too, but a stray pixel should not be able to do that again.
+*/
+html {
+    overflow-x: clip;
+}
+
 body {
     margin: 0;
     /* Lets the welcome screen's hero break out of the column to the full width of the window.
@@ -501,6 +512,28 @@ header > a:first-child:hover {
     color: var(--ink);
 }
 
+/*
+    The page is built in two arrivals — the entry from Library, then the book's details from
+    Catalog — and each part rises into place as it comes, a beat apart, the way the shelf's cards
+    do. Backwards rather than both, for the same reason as the cards: a kept final frame keeps
+    its transform. The details (categories, the description) are rendered only once Catalog has
+    answered, so their animation plays on insertion, which is exactly when they should move.
+*/
+.book__head,
+.book__edition,
+.book > .reading {
+    animation: rise 420ms var(--ease-out) backwards;
+}
+
+.book__edition { animation-delay: 70ms; }
+.book > .reading { animation-delay: 140ms; }
+
+.book__categories,
+.book__about,
+.book__note {
+    animation: rise 480ms var(--ease-out) backwards;
+}
+
 .book__head {
     display: flex;
     gap: 1.1rem;
@@ -755,6 +788,12 @@ header > a:first-child:hover {
     height: 3.25rem;
     border-top: 1px solid var(--line);
     border-bottom: 1px solid var(--line-strong);
+    /* Sideways, the plot clips: a tip hanging past its edge — even one at opacity 0, which
+       still has a width — hung past the page on a phone, and iOS let the page pan across to it,
+       sliding the sticky header out of line with a strip of nothing at its right. Upward stays
+       open, because that is where the tips and the maximum's label are. */
+    overflow-x: clip;
+    overflow-y: visible;
 }
 
 .chart__max {
@@ -823,13 +862,15 @@ header > a:first-child:hover {
     opacity: 1;
 }
 
-/* The first and last bars' tips would hang past the plot; keep them inside it. */
-.chart__bar:first-child .chart__tip {
+/* A tip centred on a bar near either end would hang past the plot, and the plot now clips it.
+   The few bars at each end anchor their tip to their outer edge instead — four, because a tip
+   is about that many bars wide on a phone. */
+.chart__bar:nth-child(-n + 4) .chart__tip {
     left: 0;
     transform: none;
 }
 
-.chart__bar:last-child .chart__tip {
+.chart__bar:nth-last-child(-n + 4) .chart__tip {
     left: auto;
     right: 0;
     transform: none;
