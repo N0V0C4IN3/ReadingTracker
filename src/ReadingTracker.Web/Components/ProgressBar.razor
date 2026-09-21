@@ -72,7 +72,7 @@
             <div class="progress__fill" style="width: @(percent)%"></div>
             @if (Bookmark is { } mark)
             {
-                <div class="progress__bookmark" style="left: @(Trim(mark.Percent))%" aria-hidden="true"></div>
+                <div class="progress__bookmark" style="left: @(Figures.Trim(mark.Percent))%" aria-hidden="true"></div>
             }
         </div>
     }
@@ -81,7 +81,7 @@
         @* No page count anywhere, so a percentage cannot be worked out. The total is still
            worth showing: it is what the reader actually told us. *@
         <div class="progress__figure">
-            <strong>@Trim(progress.AmountRead.Value)</strong>
+            <strong>@Figures.Trim(progress.AmountRead.Value)</strong>
             <span>pages read</span>
         </div>
         <div class="progress__track" aria-hidden="true"></div>
@@ -90,7 +90,7 @@
     @if (!Finished && Bookmark is { } bookmark)
     {
         <p class="progress__device">
-            On your device: <strong>@Trim(bookmark.Percent)%</strong>
+            On your device: <strong>@Figures.Trim(bookmark.Percent)%</strong>
             <span class="progress__device-when">@bookmark.ReportedAt.ToLocalTime().ToString("d MMM, HH:mm")</span>
         </p>
     }
@@ -123,11 +123,8 @@
     /// </summary>
     private string Read(Progress progress)
     {
-        var amount = Trim(progress.AmountRead!.Value);
+        var amount = Figures.Trim(progress.AmountRead!.Value);
 
         return EffectivePageCount is { } total ? $"{amount} of {total} pages" : $"{amount} pages read";
     }
-
-    private static string Trim(decimal value) =>
-        value == decimal.Truncate(value) ? decimal.Truncate(value).ToString() : value.ToString("0.#");
 }

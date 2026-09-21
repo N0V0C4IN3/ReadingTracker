@@ -27,7 +27,7 @@
         else if (Entry.Progress is { PercentComplete: { } percent })
         {
             <div class="stripe__figure">
-                <dt>@(pace.PagesRead is { } read && pace.PageCount is { } of ? $"{Trim(read)} of {of} pages" : "read")</dt>
+                <dt>@(pace.PagesRead is { } read && pace.PageCount is { } of ? $"{Figures.Trim(read)} of {of} pages" : "read")</dt>
                 <dd><strong class="stripe__accent">@percent%</strong></dd>
             </div>
         }
@@ -105,9 +105,6 @@
     /// <summary>A rate under ten keeps a decimal — 3.5 a day is a real difference from 3 — and past it rounds.</summary>
     private static string Rate(decimal pagesADay) =>
         pagesADay < 10 ? pagesADay.ToString("0.#") : Math.Round(pagesADay).ToString("0");
-
-    private static string Trim(decimal value) =>
-        value == decimal.Truncate(value) ? decimal.Truncate(value).ToString() : value.ToString("0.#");
 
     /// <summary>Today by name, this year's days without the year, and the year only when it is another one.</summary>
     private static string Day(DateOnly day)
