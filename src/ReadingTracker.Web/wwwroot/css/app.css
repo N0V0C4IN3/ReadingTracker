@@ -38,9 +38,9 @@
        something to read, so it can let more of the page through than the shelf does. */
     --card-sheer: rgb(255 255 255 / 50%);
     --card-raised: rgb(253 253 251 / 72%);
-    /* The account menu: the raised material, but dense enough to hide what is under it. It cannot
-       blur — see the Translucency section — so the tint has to do the whole job. */
-    --card-frosted: rgb(253 253 251 / 93%);
+    /* The account menu: frosted glass. Sheer enough that the shelf under it shows as shapes, and
+       blurred (--blur-soft) enough that none of it can be read. */
+    --card-frosted: rgb(253 253 251 / 50%);
     --line: rgb(0 0 0 / 7%);
     --line-strong: rgb(0 0 0 / 14%);
     --fill: rgb(20 30 25 / 6%);
@@ -65,6 +65,10 @@
     --radius: 16px;
     --radius-sm: 10px;
     --blur: saturate(180%) blur(20px);
+    /* A shorter blur for the account menu. At 20px what is behind a surface dissolves into flat
+       colour and the surface reads as solid whatever its tint; at 12px the shelf is still there
+       as soft shapes, which is what makes the menu look like glass rather than paint. */
+    --blur-soft: saturate(180%) blur(12px);
     --shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 10px 26px rgb(0 0 0 / 6%);
     --shadow-lifted: 0 1px 2px rgb(0 0 0 / 5%), 0 16px 36px rgb(0 0 0 / 10%);
     /*
@@ -99,7 +103,7 @@
         --card-shelf: rgb(35 39 41 / 41%);
         --card-sheer: rgb(35 39 41 / 42%);
         --card-raised: rgb(28 31 33 / 72%);
-        --card-frosted: rgb(28 31 33 / 93%);
+        --card-frosted: rgb(28 31 33 / 50%);
         --line: rgb(255 255 255 / 8%);
         --line-strong: rgb(255 255 255 / 16%);
         --fill: rgb(255 255 255 / 8%);
@@ -134,7 +138,7 @@
     --card-shelf: rgb(35 39 41 / 41%);
     --card-sheer: rgb(35 39 41 / 42%);
     --card-raised: rgb(28 31 33 / 72%);
-    --card-frosted: rgb(28 31 33 / 93%);
+    --card-frosted: rgb(28 31 33 / 50%);
     --line: rgb(255 255 255 / 8%);
     --line-strong: rgb(255 255 255 / 16%);
     --fill: rgb(255 255 255 / 8%);
@@ -3341,12 +3345,12 @@ button.danger:hover:not(:disabled) {
         backdrop-filter: var(--blur);
     }
 
-    /* The account menu is the header's material, denser: a raised sheet that is read, not
-       looked through, so the shelf under it is a blur and nothing more. */
+    /* The account menu is frosted glass over the shelf: sheerer than the header and blurred less,
+       so the shelf shows through as shapes that cannot be read. */
     .account__menu {
         background: var(--card-frosted);
-        -webkit-backdrop-filter: var(--blur);
-        backdrop-filter: var(--blur);
+        -webkit-backdrop-filter: var(--blur-soft);
+        backdrop-filter: var(--blur-soft);
     }
 
     /* Controls take the tint but not a blur of their own: they sit on surfaces that are already
