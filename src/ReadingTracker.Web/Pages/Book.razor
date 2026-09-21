@@ -12,7 +12,9 @@
 
     One column, at most 640px, the same on a phone and on a desk. The book half first — cover,
     title, authors, what it is about, the edition line — because that is what somebody came for;
-    the reading half follows below it.
+    the reading half follows below it, and is BookReading's: everything the shelf card can do,
+    done here with more room. What it changes it hands back up, and the page shows the entry
+    Library answered with — the same entry, the device linked to it untouched.
 
     The two halves come from two places and arrive on their own: the entry from Library, and the
     Book's longer details from Catalog, which may be going to the provider for them the first
@@ -107,6 +109,11 @@
                         <a href="@providerUrl" target="_blank" rel="noopener">@providerName ↗</a>
                     }
                 </p>
+
+                <BookReading Entry="entry"
+                             OnChanged="Changed"
+                             OnRemoved="Removed"
+                             OnSignedOut="SignedOut" />
             }
             else if (_problem is LibraryUnavailable.NotSignedIn)
             {
@@ -199,6 +206,18 @@
     }
 
     private void SignIn() => Navigation.NavigateToLogin("authentication/login");
+
+    /// <summary>Library answered a change with the entry as it now is; that is what the page shows.</summary>
+    private void Changed(LibraryEntry fresh) => _entry = fresh;
+
+    /// <summary>The book is off the shelf, so its page is over; back to the shelf, where it is gone.</summary>
+    private void Removed() => Navigation.NavigateTo("");
+
+    private void SignedOut()
+    {
+        _entry = null;
+        _problem = LibraryUnavailable.NotSignedIn;
+    }
 
     private static string Initial(LibraryEntry entry) =>
         (entry.Book?.Title ?? "?").Trim() is { Length: > 0 } title ? title[..1].ToUpperInvariant() : "?";

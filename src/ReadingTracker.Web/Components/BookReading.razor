@@ -1,0 +1,144 @@
+@using ReadingTracker.Web.Services
+@inherits EntryHost
+
+@*
+    The reading half of the Book page: everything the reader has done with this book and
+    everything they can do to it — the same panels as the shelf card, wired to the same changes,
+    with the room a page has that a card does not. The status and the figure head it, the bar
+    runs under them, and the line saying where the e-reader last was comes with the bar; the
+    log form opens under its button; Settings and Remove sit at the foot, where a page keeps
+    the things done once.
+
+    Unlike the card, the sessions are always wanted here — the page draws them — so they are
+    loaded with the page and kept fresh through every change.
+*@
+
+<div class="reading @(Working ? "entry--working" : null) @(Parked ? "entry--parked" : null) @(Finished ? "entry--finished" : null)">
+    <div class="reading__status">
+        <StatusSelect Entry="Entry" Disabled="Working" OnPick="ChangeStatusAsync" />
+    </div>
+
+    <ProgressBar Progress="Entry.Progress"
+                 TrackingMethod="@Entry.TrackingMethod"
+                 EffectivePageCount="Entry.EffectivePageCount"
+                 Bookmark="Entry.Bookmark"
+                 Finished="Finished"
+                 FinishedOn="Entry.FinishedOn" />
+
+    @if (Logging)
+    {
+        <div class="reading__actions">
+            <button type="button"
+                    class="button--log @(_panel == Panel.Log ? "button--log--open" : null)"
+                    @onclick="() => Toggle(Panel.Log)"
+                    disabled="@Working">
+                @if (_panel == Panel.Log)
+                {
+                    <text>Cancel</text>
+                }
+                else
+                {
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.4 1.6l3 3L5.2 13.8 1.5 14.5l.7-3.7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" /></svg>
+                    <text>Log reading</text>
+                }
+            </button>
+        </div>
+    }
+
+    @if (Reasons.Count > 0)
+    {
+        <ul class="entry__reasons" role="alert">
+            @foreach (var reason in Reasons)
+            {
+                <li>@reason</li>
+            }
+        </ul>
+    }
+
+    @if (_panel == Panel.Log && Logging)
+    {
+        <SessionForm Unit="@Entry.TrackingMethod"
+                     SubmitLabel="Log it"
+                     OnSubmit="LogAsync"
+                     OnCancel="Close" />
+    }
+
+    @if (_panel == Panel.Finished)
+    {
+        <FinishPrompt Title="@Title"
+                      Disabled="Working"
+                      OnFinish="MarkFinishedAsync"
+                      OnNotYet="Close" />
+    }
+
+    <div class="reading__foot">
+        <button type="button" class="link-button" @onclick="() => Toggle(Panel.Settings)" disabled="@Working">
+            Settings
+        </button>
+        <button type="button" class="link-button link-button--danger" @onclick="() => Toggle(Panel.Remove)" disabled="@Working">
+            Remove from shelf
+        </button>
+    </div>
+
+    @if (_panel == Panel.Settings)
+    {
+        <EntrySettings Entry="Entry"
+                       Disabled="Working"
+                       OnTrackingMethod="ChangeTrackingMethodAsync"
+                       OnPageCount="SetPageCountAsync"
+                       OnEdition="UseEditionAsync" />
+    }
+
+    @if (_panel == Panel.Remove)
+    {
+        <RemovePrompt Title="@Title"
+                      Disabled="Working"
+                      OnRemove="RemoveAsync"
+                      OnKeep="Close" />
+    }
+</div>
+
+@code {
+    private enum Panel { None, Log, Settings, Remove, Finished }
+
+    private Panel _panel = Panel.None;
+
+    /// <summary>Always: the page draws the sessions, so a change to them is always worth re-reading.</summary>
+    protected override bool HistoryShowing => true;
+
+    private string Title => Entry.Book?.Title ?? "this book";
+
+    protected override Task OnInitializedAsync() => LoadSessionsAsync();
+
+    private void Toggle(Panel panel)
+    {
+        _panel = _panel == panel ? Panel.None : panel;
+        ClearReasons();
+    }
+
+    private void Close()
+    {
+        _panel = Panel.None;
+        ClearReasons();
+    }
+
+    /// <summary>Their answer to the prompt a completed book raises, which is the same change
+    /// the status control makes — the prompt only saves them going to find it.</summary>
+    private Task MarkFinishedAsync() => ChangeStatusAsync("Finished");
+
+    protected override void Logged() => Close();
+
+    /// <summary>
+    /// The prompt that asked has been answered; and a log form open on a book just set aside
+    /// has nothing left to log against.
+    /// </summary>
+    protected override void StatusChanged(LibraryEntry entry)
+    {
+        if (_panel == Panel.Finished || (_panel == Panel.Log && entry.Status is not ("Reading" or "WantToRead")))
+        {
+            Close();
+        }
+    }
+
+    protected override void ReachedEnd() => _panel = Panel.Finished;
+}
