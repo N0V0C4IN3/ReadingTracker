@@ -33,4 +33,36 @@ public sealed class Book
     public string? ExternalId { get; init; }
 
     public DateTimeOffset CreatedAt { get; init; }
+
+    // The longer details, which can arrive later than the rest: settable, where everything
+    // above is fixed the moment the Book is cached.
+
+    /// <summary>Plain text, paragraphs separated by a blank line.</summary>
+    public string? Description { get; set; }
+
+    public string? Publisher { get; set; }
+
+    /// <summary>As the provider gave it — a year, a year and month, or a full date.</summary>
+    public string? PublishedDate { get; set; }
+
+    public List<string> Categories { get; set; } = [];
+
+    /// <summary>
+    /// When the details were last looked for at the Book's provider; null when they never
+    /// were. Recorded whatever the provider had, so a Book it has no description for is asked
+    /// about once and not on every visit — and left null when the provider could not be
+    /// reached, so the next visit tries again.
+    /// </summary>
+    public DateTimeOffset? DetailsLookedAt { get; set; }
+
+    public BookDetails Details => new(Description, Publisher, PublishedDate, Categories);
+
+    public void Fill(BookDetails details, DateTimeOffset lookedAt)
+    {
+        Description = details.Description;
+        Publisher = details.Publisher;
+        PublishedDate = details.PublishedDate;
+        Categories = [.. details.Categories];
+        DetailsLookedAt = lookedAt;
+    }
 }

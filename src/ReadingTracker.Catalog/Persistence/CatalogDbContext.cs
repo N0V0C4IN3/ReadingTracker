@@ -26,6 +26,9 @@ public sealed class CatalogDbContext(DbContextOptions<CatalogDbContext> options)
             // Stored by name so adding a source later needs no migration.
             book.Property(entity => entity.Source).HasConversion<string>().IsRequired();
 
+            // Derived from the columns, not a column of its own.
+            book.Ignore(entity => entity.Details);
+
             // One Book per ISBN: this is what makes duplicate provider matches collapse,
             // including when two requests race to cache the same title.
             book.HasIndex(entity => entity.Isbn)

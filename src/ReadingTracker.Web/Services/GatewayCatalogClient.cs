@@ -18,6 +18,59 @@ public sealed record BookSearchResult(
 /// </summary>
 public sealed record BookSearchPage(IReadOnlyList<BookSearchResult> Results, int Page, bool HasMore);
 
+/// <summary>
+/// A Book as Catalog describes it in full: the basics every listing has, and the longer
+/// details only this lookup carries. <paramref name="Description"/> is plain text with a blank
+/// line between paragraphs; <paramref name="PublishedDate"/> is whatever the provider knew, a
+/// year at least; <paramref name="ProviderUrl"/> is the book's page on the provider's own site,
+/// and null for a Book entered by hand; <paramref name="DetailsUnavailable"/> means the details
+/// are missing only because the provider could not be reached just now.
+/// </summary>
+public sealed record CatalogBook(
+    Guid Id,
+    string Title,
+    IReadOnlyList<string> Authors,
+    string? Isbn,
+    string? CoverUrl,
+    int? TotalPages,
+    string Source,
+    string? Description,
+    string? Publisher,
+    string? PublishedDate,
+    IReadOnlyList<string> Categories,
+    string? ProviderUrl,
+    bool DetailsUnavailable)
+{
+    /// <summary>The year a jacket flap would give, from however much of the date the provider had.</summary>
+    public string? PublishedYear =>
+        PublishedDate is { Length: >= 4 } date && date[..4].All(char.IsAsciiDigit) ? date[..4] : null;
+
+    /// <summary>The description's paragraphs, in order; none when there is no description.</summary>
+    public IReadOnlyList<string> Paragraphs =>
+        Description?.Split("\n\n", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? [];
+
+    /// <summary>What to call the link out, by where the Book came from.</summary>
+    public string? ProviderName => Source switch
+    {
+        "GoogleBooks" => "Google Books",
+        "OpenLibrary" => "Open Library",
+        _ => null,
+    };
+}
+
+/// <summary>Why one Book could not be fetched.</summary>
+public enum BookUnavailable
+{
+    /// <summary>There is no session, or it has ended. The Gateway said 401.</summary>
+    NotSignedIn,
+
+    /// <summary>Catalog has no Book by that id.</summary>
+    NotFound,
+
+    /// <summary>The Gateway itself could not be reached — a network failure, not a refusal.</summary>
+    GatewayUnreachable,
+}
+
 /// <summary>A Book as the reader typed it in, for the times no provider has heard of it.</summary>
 public sealed record NewBook(
     string Title,
@@ -162,6 +215,42 @@ public sealed class GatewayCatalogClient(HttpClient httpClient)
         var body = await response.Content.ReadFromJsonAsync<SearchResponseBody>(cancellationToken);
 
         return (new BookSearchPage(body?.Results ?? [], body?.Page ?? page, body?.HasMore ?? false), null);
+    }
+
+    /// <summary>
+    /// One Book in full, for its page. The first time anybody asks for a Book, Catalog may go
+    /// to the provider for its longer details, so this can take a moment longer than a search.
+    /// </summary>
+    public async Task<(CatalogBook? Book, BookUnavailable? Problem)> GetBookAsync(
+        Guid bookId,
+        CancellationToken cancellationToken)
+    {
+        HttpResponseMessage response;
+
+        try
+        {
+            response = await httpClient.GetAsync($"api/books/{bookId}", cancellationToken);
+        }
+        catch (HttpRequestException)
+        {
+            return (null, BookUnavailable.GatewayUnreachable);
+        }
+
+        if (response.StatusCode is HttpStatusCode.Unauthorized)
+        {
+            return (null, BookUnavailable.NotSignedIn);
+        }
+
+        if (response.StatusCode is HttpStatusCode.NotFound)
+        {
+            return (null, BookUnavailable.NotFound);
+        }
+
+        response.EnsureSuccessStatusCode();
+
+        var book = await response.Content.ReadFromJsonAsync<CatalogBook>(cancellationToken);
+
+        return book is null ? (null, BookUnavailable.NotFound) : (book, null);
     }
 
     /// <summary>

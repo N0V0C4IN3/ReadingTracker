@@ -26,6 +26,20 @@ public sealed record ProviderSearch(SearchStatus Status, IReadOnlyList<BookSearc
 }
 
 /// <summary>
+/// What a provider said when asked about one of its own volumes: the details, when it
+/// still has the volume; <see cref="SearchStatus.Completed"/> with nothing when it no longer
+/// does; <see cref="SearchStatus.ProvidersUnavailable"/> when it could not be reached.
+/// </summary>
+public sealed record ProviderDetails(SearchStatus Status, BookDetails? Details)
+{
+    public static ProviderDetails Found(BookDetails details) => new(SearchStatus.Completed, details);
+
+    public static ProviderDetails NotFound { get; } = new(SearchStatus.Completed, null);
+
+    public static ProviderDetails Unavailable { get; } = new(SearchStatus.ProvidersUnavailable, null);
+}
+
+/// <summary>
 /// Asks each provider in turn and takes the first real answer, so a gap or an outage at one
 /// provider doesn't make a book unfindable. Distinguishes "nobody has this book" from
 /// "nobody could be reached", which are very different answers to give a reader.
@@ -60,6 +74,44 @@ public sealed class BookProviderChain(IEnumerable<IBookProvider> providers, ILog
             query,
             window,
             cancellationToken);
+
+    /// <summary>
+    /// The longer details of a volume, from the one provider that described it: an id is
+    /// only meaningful to the provider that issued it, so there is no falling through to
+    /// another here.
+    /// </summary>
+    public async Task<ProviderDetails> FindDetailsAsync(
+        BookSource source,
+        string externalId,
+        CancellationToken cancellationToken)
+    {
+        if (ProviderFor(source) is not { } provider)
+        {
+            return ProviderDetails.NotFound;
+        }
+
+        try
+        {
+            var details = await provider.FindDetailsAsync(externalId, cancellationToken);
+
+            return details is null ? ProviderDetails.NotFound : ProviderDetails.Found(details);
+        }
+        catch (Exception exception) when (IsProviderFailure(exception, cancellationToken))
+        {
+            logger.LogWarning(
+                exception,
+                "Book provider {Provider} could not be reached for the details of {ExternalId}",
+                provider.GetType().Name,
+                externalId);
+
+            return ProviderDetails.Unavailable;
+        }
+    }
+
+    /// <summary>Where a reader can see the volume on its provider's own site; null for a source no provider answers for.</summary>
+    public Uri? PageFor(BookSource source, string externalId) => ProviderFor(source)?.PageFor(externalId);
+
+    private IBookProvider? ProviderFor(BookSource source) => providers.FirstOrDefault(provider => provider.Source == source);
 
     /// <summary>
     /// Each provider is asked for the same window, and the first with anything to say answers.

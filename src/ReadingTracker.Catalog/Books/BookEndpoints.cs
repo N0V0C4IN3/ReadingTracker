@@ -148,14 +148,16 @@ public static class BookEndpoints
         })
         .WithName("AddBookByHand");
 
+        // One Book in full — the longer details included, which the list and search
+        // responses leave out so that a shelf of two hundred books stays the size it is.
         endpoints.MapGet("/api/books/{bookId:guid}", async (
             Guid bookId,
             BookCatalog catalog,
             CancellationToken cancellationToken) =>
         {
-            var book = await catalog.FindAsync(bookId, cancellationToken);
+            var lookup = await catalog.FindAsync(bookId, cancellationToken);
 
-            return book is null ? Results.NotFound() : Results.Ok(BookResponse.From(book));
+            return lookup is null ? Results.NotFound() : Results.Ok(BookDetailResponse.From(lookup));
         })
         .WithName("GetBook");
     }
@@ -298,5 +300,41 @@ public static class BookEndpoints
     {
         public static BookResponse From(Book book) =>
             new(book.Id, book.Title, book.Authors, book.Isbn, book.CoverUrl, book.TotalPages, book.Source.ToString());
+    }
+
+    /// <summary>
+    /// A Book with its longer details. <paramref name="DetailsUnavailable"/> says the details
+    /// are missing because the provider could not be reached this time, which a page can say
+    /// out loud; details missing because there are none are simply null and empty.
+    /// </summary>
+    private sealed record BookDetailResponse(
+        Guid Id,
+        string Title,
+        IReadOnlyList<string> Authors,
+        string? Isbn,
+        string? CoverUrl,
+        int? TotalPages,
+        string Source,
+        string? Description,
+        string? Publisher,
+        string? PublishedDate,
+        IReadOnlyList<string> Categories,
+        Uri? ProviderUrl,
+        bool DetailsUnavailable)
+    {
+        public static BookDetailResponse From(BookLookup lookup) => new(
+            lookup.Book.Id,
+            lookup.Book.Title,
+            lookup.Book.Authors,
+            lookup.Book.Isbn,
+            lookup.Book.CoverUrl,
+            lookup.Book.TotalPages,
+            lookup.Book.Source.ToString(),
+            lookup.Book.Description,
+            lookup.Book.Publisher,
+            lookup.Book.PublishedDate,
+            lookup.Book.Categories,
+            lookup.ProviderUrl,
+            lookup.DetailsUnavailable);
     }
 }

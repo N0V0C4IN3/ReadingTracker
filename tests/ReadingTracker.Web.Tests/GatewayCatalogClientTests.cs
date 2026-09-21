@@ -164,6 +164,103 @@ public sealed class GatewayCatalogClientTests
         Assert.True(page.HasMore);
     }
 
+    [Fact]
+    public async Task Reads_one_book_in_full()
+    {
+        var (client, gateway) = CreateClient();
+        gateway.Respond = _ => StubHttpMessageHandler.Json("""
+            {
+              "id": "22222222-2222-2222-2222-222222222222",
+              "title": "Red Rising",
+              "authors": ["Pierce Brown"],
+              "isbn": "9780345539786",
+              "coverUrl": "https://example.test/red-rising.jpg",
+              "totalPages": 382,
+              "source": "GoogleBooks",
+              "description": "Darrow is a Red.\n\nHe works all day.",
+              "publisher": "Del Rey",
+              "publishedDate": "2014-01-28",
+              "categories": ["Fiction", "Science Fiction"],
+              "providerUrl": "https://books.google.com/books?id=redrising",
+              "detailsUnavailable": false
+            }
+            """);
+
+        var (book, problem) = await client.GetBookAsync(Guid.Parse("22222222-2222-2222-2222-222222222222"), CancellationToken.None);
+
+        Assert.Null(problem);
+        Assert.Equal("api/books/22222222-2222-2222-2222-222222222222", gateway.LastRequest!.RequestUri!.PathAndQuery.TrimStart('/'));
+        Assert.Equal("Red Rising", book!.Title);
+        Assert.Equal(["Darrow is a Red.", "He works all day."], book.Paragraphs);
+        Assert.Equal("Del Rey", book.Publisher);
+        Assert.Equal("2014", book.PublishedYear);
+        Assert.Equal(["Fiction", "Science Fiction"], book.Categories);
+        Assert.Equal("https://books.google.com/books?id=redrising", book.ProviderUrl);
+        Assert.Equal("Google Books", book.ProviderName);
+        Assert.False(book.DetailsUnavailable);
+    }
+
+    [Fact]
+    public async Task Reads_a_book_whose_details_could_not_be_fetched()
+    {
+        var (client, gateway) = CreateClient();
+        gateway.Respond = _ => StubHttpMessageHandler.Json("""
+            {
+              "id": "33333333-3333-3333-3333-333333333333",
+              "title": "The Word for World Is Forest",
+              "authors": ["Ursula K. Le Guin"],
+              "source": "OpenLibrary",
+              "categories": [],
+              "providerUrl": "https://openlibrary.org/books/OL17952222M",
+              "detailsUnavailable": true
+            }
+            """);
+
+        var (book, problem) = await client.GetBookAsync(Guid.Parse("33333333-3333-3333-3333-333333333333"), CancellationToken.None);
+
+        Assert.Null(problem);
+        Assert.True(book!.DetailsUnavailable);
+        Assert.Empty(book.Paragraphs);
+        Assert.Null(book.PublishedYear);
+        Assert.Equal("Open Library", book.ProviderName);
+    }
+
+    [Fact]
+    public async Task Reports_a_book_catalog_does_not_have()
+    {
+        var (client, gateway) = CreateClient();
+        gateway.Respond = _ => new HttpResponseMessage(HttpStatusCode.NotFound);
+
+        var (book, problem) = await client.GetBookAsync(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Null(book);
+        Assert.Equal(BookUnavailable.NotFound, problem);
+    }
+
+    [Fact]
+    public async Task Reports_when_a_book_lookup_finds_the_session_ended()
+    {
+        var (client, gateway) = CreateClient();
+        gateway.Respond = _ => new HttpResponseMessage(HttpStatusCode.Unauthorized);
+
+        var (book, problem) = await client.GetBookAsync(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Null(book);
+        Assert.Equal(BookUnavailable.NotSignedIn, problem);
+    }
+
+    [Fact]
+    public async Task Reports_when_a_book_lookup_cannot_reach_the_gateway()
+    {
+        var (client, gateway) = CreateClient();
+        gateway.Respond = _ => throw new HttpRequestException("connection refused");
+
+        var (book, problem) = await client.GetBookAsync(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Null(book);
+        Assert.Equal(BookUnavailable.GatewayUnreachable, problem);
+    }
+
     private static (GatewayCatalogClient Client, StubHttpMessageHandler Gateway) CreateClient()
     {
         var gateway = new StubHttpMessageHandler();

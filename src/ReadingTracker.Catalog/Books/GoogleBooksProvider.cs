@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using Microsoft.Extensions.Options;
 
@@ -6,6 +7,8 @@ namespace ReadingTracker.Catalog.Books;
 public sealed class GoogleBooksProvider(HttpClient httpClient, IOptions<GoogleBooksOptions> options) : IBookProvider
 {
     private readonly GoogleBooksOptions _options = options.Value;
+
+    public BookSource Source => BookSource.GoogleBooks;
 
     public Task<IReadOnlyList<BookSearchResult>> SearchByIsbnAsync(
         string isbn,
@@ -42,6 +45,28 @@ public sealed class GoogleBooksProvider(HttpClient httpClient, IOptions<GoogleBo
         CancellationToken cancellationToken) =>
         SearchAsync(query.Trim(), searchedIsbn: null, window, cancellationToken);
 
+    /// <summary>
+    /// One volume by Google's id for it. Google answers a volume it no longer has with a 404,
+    /// which is an answer; anything else that is not success is treated as not reaching it.
+    /// </summary>
+    public async Task<BookDetails?> FindDetailsAsync(string externalId, CancellationToken cancellationToken)
+    {
+        using var response = await SendAsync($"volumes/{Uri.EscapeDataString(externalId)}", cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        response.EnsureSuccessStatusCode();
+
+        var volume = await response.Content.ReadFromJsonAsync<VolumeItem>(cancellationToken);
+
+        return volume is null ? null : DetailsOf(volume.VolumeInfo);
+    }
+
+    public Uri PageFor(string externalId) => new($"https://books.google.com/books?id={Uri.EscapeDataString(externalId)}");
+
     private async Task<IReadOnlyList<BookSearchResult>> SearchAsync(
         string searchTerms,
         string? searchedIsbn,
@@ -52,6 +77,17 @@ public sealed class GoogleBooksProvider(HttpClient httpClient, IOptions<GoogleBo
         var query = $"volumes?q={Uri.EscapeDataString(searchTerms)}"
             + $"&startIndex={window.Offset}&maxResults={window.PageSize}";
 
+        using var response = await SendAsync(query, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var payload = await response.Content.ReadFromJsonAsync<VolumesResponse>(cancellationToken);
+
+        // Google omits "items" entirely when nothing matches, rather than returning an empty array.
+        return payload?.Items?.Select(item => ToSearchResult(item, searchedIsbn)).ToArray() ?? [];
+    }
+
+    private async Task<HttpResponseMessage> SendAsync(string query, CancellationToken cancellationToken)
+    {
         using var request = new HttpRequestMessage(HttpMethod.Get, query);
 
         // As a header, never as a query parameter: a URI is what proxies, access logs and
@@ -62,13 +98,7 @@ public sealed class GoogleBooksProvider(HttpClient httpClient, IOptions<GoogleBo
             request.Headers.Add("X-Goog-Api-Key", _options.ApiKey);
         }
 
-        using var response = await httpClient.SendAsync(request, cancellationToken);
-        response.EnsureSuccessStatusCode();
-
-        var payload = await response.Content.ReadFromJsonAsync<VolumesResponse>(cancellationToken);
-
-        // Google omits "items" entirely when nothing matches, rather than returning an empty array.
-        return payload?.Items?.Select(item => ToSearchResult(item, searchedIsbn)).ToArray() ?? [];
+        return await httpClient.SendAsync(request, cancellationToken);
     }
 
     private static BookSearchResult ToSearchResult(VolumeItem item, string? searchedIsbn)
@@ -83,8 +113,14 @@ public sealed class GoogleBooksProvider(HttpClient httpClient, IOptions<GoogleBo
             // Google says 0 when it does not know; that is no page count, not a short book.
             TotalPages: info?.PageCount is > 0 and var pages ? pages : null,
             Source: BookSource.GoogleBooks,
-            ExternalId: item.Id);
+            ExternalId: item.Id,
+            // A volume list carries the same details as the volume itself, so a Book cached
+            // from a search never needs to be asked about again.
+            Details: DetailsOf(info));
     }
+
+    private static BookDetails DetailsOf(VolumeInfo? info) =>
+        BookDetails.Cleaned(info?.Description, info?.Publisher, info?.PublishedDate, info?.Categories);
 
     private static string? PreferredIsbn(IReadOnlyList<IndustryIdentifier>? identifiers) =>
         identifiers?.FirstOrDefault(id => id.Type == "ISBN_13")?.Identifier
@@ -100,7 +136,11 @@ public sealed class GoogleBooksProvider(HttpClient httpClient, IOptions<GoogleBo
         IReadOnlyList<string>? Authors,
         IReadOnlyList<IndustryIdentifier>? IndustryIdentifiers,
         int? PageCount,
-        ImageLinks? ImageLinks);
+        ImageLinks? ImageLinks,
+        string? Description,
+        string? Publisher,
+        string? PublishedDate,
+        IReadOnlyList<string>? Categories);
 
     private sealed record IndustryIdentifier(string? Type, string? Identifier);
 

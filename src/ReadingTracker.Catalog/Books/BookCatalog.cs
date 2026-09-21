@@ -121,8 +121,42 @@ public sealed class BookCatalog(
             .Where(book => bookIds.Contains(book.Id))
             .ToListAsync(cancellationToken);
 
-    public Task<Book?> FindAsync(Guid bookId, CancellationToken cancellationToken) =>
-        database.Books.FirstOrDefaultAsync(book => book.Id == bookId, cancellationToken);
+    /// <summary>
+    /// One Book in full. A Book that came from a provider without its longer details is asked
+    /// about here, the first time — by the id the provider gave it — and what came back is
+    /// kept, even when it is nothing, so no Book is asked about twice. A provider that cannot
+    /// be reached is the one case left unrecorded: the Book is answered as it is, and the next
+    /// lookup tries again. A Book entered by hand has no provider to ask.
+    /// </summary>
+    public async Task<BookLookup?> FindAsync(Guid bookId, CancellationToken cancellationToken)
+    {
+        var book = await database.Books.FirstOrDefaultAsync(book => book.Id == bookId, cancellationToken);
+
+        if (book is null)
+        {
+            return null;
+        }
+
+        if (book.DetailsLookedAt is not null || book.Source == BookSource.Manual || book.ExternalId is null)
+        {
+            return new BookLookup(book, PageFor(book), DetailsUnavailable: false);
+        }
+
+        var answer = await providers.FindDetailsAsync(book.Source, book.ExternalId, cancellationToken);
+
+        if (answer.Status is SearchStatus.ProvidersUnavailable)
+        {
+            return new BookLookup(book, PageFor(book), DetailsUnavailable: true);
+        }
+
+        book.Fill(answer.Details ?? BookDetails.None, clock.GetUtcNow());
+        await database.SaveChangesAsync(cancellationToken);
+
+        return new BookLookup(book, PageFor(book), DetailsUnavailable: false);
+    }
+
+    private Uri? PageFor(Book book) =>
+        book.ExternalId is null ? null : providers.PageFor(book.Source, book.ExternalId);
 
     /// <summary>
     /// Turns provider results into stored Books, reusing any that are already known so the
@@ -228,16 +262,36 @@ public sealed class BookCatalog(
               && book.Source == result.Source
               && book.ExternalId == result.ExternalId;
 
-    private Book ToBook(BookSearchResult result) => new()
+    private Book ToBook(BookSearchResult result)
     {
-        Id = Guid.CreateVersion7(),
-        Title = result.Title,
-        Authors = [.. result.Authors],
-        Isbn = result.Isbn,
-        CoverUrl = result.CoverUrl,
-        TotalPages = result.TotalPages,
-        Source = result.Source,
-        ExternalId = result.ExternalId,
-        CreatedAt = clock.GetUtcNow(),
-    };
+        var now = clock.GetUtcNow();
+
+        var book = new Book
+        {
+            Id = Guid.CreateVersion7(),
+            Title = result.Title,
+            Authors = [.. result.Authors],
+            Isbn = result.Isbn,
+            CoverUrl = result.CoverUrl,
+            TotalPages = result.TotalPages,
+            Source = result.Source,
+            ExternalId = result.ExternalId,
+            CreatedAt = now,
+        };
+
+        // A search that carried the details has answered the question a later lookup would ask.
+        if (result.Details is { } details)
+        {
+            book.Fill(details, now);
+        }
+
+        return book;
+    }
 }
+
+/// <summary>
+/// A Book as answered by <see cref="BookCatalog.FindAsync"/>: the Book, where its provider
+/// shows it, and whether its details are missing only because the provider could not be
+/// reached just now — as opposed to the provider having none, or the Book having no provider.
+/// </summary>
+public sealed record BookLookup(Book Book, Uri? ProviderUrl, bool DetailsUnavailable);
