@@ -102,9 +102,6 @@
             ? (displayed.Amount, displayed.Unit)
             : (session.Amount, session.Unit);
 
-        return unit == "Percentage" ? $"{Trim(amount)}%" : $"{Trim(amount)} {(amount == 1m ? "page" : "pages")}";
+        return unit == "Percentage" ? $"{Figures.Trim(amount)}%" : $"{Figures.Trim(amount)} {(amount == 1m ? "page" : "pages")}";
     }
-
-    private static string Trim(decimal value) =>
-        value == decimal.Truncate(value) ? decimal.Truncate(value).ToString() : value.ToString("0.#");
 }
