@@ -3311,7 +3311,9 @@ button.danger:hover:not(:disabled) {
     them is only the mesh, so they are sheer everywhere and blur nothing — see .entry.
 */
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-    header {
+    /* The account menu hangs off the header and is the same material: a raised, blurred sheet. */
+    header,
+    .account__menu {
         background: var(--card-raised);
         -webkit-backdrop-filter: var(--blur);
         backdrop-filter: var(--blur);
