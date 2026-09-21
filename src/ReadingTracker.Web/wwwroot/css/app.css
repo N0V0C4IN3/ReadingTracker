@@ -3316,18 +3316,33 @@ button.danger:hover:not(:disabled) {
     them is only the mesh, so they are sheer everywhere and blur nothing — see .entry.
 */
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    /*
+        The header's material is a pane behind it, not the header itself. An element with a
+        backdrop filter is the backdrop root for everything inside it: a descendant's own filter
+        can sample only that element's box. The account menu hangs below the header, and with the
+        blur on the header the menu's blur sampled nothing — the shelf's text came through the
+        menu untouched, only tinted. A pseudo-element carries the header's blur instead, so the
+        header itself is not a root and the menu blurs the page it is actually over.
+
+        The header is sticky with a z-index, so it is a stacking context of its own and the pane
+        at -1 stays inside it: behind the bar's contents, above the page.
+    */
     header {
+        background: transparent;
+    }
+
+    header::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -1;
         background: var(--card-raised);
         -webkit-backdrop-filter: var(--blur);
         backdrop-filter: var(--blur);
     }
 
-    /* The account menu hangs off the header and wants to be the same material, but it cannot be:
-       it is inside the header, and an element with a backdrop filter is the backdrop root for
-       everything in it. The menu's filter can only sample the header's own box, and below the
-       header that is nothing — so the page behind the menu came through untouched, and the
-       72% tint alone left the shelf's text legible under the menu. The blur stays, for the strip
-       that does overlap the header; the tint is made dense enough to hide the rest by itself. */
+    /* The account menu is the header's material, denser: a raised sheet that is read, not
+       looked through, so the shelf under it is a blur and nothing more. */
     .account__menu {
         background: var(--card-frosted);
         -webkit-backdrop-filter: var(--blur);
