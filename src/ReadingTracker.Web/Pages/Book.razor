@@ -30,14 +30,14 @@
     </Authorizing>
     <NotAuthorized>
         <section class="book">
-            <a class="book__back" href="">← Your shelf</a>
+            <a class="book__back" href="">← Back</a>
             <p class="notice">Sign in to see this book. You will be brought back here.</p>
             <button type="button" class="button--primary" @onclick="SignIn">Sign in</button>
         </section>
     </NotAuthorized>
     <Authorized>
         <section class="book">
-            <a class="book__back" href="">← Your shelf</a>
+            <a class="book__back" href="">← Back</a>
 
             @if (_entry is { } entry)
             {
