@@ -189,6 +189,49 @@ public abstract class EntryHost : ComponentBase
             await RefreshAsync();
         });
 
+    /// <summary>
+    /// Restates a day's reading as one session: the new one is logged first, and only then are
+    /// the day's old ones removed, so a refusal costs nothing and a failure part way leaves
+    /// more on the record rather than less. True when it took; false when Library refused.
+    /// </summary>
+    protected async Task<bool> CorrectDayAsync(IReadOnlyList<Guid> sessionIds, NewSession session)
+    {
+        var took = false;
+
+        await RunAsync(token => Library.LogSessionAsync(Entry.Id, session, token), async _ =>
+        {
+            took = true;
+            await RemoveEachAsync(sessionIds);
+        });
+
+        return took;
+    }
+
+    /// <summary>Removes a day's reading, session by session; the figures follow.</summary>
+    protected Task DeleteDayAsync(IReadOnlyList<Guid> sessionIds) =>
+        RunAsync(async _ =>
+        {
+            await RemoveEachAsync(sessionIds);
+            return LibraryChange.Succeeded();
+        }, () => Task.CompletedTask);
+
+    private async Task RemoveEachAsync(IReadOnlyList<Guid> sessionIds)
+    {
+        foreach (var sessionId in sessionIds)
+        {
+            var gone = await Library.DeleteSessionAsync(Entry.Id, sessionId, CancellationToken.None);
+
+            if (!gone.Ok)
+            {
+                await ExplainAsync(gone.Problem, gone.Reasons);
+                break;
+            }
+        }
+
+        await ReloadSessionsAsync();
+        await RefreshAsync();
+    }
+
     protected Task RemoveAsync() =>
         RunAsync(token => Library.RemoveAsync(Entry.Id, token), () => OnRemoved.InvokeAsync());
 

@@ -1,14 +1,12 @@
 @using ReadingTracker.Web.Services
 
 @*
-    The entry's ReadingSessions as days: one card per calendar day, latest first, its header
-    naming the day and saying what it added up to — pages where they can be counted, minutes
-    where anybody said. The day is what a reader remembers reading by, and an e-reader that
-    reported four times in an evening is one evening's reading, so the sessions themselves stay
-    folded inside the card until asked for: the header says how many there are, and opening it
-    lists them, latest first, each with its amount as it was logged, its time, its minutes, a
-    mark when a device reported it, and Correct and Delete. Whether a correction took is the
-    host's to say, so the form stays open on a refusal with the host's reasons beside it.
+    The entry's ReadingSessions as days: one card per calendar day, latest first, naming the
+    day and saying how many pages it came to. The day is what a reader remembers reading by,
+    and an e-reader that reported four times in an evening is one evening's reading — so the
+    logs themselves are not shown at all; a day is a number. Correct restates the day as one
+    amount, and Delete takes the day off the record. Whether a correction took is the host's to
+    say, so the form stays open on a refusal with the host's reasons beside it.
 
     Twenty days show at first; the rest are behind "Show all", since a history is read from
     the top.
@@ -30,65 +28,38 @@ else
     <ol class="days">
         @foreach (var day in SessionDays.Shown(days, _all))
         {
-            var open = _open.Contains(day.Day);
-
             <li class="day" @key="day.Day">
-                <button type="button"
-                        class="day__head @(open ? "day__head--open" : null)"
-                        @onclick="() => ToggleAsync(day.Day)"
-                        aria-expanded="@(open ? "true" : "false")">
-                    <span class="day__name">@day.Name(today)</span>
-                    <span class="day__date">@day.Date(today)</span>
-                    <span class="day__total">@Total(day)</span>
-                    <span class="day__count">@(day.Sessions.Count == 1 ? "1 log" : $"{day.Sessions.Count} logs")</span>
-                </button>
-
-                @if (open)
+                @if (_editing == day.Day)
                 {
-                    <ul class="sessions">
-                        @foreach (var session in day.Sessions)
+                    <div class="day__edit">
+                        <p class="day__editing"><span class="day__name">@day.Name(today)</span> <span class="day__date">@day.Date(today)</span></p>
+                        <SessionForm Unit="@Unit"
+                                     SubmitLabel="Save"
+                                     Existing="AsOne(day)"
+                                     OnSubmit="@(stated => SaveAsync(day, stated))"
+                                     OnCancel="CancelAsync" />
+                        @if (Reasons.Count > 0)
                         {
-                            <li class="session" @key="session.Id">
-                                @if (_editing == session.Id)
+                            <ul class="entry__reasons" role="alert">
+                                @foreach (var reason in Reasons)
                                 {
-                                    <SessionForm Unit="@Unit"
-                                                 SubmitLabel="Save"
-                                                 Existing="session"
-                                                 OnSubmit="@(edited => SaveAsync(session.Id, edited))"
-                                                 OnCancel="CancelAsync" />
-                                    @if (Reasons.Count > 0)
-                                    {
-                                        <ul class="entry__reasons" role="alert">
-                                            @foreach (var reason in Reasons)
-                                            {
-                                                <li>@reason</li>
-                                            }
-                                        </ul>
-                                    }
+                                    <li>@reason</li>
                                 }
-                                else
-                                {
-                                    <span class="session__what">@Describe(session)</span>
-                                    @if (TimeOf(session) is { } time)
-                                    {
-                                        <span class="session__when">@time</span>
-                                    }
-                                    @if (session.DurationMinutes is { } minutes)
-                                    {
-                                        <span class="session__how-long">@minutes min</span>
-                                    }
-                                    @if (session.Source == "Device")
-                                    {
-                                        @* Reported by an e-reader rather than typed in: worth knowing when a
-                                           session looks like nothing the reader remembers logging. *@
-                                        <span class="session__source" title="Reported by your device">device</span>
-                                    }
-                                    <button type="button" class="link-button" @onclick="() => StartEditingAsync(session.Id)">Correct</button>
-                                    <button type="button" class="link-button link-button--danger" @onclick="() => OnDelete(session.Id)">Delete</button>
-                                }
-                            </li>
+                            </ul>
                         }
-                    </ul>
+                    </div>
+                }
+                else
+                {
+                    <div class="day__head">
+                        <span class="day__name">@day.Name(today)</span>
+                        <span class="day__date">@day.Date(today)</span>
+                        <span class="day__total">@Total(day)</span>
+                        <span class="day__ops">
+                            <button type="button" class="link-button" @onclick="() => StartEditingAsync(day.Day)">Correct</button>
+                            <button type="button" class="link-button link-button--danger" @onclick="() => OnDeleteDay(Ids(day))">Delete</button>
+                        </span>
+                    </div>
                 }
             </li>
         }
@@ -115,12 +86,13 @@ else
     [Parameter]
     public int? EffectivePageCount { get; set; }
 
-    /// <summary>Corrects a session. Answers whether it took; the form closes only when it did.</summary>
+    /// <summary>Restates a day — these sessions — as the one given. Answers whether it took; the form closes only when it did.</summary>
     [Parameter, EditorRequired]
-    public required Func<Guid, NewSession, Task<bool>> OnCorrect { get; set; }
+    public required Func<IReadOnlyList<Guid>, NewSession, Task<bool>> OnCorrectDay { get; set; }
 
+    /// <summary>Takes a day — these sessions — off the record.</summary>
     [Parameter, EditorRequired]
-    public required Func<Guid, Task> OnDelete { get; set; }
+    public required Func<IReadOnlyList<Guid>, Task> OnDeleteDay { get; set; }
 
     /// <summary>
     /// The host's reasons for refusing the last change, shown beside the correction form while
@@ -133,28 +105,15 @@ else
     [Parameter]
     public EventCallback<bool> OnEditingChanged { get; set; }
 
-    private readonly HashSet<DateOnly> _open = [];
-
     private bool _all;
 
-    private Guid? _editing;
+    private DateOnly? _editing;
 
-    private async Task ToggleAsync(DateOnly day)
-    {
-        if (!_open.Remove(day))
-        {
-            _open.Add(day);
-        }
-        else if (_editing is not null)
-        {
-            // Closing a day closes a correction begun inside it.
-            await CancelAsync();
-        }
-    }
+    private static IReadOnlyList<Guid> Ids(SessionDay day) => day.Sessions.Select(session => session.Id).ToList();
 
-    private async Task StartEditingAsync(Guid sessionId)
+    private async Task StartEditingAsync(DateOnly day)
     {
-        _editing = sessionId;
+        _editing = day;
         await OnEditingChanged.InvokeAsync(true);
     }
 
@@ -164,16 +123,16 @@ else
         await OnEditingChanged.InvokeAsync(false);
     }
 
-    private async Task SaveAsync(Guid sessionId, NewSession edited)
+    private async Task SaveAsync(SessionDay day, NewSession stated)
     {
-        if (await OnCorrect(sessionId, edited))
+        if (await OnCorrectDay(Ids(day), stated))
         {
             _editing = null;
             await OnEditingChanged.InvokeAsync(false);
         }
     }
 
-    /// <summary>What the day added up to: pages where they could be counted, percent where not, minutes where given.</summary>
+    /// <summary>What the day added up to: pages where they could be counted, percent where they could not.</summary>
     private static string Total(SessionDay day)
     {
         var amounts = new List<string>(2);
@@ -188,25 +147,27 @@ else
             amounts.Add($"{Figures.Trim(percent)}%");
         }
 
-        var total = string.Join(" + ", amounts);
-
-        return day.Minutes is { } minutes ? $"{total} · {minutes} min" : total;
+        return string.Join(" + ", amounts);
     }
 
     /// <summary>
-    /// The time of day, for a session that has one. A stretch logged by hand is dated to a day
-    /// and stored at its midnight, and "00:00" would claim a time nobody gave.
+    /// The day as one session, for the form to start from: its total in the reader's unit where
+    /// that can be said, on its day, for as long as anybody said. A day whose total cannot be put
+    /// in the reader's unit starts blank, and they say afresh.
     /// </summary>
-    private static string? TimeOf(ReadingSessionView session)
+    private ReadingSessionView AsOne(SessionDay day)
     {
-        var at = session.OccurredAt.ToLocalTime();
+        var total = Unit == "Pages" ? day.Pages : day.Pages is null ? day.Percent : null;
+        var midnight = day.Day.ToDateTime(TimeOnly.MinValue);
+        var start = new DateTimeOffset(midnight, TimeZoneInfo.Local.GetUtcOffset(midnight));
 
-        return at.TimeOfDay == TimeSpan.Zero ? null : at.ToString("HH:mm");
+        return new ReadingSessionView(
+            Guid.Empty,
+            total ?? 0,
+            Unit,
+            "Reader",
+            start,
+            day.Minutes,
+            total is { } amount ? new DisplayedAmount(amount, Unit) : null);
     }
-
-    /// <summary>The amount as it was logged — the day's header has already done the adding up in one unit.</summary>
-    private static string Describe(ReadingSessionView session) =>
-        session.Unit == "Percentage"
-            ? $"{Figures.Trim(session.Amount)}%"
-            : $"{Figures.Trim(session.Amount)} {(session.Amount == 1m ? "page" : "pages")}";
 }

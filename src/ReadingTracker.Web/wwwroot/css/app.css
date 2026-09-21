@@ -2440,10 +2440,9 @@ button.danger:hover:not(:disabled) {
 }
 
 /*
-    Days. The history is one card per calendar day on the shelf card's own surface, the day
-    named in a tinted header with what it added up to on the right, and how many logs it holds.
-    The header is the button that opens it: the logs — an e-reader's every few minutes — are
-    inside, and stay folded until somebody wants to correct one.
+    Days. The history is one card per calendar day on the shelf card's own surface: the day
+    named in a tinted row, what it came to on the right, and Correct and Delete for the day. The
+    logs themselves — an e-reader's every few minutes — are not shown; a day is a number.
 */
 .days {
     display: flex;
@@ -2467,22 +2466,9 @@ button.danger:hover:not(:disabled) {
     flex-wrap: wrap;
     align-items: baseline;
     gap: 0.2rem 0.6rem;
-    width: 100%;
-    margin: 0;
-    padding: 0.55rem 0.85rem;
-    border: 0;
-    border-radius: 0;
+    padding: 0.5rem 0.85rem;
     background: var(--fill);
-    color: var(--ink);
-    font: inherit;
     font-size: 0.9rem;
-    text-align: left;
-    cursor: pointer;
-    box-shadow: none;
-}
-
-.day__head:hover:not(:disabled) {
-    background: var(--fill-hover);
 }
 
 .day__name {
@@ -2496,44 +2482,30 @@ button.danger:hover:not(:disabled) {
 
 .day__total {
     margin-left: auto;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+}
+
+.day__ops {
+    display: flex;
+    gap: 0.1rem;
+    margin-right: -0.6rem;
     font-size: 0.82rem;
-    color: var(--ink-soft);
-    font-variant-numeric: tabular-nums;
 }
 
-.day__count {
-    font-size: 0.72rem;
-    color: var(--ink-faint);
-    font-variant-numeric: tabular-nums;
+/* The day restated: its name over the form, on the card's own surface rather than the tint. */
+.day__edit {
+    padding: 0.6rem 0.85rem 0.75rem;
 }
 
-/* A small chevron says the header opens; it turns when it has. */
-.day__count::after {
-    content: "";
-    display: inline-block;
-    width: 0.4em;
-    height: 0.4em;
-    margin-left: 0.4rem;
-    border-right: 1.5px solid currentColor;
-    border-bottom: 1.5px solid currentColor;
-    transform: translateY(-0.15em) rotate(45deg);
-    transition: transform 160ms var(--ease);
-}
-
-.day__head--open .day__count::after {
-    transform: translateY(0.05em) rotate(-135deg);
-}
-
-.day .sessions {
-    padding: 0.15rem 0.85rem;
-}
-
-.day .session {
-    font-size: 0.85rem;
-}
-
-.day .session .entry__reasons {
-    flex-basis: 100%;
+.day__editing {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin: 0 0 0.4rem;
+    font-size: 0.9rem;
 }
 
 .days__all {
