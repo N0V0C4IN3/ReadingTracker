@@ -515,15 +515,18 @@ header > a:first-child:hover {
 /* The way back: the same outlined pill as Read more below it, so the page's two small controls
    are one shape rather than a link and a button that happen to be near each other. */
 .book__back {
-    display: inline-block;
-    margin-bottom: 1rem;
-    padding: 0.3rem 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0 0 1.1rem;
+    padding: 0.2rem 0.7rem 0.2rem 0.55rem;
     border: 1px solid var(--line-strong);
     border-radius: 999px;
     background: var(--fill);
-    color: var(--ink);
-    font-size: 0.8rem;
+    color: var(--ink-soft);
+    font-size: 0.74rem;
     font-weight: 600;
+    line-height: 1.4;
     text-decoration: none;
     transition: background var(--quick) var(--ease), border-color var(--quick) var(--ease);
 }
@@ -531,6 +534,7 @@ header > a:first-child:hover {
 .book__back:hover {
     background: var(--fill-hover);
     border-color: var(--ink-faint);
+    color: var(--ink);
 }
 
 /*
