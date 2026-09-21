@@ -13,9 +13,10 @@
 // not read the pixels of a cross-origin image, and Google Books sends no CORS headers.
 //
 // What was read is kept in localStorage by book, so a page revisited is painted from the first
-// frame and only re-read afterwards; the first visit snaps a beat after the page appears, once
-// the cover arrives. Both are per theme: the same jacket gives a pale accent on dark and a deep
-// one on light.
+// frame and only re-read afterwards; on a first visit the colours glide in a beat after the
+// page appears, once the cover arrives (the tokens are registered in app.css so that they can,
+// and data-jacket on <html> is what switches the transition on). Both are per theme: the same
+// jacket gives a pale accent on dark and a deep one on light.
 
 const STORAGE = "readingtracker.palette.";
 const root = document.documentElement;
@@ -169,6 +170,10 @@ export function begin(bookId) {
     current = recall(bookId);
     paint();
 
+    // The transition is switched on a frame after what was remembered has been painted, so
+    // that is on screen at once and only what comes after it glides.
+    requestAnimationFrame(() => requestAnimationFrame(() => root.setAttribute("data-jacket", "")));
+
     observer ??= new MutationObserver(paint);
     observer.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
 }
@@ -196,6 +201,7 @@ export async function apply(bookId, bytes) {
 /** The page is over: the theme's own colours come back for whatever is next. */
 export function end() {
     current = null;
+    root.removeAttribute("data-jacket");
     washNames.concat(accentNames).forEach(name => root.style.removeProperty(name));
     observer?.disconnect();
     observer = null;

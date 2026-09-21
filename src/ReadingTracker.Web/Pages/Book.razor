@@ -3,6 +3,7 @@
 @inject GatewayLibraryClient Library
 @inject GatewayCatalogClient Catalog
 @inject NavigationManager Navigation
+@inject ShelfMemory Memory
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
@@ -78,13 +79,19 @@
 
                 @if (_book is { Paragraphs.Count: > 0 } described)
                 {
-                    @* The first two paragraphs are the pitch; the rest is there for whoever wants it, and folds back. *@
-                    <div class="book__about">
-                        @foreach (var paragraph in _readingMore ? described.Paragraphs : described.Paragraphs.Take(ParagraphsAtFirst))
-                        {
-                            <p>@paragraph</p>
-                        }
-                        @if (described.Paragraphs.Count > ParagraphsAtFirst)
+                    @*
+                        Folded, the description is the same height on every book: a fixed number of
+                        lines, cut with an ellipsis wherever the cut falls (the stylesheet does both).
+                        Read more unfolds the whole of it, and it folds back.
+                    *@
+                    <div class="book__about @(_readingMore ? null : "book__about--folded")">
+                        <div class="book__text">
+                            @foreach (var paragraph in described.Paragraphs)
+                            {
+                                <p>@paragraph</p>
+                            }
+                        </div>
+                        @if (Unfolds(described))
                         {
                             <button type="button" class="link-button book__more" @onclick="() => _readingMore = !_readingMore">
                                 @(_readingMore ? "Show less" : "Read more")
@@ -152,8 +159,14 @@
     [CascadingParameter]
     private Task<AuthenticationState>? AuthState { get; set; }
 
-    /// <summary>How much of the description shows before the reader asks for the rest.</summary>
-    private const int ParagraphsAtFirst = 2;
+    /// <summary>
+    /// Whether the description is long enough to be worth unfolding. The fold is a number of
+    /// lines, which is not known here, so this is the length of text that fills it on a phone —
+    /// on a wider screen a description a little over this fits and the button unfolds nothing,
+    /// which is a small thing next to a button that is missing when it is needed.
+    /// </summary>
+    private static bool Unfolds(CatalogBook described) =>
+        described.Paragraphs.Count > 1 || described.Paragraphs.Sum(paragraph => paragraph.Length) > 300;
 
     private LibraryEntry? _entry;
     private LibraryUnavailable? _problem;
@@ -191,7 +204,12 @@
         // Painted from what was read of the cover last time, before anything is fetched, so a
         // page revisited is in its colours from the first frame.
         await (await PaletteAsync()).InvokeVoidAsync("begin", EntryId);
-        await LoadAsync();
+
+        // The shelf the reader just tapped knew the cover already: the fetch for its colours
+        // starts now, alongside asking Library, rather than after Library has answered.
+        var painting = Memory.Recall(EntryId) is { } remembered ? PaintFromCoverAsync(remembered) : null;
+
+        await LoadAsync(painting);
     }
 
     /// <summary>
@@ -199,7 +217,7 @@
     /// the cards need and no more, so asking for the whole shelf to find one book costs what
     /// opening the shelf costs.
     /// </summary>
-    private async Task LoadAsync()
+    private async Task LoadAsync(Task? painting)
     {
         var (entries, problem) = await Library.GetEntriesAsync(null, CancellationToken.None);
 
@@ -216,7 +234,7 @@
         // colours when the cover does — each on its own, neither waiting for the other.
         StateHasChanged();
 
-        await Task.WhenAll(LoadDetailsAsync(_entry.BookId), PaintFromCoverAsync(_entry));
+        await Task.WhenAll(LoadDetailsAsync(_entry.BookId), painting ?? PaintFromCoverAsync(_entry));
     }
 
     private async Task LoadDetailsAsync(Guid bookId)

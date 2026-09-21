@@ -88,6 +88,41 @@
 }
 
 /*
+    The colours a book's page takes from its jacket (js/coverPalette.js) are registered as
+    colours rather than left as untyped text, which is what lets them be transitioned: a bare
+    custom property changes in one frame and everything built on it — the mesh's gradients most
+    of all, which no rule of their own could ease — snaps with it. Registered, the values
+    themselves glide and every use of them repaints along the way.
+
+    Every one has the theme's own light value as its initial value, which is never seen: :root
+    above always sets them. It is there because a registered property must have one.
+*/
+@property --accent { syntax: "<color>"; inherits: true; initial-value: #2f6b4f; }
+@property --accent-hover { syntax: "<color>"; inherits: true; initial-value: #275b43; }
+@property --accent-soft { syntax: "<color>"; inherits: true; initial-value: rgb(47 107 79 / 11%); }
+@property --accent-ink { syntax: "<color>"; inherits: true; initial-value: #ffffff; }
+@property --wash-accent { syntax: "<color>"; inherits: true; initial-value: rgb(47 107 79 / 14%); }
+@property --wash-warm { syntax: "<color>"; inherits: true; initial-value: rgb(212 160 84 / 12%); }
+@property --wash-cool { syntax: "<color>"; inherits: true; initial-value: rgb(86 132 176 / 12%); }
+
+/*
+    Only while a page is wearing a jacket, and only from the frame after it has put on what it
+    already knew — so a page revisited is in its colours at once, and it is the colours arriving
+    afresh, or the theme being switched under them, that glide. Long, because the arrival is
+    the whole page changing colour, and a page that changes colour quickly looks like a fault.
+*/
+:root[data-jacket] {
+    transition:
+        --accent 900ms var(--ease-out),
+        --accent-hover 900ms var(--ease-out),
+        --accent-soft 900ms var(--ease-out),
+        --accent-ink 900ms var(--ease-out),
+        --wash-accent 1200ms var(--ease-out),
+        --wash-warm 1200ms var(--ease-out),
+        --wash-cool 1200ms var(--ease-out);
+}
+
+/*
     The dark set, twice over: once for a reader whose system is dark and who has not said
     otherwise, once for a reader who chose dark here whatever their system says. The tokens are
     the same lines both times, so the two can never drift; a choice of light is the first rule's
@@ -627,6 +662,29 @@ header > a:first-child:hover {
 
 .book__about p:last-child {
     margin-bottom: 0;
+}
+
+/*
+    Folded: seven lines, whatever the book, cut with an ellipsis wherever the seventh line ends —
+    mid-sentence, usually — so every book's page has the same shape down to Read more. The
+    paragraphs run on without space between them while folded, marked by an indent instead,
+    because a gap that fell inside the seven lines would make one book's fold taller than
+    another's; unfolded, they get their space back.
+*/
+.book__about--folded .book__text {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 7;
+    line-clamp: 7;
+    overflow: hidden;
+}
+
+.book__about--folded p {
+    margin: 0;
+}
+
+.book__about--folded p + p {
+    text-indent: 1.25em;
 }
 
 /* Read more, and Show less: a small outlined pill, visibly a button at rest and not only under the pointer,
