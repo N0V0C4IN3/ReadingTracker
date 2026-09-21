@@ -4,10 +4,10 @@
 @*
     The reading half of the Book page: everything the reader has done with this book and
     everything they can do to it — the same panels as the shelf card, wired to the same changes,
-    with the room a page has that a card does not. The figure heads it with its caption at the
-    line's end, the bar runs under them, and the line saying where the e-reader last was comes
-    with the bar; the log form opens under its button; Settings and Remove sit at the foot,
-    where a page keeps the things done once.
+    with the room a page has that a card does not. The pace stripe heads it — its first figure
+    is the card's figure, so the card's bar is not repeated here — the line saying where the
+    e-reader last was comes under it; the log form opens under its button; Settings and Remove
+    sit at the foot, where a page keeps the things done once.
 
     The status is a change this half owns but does not sit here: it stands at the right end of
     the page's head, level with the title, the way it does on the card. So the page hands the
@@ -30,14 +30,17 @@
 @ChildContent
 
 <div class="reading @(Working ? "entry--working" : null) @Standing">
-    <ProgressBar Progress="Entry.Progress"
-                 TrackingMethod="@Entry.TrackingMethod"
-                 EffectivePageCount="Entry.EffectivePageCount"
-                 Bookmark="Entry.Bookmark"
-                 Finished="Finished"
-                 FinishedOn="Entry.FinishedOn" />
-
     <PaceStripe Entry="Entry" Sessions="Sessions" />
+
+    @* Where the e-reader last was — the card says it under its bar; here the same line goes
+       under the stripe, since the page has no bar of its own. See ProgressBar.razor. *@
+    @if (!Finished && Entry.Bookmark is { } bookmark)
+    {
+        <p class="progress__device">
+            On your device: <strong>@Figures.Trim(bookmark.Percent)%</strong>
+            <span class="progress__device-when">@bookmark.ReportedAt.ToLocalTime().ToString("d MMM, HH:mm")</span>
+        </p>
+    }
 
     @if (Logging)
     {

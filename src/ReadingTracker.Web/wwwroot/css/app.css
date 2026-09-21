@@ -747,19 +747,17 @@ header > a:first-child:hover {
 }
 
 /*
-    The reading half: a column, so the progress bar's pieces land where they do on the card —
-    the figure and its caption on one line, the bar across beneath, the device line under that —
-    and every panel full width after them. The status is not here: it is up in the head, level
-    with the title, the same place it has on the card.
+    The reading half: a column, the pace stripe first — its top rule is the line between the
+    book and the reading — the device line under it, and every panel full width after them.
+    The status is not here: it is up in the head, level with the title, the same place it has
+    on the card.
 */
 .reading {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     row-gap: 0.6rem;
     align-items: start;
-    margin-top: 1.4rem;
-    padding-top: 1.1rem;
-    border-top: 1px solid var(--line);
+    margin-top: 1.6rem;
 }
 
 .reading__actions {
@@ -2256,6 +2254,7 @@ button.danger:hover:not(:disabled) {
 
 .status-select {
     font-size: 0.85rem;
+    font-weight: 600;
     padding: 0.3rem 0.5rem;
 }
 
