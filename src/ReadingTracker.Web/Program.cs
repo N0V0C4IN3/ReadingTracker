@@ -79,6 +79,7 @@ else
 // Every client this application makes points at the Gateway, the only address this
 // application is allowed to know — never at Catalog or Library directly.
 builder.Services.AddScoped<ShelfChanges>();
+builder.Services.AddScoped<ShelfMemory>();
 builder.Services.AddScoped<ImportJob>();
 
 AddGatewayClient<GatewayLibraryClient>();

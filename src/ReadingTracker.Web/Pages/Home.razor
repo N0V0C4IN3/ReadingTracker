@@ -7,6 +7,7 @@
 @inject GatewayCatalogClient Catalog
 @inject IOptions<DevSignInOptions> DevSignIn
 @inject NavigationManager Navigation
+@inject ShelfMemory Memory
 @inject IJSRuntime JS
 
 <PageTitle>ReadingTracker</PageTitle>
@@ -683,6 +684,12 @@
             return;
         }
 
+        // The shelf remembers the tab it was left on for whoever left it there, and nobody else.
+        if (_shelfBelongsTo is not null && reader != _shelfBelongsTo)
+        {
+            Memory.Forget();
+        }
+
         _shelfBelongsTo = reader;
 
         // One reader's results must never be left on screen for the next one.
@@ -692,7 +699,7 @@
         _searched = null;
         _searchProblem = null;
         _addProblem = null;
-        _filter = OpensOn;
+        _filter = Memory.Remembers ? Memory.Tab : OpensOn;
         StopAddingByHand();
 
         // Fetching before we know there is a reader would send the Gateway a request with no
@@ -709,7 +716,8 @@
         // everything instead. An empty Reading tab is a poor first sight of a shelf with books on
         // it, and a worse one of a shelf with none: the "add your first book" line lives on All.
         // The whole shelf is already here, so this is a look at it rather than a second fetch.
-        if (StatusFiltered.Count == 0)
+        // A tab the reader chose is theirs, though, empty or not.
+        if (!Memory.Remembers && StatusFiltered.Count == 0)
         {
             _filter = null;
         }
@@ -722,7 +730,11 @@
     /// Switching tabs no longer fetches: the whole shelf is already here, so the status filter is
     /// applied where the cards are read (StatusFiltered). Instant, and off-limits while searching.
     /// </summary>
-    private void FilterAsync(string? status) => _filter = status;
+    private void FilterAsync(string? status)
+    {
+        _filter = status;
+        Memory.Remember(status);
+    }
 
     /// <summary>
     /// Swap in the entry as Library now describes it, rather than reloading the whole shelf for one
@@ -1043,6 +1055,7 @@
         if (added is { } entry && _filter is not null && _filter != entry.Status)
         {
             _filter = entry.Status;
+            Memory.Remember(_filter);
         }
 
         await LoadShelfAsync();
