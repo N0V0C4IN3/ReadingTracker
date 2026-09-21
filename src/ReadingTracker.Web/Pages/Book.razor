@@ -72,15 +72,17 @@
 
                 @if (_book is { Paragraphs.Count: > 0 } described)
                 {
-                    @* The first two paragraphs are the pitch; the rest is there for whoever wants it. *@
+                    @* The first two paragraphs are the pitch; the rest is there for whoever wants it, and folds back. *@
                     <div class="book__about">
                         @foreach (var paragraph in _readingMore ? described.Paragraphs : described.Paragraphs.Take(ParagraphsAtFirst))
                         {
                             <p>@paragraph</p>
                         }
-                        @if (!_readingMore && described.Paragraphs.Count > ParagraphsAtFirst)
+                        @if (described.Paragraphs.Count > ParagraphsAtFirst)
                         {
-                            <button type="button" class="link-button book__more" @onclick="() => _readingMore = true">Read more</button>
+                            <button type="button" class="link-button book__more" @onclick="() => _readingMore = !_readingMore">
+                                @(_readingMore ? "Show less" : "Read more")
+                            </button>
                         }
                     </div>
                 }

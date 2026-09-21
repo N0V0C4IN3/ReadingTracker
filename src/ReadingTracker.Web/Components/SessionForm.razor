@@ -65,7 +65,7 @@
     private readonly string _id = Guid.NewGuid().ToString("N")[..8];
 
     private decimal? _amount;
-    private DateTime? _occurredOn = DateTime.Today;
+    private DateTime? _occurredOn;
     private int? _minutes;
     private string? _complaint;
 
@@ -75,6 +75,8 @@
     {
         if (Existing is not { } session)
         {
+            // A new stretch was read today until the reader says otherwise.
+            _occurredOn ??= DateTime.Today;
             return;
         }
 
@@ -98,9 +100,12 @@
         _complaint = null;
 
         // Sent as a local-midnight instant with its offset, so "Tuesday" stays Tuesday rather
-        // than sliding a day for readers west of UTC.
+        // than sliding a day for readers west of UTC. A correction that leaves the day alone
+        // leaves the time alone too: the evening it was read is part of the record.
         var occurredAt = _occurredOn is { } on
-            ? new DateTimeOffset(on.Date, TimeZoneInfo.Local.GetUtcOffset(on.Date))
+            ? Existing is { } was && was.OccurredAt.LocalDateTime.Date == on.Date
+                ? was.OccurredAt
+                : new DateTimeOffset(on.Date, TimeZoneInfo.Local.GetUtcOffset(on.Date))
             : (DateTimeOffset?)null;
 
         await OnSubmit.InvokeAsync(new NewSession(amount, occurredAt, _minutes));
