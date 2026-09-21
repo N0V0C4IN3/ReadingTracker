@@ -621,6 +621,11 @@ header > a:first-child:hover {
 .book__more {
     margin-top: 0.2rem;
     padding: 0.3rem 0.85rem;
+    /* One width on every page and for both labels: "Read more" and "Show less" are not the same
+       length, and a pill that resized with them shifted under the pointer each time it was
+       pressed, and sat at a different width on every book. */
+    min-width: 7.5rem;
+    text-align: center;
     border: 1px solid var(--line-strong);
     border-radius: 999px;
     background: var(--fill);
