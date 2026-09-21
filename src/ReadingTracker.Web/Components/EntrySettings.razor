@@ -1,0 +1,229 @@
+@using ReadingTracker.Web.Services
+@inject GatewayCatalogClient Catalog
+
+@*
+    How the reader tracks this book and how long their copy is: the TrackingMethod, their own
+    page count, and — the other way a count goes wrong — the edition itself, found by searching
+    the library from here. Each change is the host's to make; this panel says what was asked.
+*@
+
+<div class="panel">
+    <div class="field">
+        <label for="@($"method-{Entry.Id}")">Track by</label>
+        <select id="@($"method-{Entry.Id}")" value="@Entry.TrackingMethod" @onchange="TrackingMethodChangedAsync" disabled="@Disabled">
+            <option value="Pages" selected="@(Entry.TrackingMethod == "Pages")">Pages</option>
+            <option value="Percentage" selected="@(Entry.TrackingMethod == "Percentage")">Percentage</option>
+        </select>
+        @* Switching is a display-time conversion, never a rewrite of past sessions —
+           each keeps the unit it was logged in. Saying so stops it looking lossy. *@
+        <p class="hint">Past sessions keep the unit they were logged in.</p>
+    </div>
+
+    <div class="field">
+        <label for="@($"pages-{Entry.Id}")">Pages in your edition</label>
+        <input id="@($"pages-{Entry.Id}")" type="number" min="1" @bind="_pageCount" disabled="@Disabled" />
+        <button type="button" @onclick="() => OnPageCount(_pageCount)" disabled="@Disabled">Save</button>
+        @if (Entry.PageCountOverride is not null)
+        {
+            <button type="button" class="link-button" @onclick="() => OnPageCount(null)" disabled="@Disabled">
+                Use the catalog's count
+            </button>
+        }
+        <p class="hint">
+            @if (Entry.PageCountOverride is { } own)
+            {
+                <text>Yours: @own pages.</text>
+            }
+            else if (Entry.Book?.TotalPages is { } catalogued)
+            {
+                <text>The catalog says @catalogued pages.</text>
+            }
+            else
+            {
+                <text>Nobody has a page count for this book, so percentages are unavailable until you set one.</text>
+            }
+        </p>
+    </div>
+
+    @*
+        The wrong edition is the other way a count goes wrong, and the fix for it is
+        not a number but the right book. Pointing the entry at it keeps everything
+        — status, sessions, the device linked to it — where re-adding would not.
+    *@
+    <div class="field field--edition">
+        <label for="@($"edition-{Entry.Id}")">Edition</label>
+        @if (_editions is null && !_editionOpen)
+        {
+            <button type="button" class="link-button" @onclick="OpenEditionSearch" disabled="@Disabled">
+                Reading a different edition? Find it
+            </button>
+        }
+        else
+        {
+            <div class="edition__search">
+                <input id="@($"edition-{Entry.Id}")" type="search" placeholder="Title, author or ISBN"
+                       @bind="_editionQuery" @bind:event="oninput" @onkeydown="SearchEditionOnEnterAsync"
+                       disabled="@(Disabled || _editionBusy)" />
+                <button type="button" @onclick="() => SearchEditionAsync(1)" disabled="@(Disabled || _editionBusy || string.IsNullOrWhiteSpace(_editionQuery))">
+                    @(_editionBusy ? "Searching…" : "Search")
+                </button>
+                <button type="button" class="link-button" @onclick="CloseEditionSearch" disabled="@Disabled">Cancel</button>
+            </div>
+            <p class="hint">Your status, sessions and device link stay; only the page count follows the new edition.</p>
+
+            @if (_editionProblem is { } editionProblem)
+            {
+                <p class="hint hint--bad" role="alert">@editionProblem</p>
+            }
+
+            @if (_editions is { } editions)
+            {
+                @if (editions.Results.Count == 0)
+                {
+                    <p class="hint">Nothing in the library matches that.</p>
+                }
+                else
+                {
+                    <ul class="editions">
+                        @foreach (var found in editions.Results)
+                        {
+                            <li class="lib-card @(found.Id == Entry.BookId ? "lib-card--mine" : null)" @key="found.Id">
+                                @if (found.CoverUrl is { } jacket)
+                                {
+                                    <img src="@jacket" alt="" loading="lazy" />
+                                }
+                                else
+                                {
+                                    <div class="result__cover-placeholder" aria-hidden="true"></div>
+                                }
+                                <div class="lib-card__body">
+                                    <strong>@found.Title</strong>
+                                    @if (found.Authors.Count > 0)
+                                    {
+                                        <span>@string.Join(", ", found.Authors)</span>
+                                    }
+                                    <span class="lib-card__pages">@(found.TotalPages is { } length and > 0 ? $"{length} pages" : "length unknown")</span>
+                                </div>
+                                @if (found.Id == Entry.BookId)
+                                {
+                                    <span class="onshelf">This one</span>
+                                }
+                                else
+                                {
+                                    <button type="button" class="button--add" @onclick="() => UseEditionAsync(found)" disabled="@Disabled">
+                                        Use this edition
+                                    </button>
+                                }
+                            </li>
+                        }
+                    </ul>
+
+                    @if (editions.HasMore)
+                    {
+                        <button type="button" class="link-button" @onclick="() => SearchEditionAsync(editions.Page + 1)" disabled="@(Disabled || _editionBusy)">
+                            More results
+                        </button>
+                    }
+                }
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required LibraryEntry Entry { get; set; }
+
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    [Parameter, EditorRequired]
+    public required Func<string, Task> OnTrackingMethod { get; set; }
+
+    /// <summary>Sets the reader's own page count; null goes back to the catalog's.</summary>
+    [Parameter, EditorRequired]
+    public required Func<int?, Task> OnPageCount { get; set; }
+
+    /// <summary>Points the entry at another Book. Answers whether it took; the search closes only when it did.</summary>
+    [Parameter, EditorRequired]
+    public required Func<Guid, Task<bool>> OnEdition { get; set; }
+
+    private int? _pageCount;
+
+    private bool _editionOpen;
+    private string _editionQuery = "";
+    private bool _editionBusy;
+    private BookSearchPage? _editions;
+    private string? _editionProblem;
+
+    protected override void OnParametersSet() =>
+        _pageCount = Entry.PageCountOverride ?? Entry.Book?.TotalPages;
+
+    private async Task TrackingMethodChangedAsync(ChangeEventArgs e)
+    {
+        if (e.Value?.ToString() is { } method)
+        {
+            await OnTrackingMethod(method);
+        }
+    }
+
+    private void OpenEditionSearch()
+    {
+        _editionOpen = true;
+        _editionQuery = Entry.Book?.Title ?? "";
+        _editions = null;
+        _editionProblem = null;
+    }
+
+    private void CloseEditionSearch()
+    {
+        _editionOpen = false;
+        _editions = null;
+        _editionProblem = null;
+    }
+
+    private async Task SearchEditionOnEnterAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_editionQuery) && !_editionBusy)
+        {
+            await SearchEditionAsync(1);
+        }
+    }
+
+    private async Task SearchEditionAsync(int page)
+    {
+        _editionBusy = true;
+        _editionProblem = null;
+
+        try
+        {
+            var (found, problem) = await Catalog.SearchAsync(_editionQuery, page, CancellationToken.None);
+
+            if (found is not null)
+            {
+                _editions = found;
+            }
+            else
+            {
+                _editionProblem = problem switch
+                {
+                    SearchUnavailable.NotSignedIn => "Your session has ended. Sign in again.",
+                    SearchUnavailable.TooManyRequests => "That is a lot of searching — give the library a minute.",
+                    _ => "The library could not be searched just now. Try again shortly.",
+                };
+            }
+        }
+        finally
+        {
+            _editionBusy = false;
+        }
+    }
+
+    private async Task UseEditionAsync(BookSearchResult book)
+    {
+        if (await OnEdition(book.Id))
+        {
+            CloseEditionSearch();
+        }
+    }
+}

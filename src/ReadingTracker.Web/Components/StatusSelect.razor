@@ -1,0 +1,46 @@
+@using ReadingTracker.Web.Services
+
+@* The ReadingStatus, as one select coloured by where the book stands. Picking says what was picked; the host makes the change. *@
+
+<div class="entry__status">
+    <label class="visually-hidden" for="@($"status-{Entry.Id}")">Reading status</label>
+    <select id="@($"status-{Entry.Id}")"
+            class="status-select status-select--@Entry.Status.ToLowerInvariant()"
+            value="@Entry.Status"
+            @onchange="PickAsync"
+            disabled="@Disabled">
+        @foreach (var status in Statuses)
+        {
+            <option value="@status.Key" selected="@(status.Key == Entry.Status)">@status.Value</option>
+        }
+    </select>
+</div>
+
+@code {
+    /// <summary>The wording readers see, against the values Library actually accepts.</summary>
+    private static readonly Dictionary<string, string> Statuses = new()
+    {
+        ["WantToRead"] = "Want to read",
+        ["Reading"] = "Reading",
+        ["Finished"] = "Finished",
+        ["OnHold"] = "On hold",
+        ["Dropped"] = "Dropped",
+    };
+
+    [Parameter, EditorRequired]
+    public required LibraryEntry Entry { get; set; }
+
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnPick { get; set; }
+
+    private async Task PickAsync(ChangeEventArgs e)
+    {
+        if (e.Value?.ToString() is { } status)
+        {
+            await OnPick.InvokeAsync(status);
+        }
+    }
+}

@@ -5,7 +5,7 @@ A web application for tracking personal reading progress across books — what y
 ## Language
 
 **Book**:
-Catalog metadata for a title — author(s), ISBN, cover image, total page count when known — sourced from an external book-data provider, or entered by hand when no provider match exists. A Book is global/shared, not owned by any one Reader, and is cached locally the first time it's referenced rather than re-fetched live on every use.
+Catalog metadata for a title — author(s), ISBN, cover image, total page count when known, and, where the provider has them, a description, publisher, publication date and categories — sourced from an external book-data provider, or entered by hand when no provider match exists. A Book is global/shared, not owned by any one Reader, and is cached locally the first time it's referenced rather than re-fetched live on every use; the longer details may arrive later than the rest, the first time somebody asks for them.
 _Avoid_: Title (ambiguous with the `title` field itself), Edition
 
 **Catalog**:
@@ -51,6 +51,10 @@ _Avoid_: State (too generic)
 **Finished on**:
 The day a Reader finished a Book, kept on the LibraryEntry: stamped when the ReadingStatus becomes `Finished`, or stated outright by the Reader when they know the real day (an import from elsewhere does), and let go of when the Book is no longer `Finished`. A day, not an instant — it is how a Reader remembers it — and the ReadingGoal counts by the year it falls in.
 _Avoid_: Completed, Read date, Date finished (Hardcover's name for it), FinishedAt
+
+**Book page**:
+One LibraryEntry in full: the Book's details — description included — and everything the Reader has done with it: status, amount read, Bookmark, every ReadingSession, and the pace they add up to. Reached from the Book on the shelf; only a Book on the Reader's shelf has one. Everything the shelf card can do, the Book page can do too.
+_Avoid_: About (reads as "about the application"), Book details (that is the Book's own metadata, without the Reader's part), Entry page
 
 **ReadingGoal**:
 How many Books a Reader means to finish in a calendar year. Set by the Reader, one per year, and only ever the target: how many they have finished is counted from their LibraryEntries' Finished on, never stored, so the two cannot disagree. A year with no ReadingGoal still has a count.
