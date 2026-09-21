@@ -107,6 +107,10 @@ public abstract class EntryHost : ComponentBase
         });
     }
 
+    /// <summary>Their answer to the prompt a completed book raises, which is the same change
+    /// the status control makes — the prompt only saves them going to find it.</summary>
+    protected Task FinishAsync() => ChangeStatusAsync("Finished");
+
     protected async Task ChangeTrackingMethodAsync(string method)
     {
         if (method == Entry.TrackingMethod)

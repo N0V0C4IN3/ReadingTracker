@@ -62,20 +62,7 @@
         <div class="entry__actions">
             @if (Logging)
             {
-                <button type="button"
-                        class="button--log @(_panel == Panel.Log ? "button--log--open" : null)"
-                        @onclick="() => Toggle(Panel.Log)"
-                        disabled="@Working">
-                    @if (_panel == Panel.Log)
-                    {
-                        <text>Cancel</text>
-                    }
-                    else
-                    {
-                        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.4 1.6l3 3L5.2 13.8 1.5 14.5l.7-3.7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" /></svg>
-                        <text>Log reading</text>
-                    }
-                </button>
+                <LogButton Open="_panel == Panel.Log" Disabled="Working" OnClick="() => Toggle(Panel.Log)" />
             }
             <button type="button" class="link-button" @onclick="ToggleHistoryAsync" disabled="@Working">
                 History
@@ -128,7 +115,7 @@
         {
             <FinishPrompt Title="@(Entry.Book?.Title ?? "this book")"
                           Disabled="Working"
-                          OnFinish="MarkFinishedAsync"
+                          OnFinish="FinishAsync"
                           OnNotYet="Close" />
         }
 
@@ -183,10 +170,6 @@
         Toggle(Panel.History);
         await LoadSessionsAsync();
     }
-
-    /// <summary>Their answer to the prompt a completed book raises, which is the same change
-    /// the status control makes — the prompt only saves them going to find it.</summary>
-    private Task MarkFinishedAsync() => ChangeStatusAsync("Finished");
 
     protected override void Logged() => Close();
 
