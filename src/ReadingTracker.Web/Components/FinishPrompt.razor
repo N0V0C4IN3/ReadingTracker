@@ -1,0 +1,26 @@
+@*
+    Offered, never done for them: people log the last page and keep going into the end matter,
+    and a book that marks itself finished is a book arguing with its reader. Only ever raised by
+    a log that took them to the end, so it does not nag someone who is sitting at 100% and has
+    already said no.
+*@
+
+<div class="panel">
+    <p>That is all of <strong>@Title</strong>. Mark it as finished?</p>
+    <button type="button" @onclick="OnFinish" disabled="@Disabled">Mark it finished</button>
+    <button type="button" class="link-button" @onclick="OnNotYet" disabled="@Disabled">Not yet</button>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required string Title { get; set; }
+
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    [Parameter]
+    public EventCallback OnFinish { get; set; }
+
+    [Parameter]
+    public EventCallback OnNotYet { get; set; }
+}
