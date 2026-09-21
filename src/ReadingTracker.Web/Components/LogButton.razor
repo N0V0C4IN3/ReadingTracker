@@ -1,0 +1,27 @@
+@* The way to the log form, and the way back out of it: one button that says which it is. *@
+<button type="button"
+        class="button--log @(Open ? "button--log--open" : null)"
+        @onclick="OnClick"
+        disabled="@Disabled">
+    @if (Open)
+    {
+        <text>Cancel</text>
+    }
+    else
+    {
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.4 1.6l3 3L5.2 13.8 1.5 14.5l.7-3.7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" /></svg>
+        <text>Log reading</text>
+    }
+</button>
+
+@code {
+    /// <summary>Whether the form it opens is open, in which case this closes it.</summary>
+    [Parameter]
+    public bool Open { get; set; }
+
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    [Parameter]
+    public EventCallback OnClick { get; set; }
+}
