@@ -3,6 +3,8 @@
 @inject GatewayLibraryClient Library
 @inject GatewayCatalogClient Catalog
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 @*
     The Book page: one LibraryEntry in full. Reached from the cover or title of a shelf card,
@@ -20,6 +22,10 @@
     Book's longer details from Catalog, which may be going to the provider for them the first
     time anybody asks. Neither waits for the other, and Catalog having nothing to say — or not
     being reachable — costs the book half one line, not the page.
+
+    The page wears the jacket's colours: the mesh behind it and the accent on it are taken from
+    the cover (js/coverPalette.js), and put back to the theme's own when the page is left. A
+    third arrival, and the quietest: a cover that cannot be had leaves the theme's colours.
 *@
 
 <PageTitle>@(_entry?.Book?.Title ?? "Your shelf") · ReadingTracker</PageTitle>
@@ -163,6 +169,15 @@
     /// </summary>
     private bool _answered;
 
+    /// <summary>
+    /// js/coverPalette.js, imported once and shared by whoever asks first — the page's first
+    /// paint and the cover's arrival race, and either may need it first.
+    /// </summary>
+    private Task<IJSObjectReference>? _palette;
+
+    private Task<IJSObjectReference> PaletteAsync() =>
+        _palette ??= JS.InvokeAsync<IJSObjectReference>("import", "./js/coverPalette.js").AsTask();
+
     /// <summary>Asked for once somebody is signed in; before that the answer would be a 401.</summary>
     protected override async Task OnParametersSetAsync()
     {
@@ -172,6 +187,10 @@
         }
 
         _asked = true;
+
+        // Painted from what was read of the cover last time, before anything is fetched, so a
+        // page revisited is in its colours from the first frame.
+        await (await PaletteAsync()).InvokeVoidAsync("begin", EntryId);
         await LoadAsync();
     }
 
@@ -193,9 +212,58 @@
             return;
         }
 
-        // The page is on screen from here; the details fill in when Catalog answers.
+        // The page is on screen from here; the details fill in when Catalog answers, and the
+        // colours when the cover does — each on its own, neither waiting for the other.
         StateHasChanged();
-        (_book, _bookProblem) = await Catalog.GetBookAsync(_entry.BookId, CancellationToken.None);
+
+        await Task.WhenAll(LoadDetailsAsync(_entry.BookId), PaintFromCoverAsync(_entry));
+    }
+
+    private async Task LoadDetailsAsync(Guid bookId)
+    {
+        (_book, _bookProblem) = await Catalog.GetBookAsync(bookId, CancellationToken.None);
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// The colours are worked out from the cover's bytes in the browser (js/coverPalette.js);
+    /// this fetches them and hands them over. Keyed by entry rather than book so a reader's own
+    /// cover for a book — should that ever exist — would colour their page and nobody else's.
+    /// </summary>
+    private async Task PaintFromCoverAsync(LibraryEntry entry)
+    {
+        if (entry.Book?.CoverUrl is not { Length: > 0 } coverUrl)
+        {
+            return;
+        }
+
+        var bytes = await Catalog.GetCoverAsync(coverUrl, CancellationToken.None);
+
+        if (bytes is null)
+        {
+            return;
+        }
+
+        await (await PaletteAsync()).InvokeVoidAsync("apply", EntryId, bytes);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_palette is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var palette = await _palette;
+            await palette.InvokeVoidAsync("end");
+            await palette.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // The page is gone with the circuit; there is nothing left to put back.
+        }
     }
 
     /// <summary>The authors, and after them who put the book out and when, the way a jacket flap says it.</summary>

@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.IdentityModel.Tokens;
 using ReadingTracker.Gateway;
+using ReadingTracker.Gateway.Covers;
 using ReadingTracker.Gateway.Devices;
 using ReadingTracker.Gateway.Persistence;
 using Yarp.ReverseProxy.Forwarder;
@@ -154,6 +155,8 @@ builder.Services.AddAuthorizationBuilder()
         .Build())
     .AddInPersonPolicy();
 
+builder.Services.AddCoverFetching();
+
 builder.Services.AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
     .AddTransforms(context => context.AddRequestTransform(transform =>
@@ -205,6 +208,9 @@ app.UseAuthorization();
 
 // Served here, not proxied: the table these read and write is the Gateway's own.
 app.MapDeviceEndpoints();
+
+// Served here too: a cover fetched on the browser's behalf, for the book page's colours.
+app.MapCoverEndpoints();
 
 app.MapReverseProxy(proxy =>
     proxy.Use(async (context, next) =>

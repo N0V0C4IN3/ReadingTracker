@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using ReadingTracker.Gateway.Covers;
 using Yarp.ReverseProxy.Forwarder;
 
 namespace ReadingTracker.Gateway.Tests;
@@ -39,6 +40,9 @@ public sealed class GatewayFixture : WebApplicationFactory<Program>, IAsyncLifet
 
     /// <summary>Stands in for Google: publishes the signing keys and mints the tokens.</summary>
     public FakeGoogle Google { get; } = new();
+
+    /// <summary>Stands in for the hosts covers are fetched from, for the cover endpoint.</summary>
+    public StubHttpMessageHandler CoverHosts { get; } = new();
 
     private readonly StubHttpMessageHandler _googleTransport = new();
 
@@ -97,6 +101,9 @@ public sealed class GatewayFixture : WebApplicationFactory<Program>, IAsyncLifet
         builder.ConfigureTestServices(services =>
         {
             services.AddSingleton<IForwarderHttpClientFactory>(new StubForwarder(Downstream));
+
+            services.AddHttpClient(CoverEndpoints.ClientName)
+                .ConfigurePrimaryHttpMessageHandler(() => CoverHosts);
 
             // Google is stubbed at the network boundary too: the Gateway still fetches the
             // discovery document and the signing keys for itself, and still checks signatures

@@ -227,6 +227,30 @@ public sealed class GatewayCatalogClient(HttpClient httpClient)
     }
 
     /// <summary>
+    /// The cover's bytes, fetched through the Gateway so the browser may read them (see the
+    /// Gateway's CoverEndpoints). Null when they cannot be had, whatever the reason: a page's
+    /// colours are a nicety, and there is nothing a reader could do about a jacket that would not
+    /// come.
+    /// </summary>
+    public async Task<byte[]?> GetCoverAsync(string coverUrl, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await httpClient.GetAsync(
+                $"api/covers?url={Uri.EscapeDataString(coverUrl)}",
+                cancellationToken);
+
+            return response.IsSuccessStatusCode
+                ? await response.Content.ReadAsByteArrayAsync(cancellationToken)
+                : null;
+        }
+        catch (HttpRequestException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// One Book in full, for its page. The first time anybody asks for a Book, Catalog may go
     /// to the provider for its longer details, so this can take a moment longer than a search.
     /// </summary>
