@@ -214,6 +214,18 @@
 */
 html {
     overflow-x: clip;
+    /*
+        The gutter is held whether or not there is anything to scroll, so the page does not go
+        15px narrower the moment it grows past the window. Without it the bar arriving is a
+        relayout of everything on screen -- the column is centred, so all of it steps left --
+        and the mesh is sized to the viewport, so it repaints at the new width in the same
+        frame. It lands as a hitch, and it lands just as a shelf or a description has finished
+        arriving, which is the worst moment to ask the eye to start again.
+
+        Phones are not affected either way: their scrollbars are drawn over the page and take no
+        width, so there is no gutter to hold and this does nothing.
+    */
+    scrollbar-gutter: stable;
 }
 
 body {
