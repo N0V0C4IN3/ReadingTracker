@@ -1535,7 +1535,155 @@ button.danger:hover:not(:disabled) {
     70%       { transform: rotateY(-180deg); opacity: 1; }
     88%, 100% { transform: rotateY(-180deg); opacity: 0; }
 }
-    40% { opacity: 1; transform: scaleY(1); }
+
+/*
+    Three waits, one chosen at random ---------------------------------------
+
+    The page turn above is no longer the only one. index.html draws all three and picks one on the
+    first paint, writing the answer to the root element; every screen drawn afterwards — the boot
+    screen and each Settling — reads that same answer, so a reader gets one wait per visit rather
+    than a different one each time something loads. Picking per-component would break the thing
+    Settling exists to protect: the handover from the runtime's screen to the app's is invisible
+    only while both are showing the same shape.
+
+    No attribute at all leaves the page turn showing. That is what a blocked script, a cached
+    index.html from before this, or a reader with JavaScript off will get, and it is exactly what
+    was here before — the random pick is an embellishment on a screen that already worked.
+*/
+.splash__stack,
+.splash__reader {
+    display: none;
+}
+
+:root[data-loader="stack"] .splash__book { display: none; }
+:root[data-loader="stack"] .splash__stack { display: flex; }
+
+:root[data-loader="reader"] .splash__book { display: none; }
+:root[data-loader="reader"] .splash__reader { display: block; }
+
+/*
+    Books landing on a pile. Everything is in em against the one font-size below, so the whole
+    thing is resized by changing that single value.
+
+    Nothing between this and the screen edge may clip: a book begins its fall 2.6em above the pile,
+    which is outside this box. On the splash there is nothing but empty page up there.
+*/
+.splash__stack {
+    flex-direction: column-reverse;
+    align-items: center;
+    justify-content: flex-start;
+    /* Air between the books. Tighter than this and five of them read as one
+       hatched block rather than as five things that were put down separately. */
+    gap: 0.2em;
+    height: 2.75em;
+    font-size: 1rem;
+}
+
+/*
+    One green, the page turn's own, so the two are plainly the same app talking. Every book stays
+    level — nothing rotates. With neither colour nor tilt telling them apart, that work is done by
+    width and by where each comes to rest (--x), and no two agree: a pile squared up in the hand
+    but not in the eye.
+
+    The offsets alternate, and they are just big enough to be read as alternating. Too small and
+    they average out into a pile that merely looks slightly off-centre; too big and the pile stops
+    being a pile and becomes a zigzag, which is a pattern rather than an accident. This is the
+    middle of that: the eye follows the lean from book to book — the thing that says somebody put
+    these down one at a time — while the stack still reads as sitting on one spot. The two sides
+    get different magnitudes as well, so the leans do not answer each other exactly.
+
+    No curve on the shorthand; the drop sets its own below.
+*/
+.splash__stack-book {
+    height: 0.34em;
+    border-radius: 0.08em;
+    background: var(--accent);
+    animation: stack 2.4s infinite;
+}
+
+.splash__stack-book:nth-child(1) { width: 2.4em; --x: -0.26em; animation-delay: 0s; }
+.splash__stack-book:nth-child(2) { width: 2.0em; --x:  0.32em; animation-delay: 0.18s; }
+.splash__stack-book:nth-child(3) { width: 2.6em; --x: -0.34em; animation-delay: 0.36s; }
+.splash__stack-book:nth-child(4) { width: 1.8em; --x:  0.22em; animation-delay: 0.54s; }
+.splash__stack-book:nth-child(5) { width: 2.2em; --x: -0.3em;  animation-delay: 0.72s; }
+
+/*
+    Straight down, from two and a half book-heights of clear air, on a curve that accelerates: a
+    thing that slows as it nears the ground is being lowered onto it, not dropped. No sideways
+    drift either — each book falls plumb onto its own spot, which is what makes the off-centre
+    landings read as a pile rather than as a slide-in.
+*/
+@keyframes stack {
+    0%        { opacity: 0; transform: translate(var(--x), -2.6em);
+                animation-timing-function: cubic-bezier(0.4, 0, 0.85, 0.4); }
+    24%       { opacity: 1; transform: translate(var(--x), 0);
+                animation-timing-function: var(--ease-out); }
+    29%       { transform: translate(var(--x), -0.1em); }
+    35%       { transform: translate(var(--x), 0); }
+    76%       { opacity: 1; transform: translate(var(--x), 0); }
+    88%, 100% { opacity: 0; transform: translate(var(--x), 0.3em); }
+}
+
+/*
+    A page setting itself on an e-reader — the device this app already knows about, in DeviceTokens
+    and the KOReader plugin. The boot screen's own three values, applied to a device instead of a
+    book: the still part in accent held back to the same 0.3 the pages use, the moving part in
+    accent at full like the leaf, and --page for the gap between them.
+*/
+.splash__reader {
+    position: relative;
+    width: 2.5em;
+    height: 3.4em;
+    /* The deeper chin an e-reader has. */
+    padding: 0.22em 0.22em 0.5em;
+    border-radius: 0.2em;
+    font-size: 0.8rem;
+}
+
+/* The bezel is a layer of its own rather than the box's background, so holding it back to a tint
+   does not drag the screen and the type back with it. */
+.splash__reader::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+    background: var(--accent);
+    opacity: 0.3;
+}
+
+.splash__screen {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    border-radius: 0.04em;
+    background: var(--page);
+}
+
+.splash__line {
+    position: absolute;
+    left: 0.16em;
+    height: 0.1em;
+    border-radius: 0.05em;
+    background: var(--accent);
+    transform-origin: left center;
+    animation: render 2.4s var(--ease-out) infinite;
+}
+
+/* Ragged down the right, the way set type is. */
+.splash__line:nth-child(1) { top: 0.3em;  width: 1.5em;  animation-delay: 0s; }
+.splash__line:nth-child(2) { top: 0.62em; width: 1.15em; animation-delay: 0.13s; }
+.splash__line:nth-child(3) { top: 0.94em; width: 1.4em;  animation-delay: 0.26s; }
+.splash__line:nth-child(4) { top: 1.26em; width: 0.95em; animation-delay: 0.39s; }
+.splash__line:nth-child(5) { top: 1.58em; width: 1.3em;  animation-delay: 0.52s; }
+
+@keyframes render {
+    0%, 4%    { transform: scaleX(0); opacity: 0; }
+    20%, 76%  { transform: scaleX(1); opacity: 1; }
+    88%, 100% { transform: scaleX(1); opacity: 0; }
 }
 
 /*
@@ -4041,14 +4189,22 @@ button.danger:hover:not(:disabled) {
            spilling them up the screen. */
         height: var(--sheet-peek);
         overflow: hidden;
-        padding: 0 1rem calc(0.9rem + env(safe-area-inset-bottom));
+        /* No side padding: every horizontal strip of the dock belongs to something that answers a
+           finger. The 1rem gutters used to be the dock's own, and a swipe begun in one of them —
+           a thumb's width from either edge — found nothing to scroll here and scrolled the shelf
+           behind instead. The gutters are the children's now. */
+        padding: 0 0 calc(0.9rem + env(safe-area-inset-bottom));
+        /* Nothing that starts inside the dock may end up moving the page under it. The results
+           carry this too; this one is for everything that is not them — the foot below the field,
+           the safe-area strip — where a scroll has nowhere of its own to go and would otherwise
+           be handed straight to the shelf. */
+        overscroll-behavior: contain;
         border-width: 1px 0 0;
         border-radius: 22px 22px 0 0;
+        /* The tint for browsers with no backdrop filter, where the dock cannot be glass and has to
+           be nearly paper: the shelf scrolls under it and results have to stay readable over it.
+           Where the filter works, the @supports below makes it the same glass as the menus. */
         background-color: var(--card-raised);
-        /* The dock is the one surface that still blurs what is behind it: the shelf scrolls under
-           it. Browsers without the filter keep the tint alone, which is enough to read on. */
-        -webkit-backdrop-filter: var(--blur);
-        backdrop-filter: var(--blur);
         box-shadow: 0 -10px 30px rgb(0 0 0 / 12%);
         /* Only the height eases. bottom is how far the keyboard has lifted it (sheet.js), and
            that has to move with the keyboard, not glide after it: eased, every correction to
@@ -4056,19 +4212,42 @@ button.danger:hover:not(:disabled) {
         transition: height 260ms var(--ease-out);
     }
 
-    /* The handle you drag the sheet by: a short bar at its top, and the only surface that resizes
-       it, so a drag begun on the results scrolls them instead. */
+    /* The same frosted glass as the account menu and the status sheet — sheerer, and blurred less,
+       so the shelf under the dock stays there as shapes rather than dissolving into flat colour.
+       The dock was the one surface still on the heavier tint and the longer blur, and it read as
+       a panel where the other two read as glass. */
+    @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        .search {
+            background-color: var(--card-frosted);
+            -webkit-backdrop-filter: var(--blur-soft);
+            backdrop-filter: var(--blur-soft);
+        }
+    }
+
+    /*
+        The handle you drag the sheet by: the whole strip across its top, and the only surface that
+        resizes it, so a drag begun on the results scrolls them instead.
+
+        It is the strip and not the pill. The pill is 2.5rem wide and the drag target was the pill:
+        a finger that landed beside it — which is most of the top of the dock — was on the dock
+        itself, which scrolls nothing, and the shelf behind took the swipe. The pill still draws
+        where it did (::before, centred); what changed is how much of the top answers to it.
+    */
     .search__grip {
-        display: block;
+        /* A flex row so the pill is centred by the box rather than by a button's own idea of how
+           to place what is inside it, now that the box is wider than the pill. */
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
         flex: 0 0 auto;
-        align-self: center;
-        width: 2.5rem;
+        align-self: stretch;
+        width: auto;
         height: 1.5rem;
         margin: 0;
         padding: 0;
         background: transparent;
-        /* Only the keyboard focus ring ever draws this box, and a pill wants a round one. */
-        border-radius: 999px;
+        /* Only the keyboard focus ring ever draws this box; it follows the dock's own top corners. */
+        border-radius: 22px 22px 0 0;
         cursor: grab;
         touch-action: none;
         transition: none;
@@ -4094,9 +4273,10 @@ button.danger:hover:not(:disabled) {
     .search__grip::before {
         content: "";
         display: block;
+        flex: 0 0 auto;
         width: 2.5rem;
         height: 4px;
-        margin: 0.6rem auto 0;
+        margin-top: 0.6rem;
         border-radius: 999px;
         background: var(--line-strong);
     }
@@ -4151,13 +4331,22 @@ button.danger:hover:not(:disabled) {
         flex: 1 1 auto;
         overflow-y: auto;
         min-height: 0;
+        /* The dock's side gutters, carried by the scroller rather than by the dock, so a swipe
+           that lands anywhere across the width of the results is a swipe on the results. */
+        padding-inline: 1rem;
         overscroll-behavior: contain;
+        /* Panning is the only gesture the results owe a finger. Stated, because a list that has
+           not overflowed yet is a list with nothing to scroll, and the shelf behind is only too
+           happy to take the swipe instead. */
+        touch-action: pan-y;
     }
 
-    /* A breath between the dock's top edge and the first result, and between the last and the box. */
+    /* A breath between the dock's top edge and the first result, and between the last and the box.
+       Both are the scroller's own padding: as a margin, the lower gap was a strip of dock between
+       the results and the field that scrolled the shelf behind when a thumb came down on it. */
     .search__found:not(:empty) {
         padding-top: 0.5rem;
-        margin-bottom: 0.85rem;
+        padding-bottom: 0.85rem;
     }
 
     .search-row {
@@ -4169,6 +4358,8 @@ button.danger:hover:not(:disabled) {
         order: 1;
         flex: 0 0 auto;
         margin: 0;
+        /* The dock's gutters again — see .search__found. */
+        padding-inline: 1rem;
     }
 
     /* Two-up is one-up in a dock this narrow. */
