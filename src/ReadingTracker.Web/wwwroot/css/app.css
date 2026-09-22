@@ -1585,11 +1585,12 @@ button.danger:hover:not(:disabled) {
     width and by where each comes to rest (--x), and no two agree: a pile squared up in the hand
     but not in the eye.
 
-    The offsets alternate, and they are big enough to be read as alternating. Small ones — a
-    twentieth of a book's width, which is where this started — average out into a pile that just
-    looks slightly off-centre; at this size the eye follows the zigzag from book to book, which is
-    the thing that says somebody put these down one at a time. The two sides are given different
-    magnitudes as well, so the leans do not answer each other exactly.
+    The offsets alternate, and they are just big enough to be read as alternating. Too small and
+    they average out into a pile that merely looks slightly off-centre; too big and the pile stops
+    being a pile and becomes a zigzag, which is a pattern rather than an accident. This is the
+    middle of that: the eye follows the lean from book to book — the thing that says somebody put
+    these down one at a time — while the stack still reads as sitting on one spot. The two sides
+    get different magnitudes as well, so the leans do not answer each other exactly.
 
     No curve on the shorthand; the drop sets its own below.
 */
@@ -1600,11 +1601,11 @@ button.danger:hover:not(:disabled) {
     animation: stack 2.4s infinite;
 }
 
-.splash__stack-book:nth-child(1) { width: 2.4em; --x: -0.38em; animation-delay: 0s; }
-.splash__stack-book:nth-child(2) { width: 2.0em; --x:  0.46em; animation-delay: 0.18s; }
-.splash__stack-book:nth-child(3) { width: 2.6em; --x: -0.5em;  animation-delay: 0.36s; }
-.splash__stack-book:nth-child(4) { width: 1.8em; --x:  0.32em; animation-delay: 0.54s; }
-.splash__stack-book:nth-child(5) { width: 2.2em; --x: -0.44em; animation-delay: 0.72s; }
+.splash__stack-book:nth-child(1) { width: 2.4em; --x: -0.26em; animation-delay: 0s; }
+.splash__stack-book:nth-child(2) { width: 2.0em; --x:  0.32em; animation-delay: 0.18s; }
+.splash__stack-book:nth-child(3) { width: 2.6em; --x: -0.34em; animation-delay: 0.36s; }
+.splash__stack-book:nth-child(4) { width: 1.8em; --x:  0.22em; animation-delay: 0.54s; }
+.splash__stack-book:nth-child(5) { width: 2.2em; --x: -0.3em;  animation-delay: 0.72s; }
 
 /*
     Straight down, from two and a half book-heights of clear air, on a curve that accelerates: a
