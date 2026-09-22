@@ -240,6 +240,9 @@ body {
         up and down with it. Safari also ignores the attachment and lets the mesh scroll with the
         page, which is a smaller thing to live with than an edge. Chrome composites a fixed root
         background, so it costs nothing on the scroll.
+
+        KEEP IN STEP with .splash--settling, which paints this same canvas over the page it is
+        covering so that covering the page does not cover the mesh.
     */
     background-image:
         radial-gradient(56rem 40rem at 12% 12%, var(--wash-accent), transparent 66%),
@@ -1718,7 +1721,27 @@ button.danger:hover:not(:disabled) {
        middle of signing in is worse than that. */
     z-index: 25;
     min-height: 100vh;
-    background: var(--page);
+    /*
+        The body's own canvas, painted again, rather than a flat fill of var(--page). What this
+        covers it covers completely, and a flat fill covers the mesh along with everything else.
+        On the Book page that showed: the nearest positioned ancestor is the 40rem column, so
+        the wait was a slab of bare page colour down the middle with the mesh still there either
+        side of it. And the mesh is not idle during that wait — the jacket's colours are gliding
+        into it (see the registered properties above), which is the only thing on screen that is
+        about the book being waited for.
+
+        Attached to the viewport, as on the body, so the four fields land in the same places
+        whatever this happens to be sitting in and its edges do not show.
+
+        KEEP IN STEP with the mesh on body.
+    */
+    background-color: var(--page);
+    background-image:
+        radial-gradient(56rem 40rem at 12% 12%, var(--wash-accent), transparent 66%),
+        radial-gradient(52rem 38rem at 88% 4%, var(--wash-warm), transparent 66%),
+        radial-gradient(56rem 40rem at 76% 96%, var(--wash-cool), transparent 66%),
+        radial-gradient(48rem 34rem at 14% 100%, var(--wash-accent), transparent 66%);
+    background-attachment: fixed;
 }
 
 /* The download is finished by the time this draws; the bar says so rather than restarting. */
