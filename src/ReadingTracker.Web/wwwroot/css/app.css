@@ -4041,14 +4041,22 @@ button.danger:hover:not(:disabled) {
            spilling them up the screen. */
         height: var(--sheet-peek);
         overflow: hidden;
-        padding: 0 1rem calc(0.9rem + env(safe-area-inset-bottom));
+        /* No side padding: every horizontal strip of the dock belongs to something that answers a
+           finger. The 1rem gutters used to be the dock's own, and a swipe begun in one of them —
+           a thumb's width from either edge — found nothing to scroll here and scrolled the shelf
+           behind instead. The gutters are the children's now. */
+        padding: 0 0 calc(0.9rem + env(safe-area-inset-bottom));
+        /* Nothing that starts inside the dock may end up moving the page under it. The results
+           carry this too; this one is for everything that is not them — the foot below the field,
+           the safe-area strip — where a scroll has nowhere of its own to go and would otherwise
+           be handed straight to the shelf. */
+        overscroll-behavior: contain;
         border-width: 1px 0 0;
         border-radius: 22px 22px 0 0;
+        /* The tint for browsers with no backdrop filter, where the dock cannot be glass and has to
+           be nearly paper: the shelf scrolls under it and results have to stay readable over it.
+           Where the filter works, the @supports below makes it the same glass as the menus. */
         background-color: var(--card-raised);
-        /* The dock is the one surface that still blurs what is behind it: the shelf scrolls under
-           it. Browsers without the filter keep the tint alone, which is enough to read on. */
-        -webkit-backdrop-filter: var(--blur);
-        backdrop-filter: var(--blur);
         box-shadow: 0 -10px 30px rgb(0 0 0 / 12%);
         /* Only the height eases. bottom is how far the keyboard has lifted it (sheet.js), and
            that has to move with the keyboard, not glide after it: eased, every correction to
@@ -4056,19 +4064,42 @@ button.danger:hover:not(:disabled) {
         transition: height 260ms var(--ease-out);
     }
 
-    /* The handle you drag the sheet by: a short bar at its top, and the only surface that resizes
-       it, so a drag begun on the results scrolls them instead. */
+    /* The same frosted glass as the account menu and the status sheet — sheerer, and blurred less,
+       so the shelf under the dock stays there as shapes rather than dissolving into flat colour.
+       The dock was the one surface still on the heavier tint and the longer blur, and it read as
+       a panel where the other two read as glass. */
+    @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        .search {
+            background-color: var(--card-frosted);
+            -webkit-backdrop-filter: var(--blur-soft);
+            backdrop-filter: var(--blur-soft);
+        }
+    }
+
+    /*
+        The handle you drag the sheet by: the whole strip across its top, and the only surface that
+        resizes it, so a drag begun on the results scrolls them instead.
+
+        It is the strip and not the pill. The pill is 2.5rem wide and the drag target was the pill:
+        a finger that landed beside it — which is most of the top of the dock — was on the dock
+        itself, which scrolls nothing, and the shelf behind took the swipe. The pill still draws
+        where it did (::before, centred); what changed is how much of the top answers to it.
+    */
     .search__grip {
-        display: block;
+        /* A flex row so the pill is centred by the box rather than by a button's own idea of how
+           to place what is inside it, now that the box is wider than the pill. */
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
         flex: 0 0 auto;
-        align-self: center;
-        width: 2.5rem;
+        align-self: stretch;
+        width: auto;
         height: 1.5rem;
         margin: 0;
         padding: 0;
         background: transparent;
-        /* Only the keyboard focus ring ever draws this box, and a pill wants a round one. */
-        border-radius: 999px;
+        /* Only the keyboard focus ring ever draws this box; it follows the dock's own top corners. */
+        border-radius: 22px 22px 0 0;
         cursor: grab;
         touch-action: none;
         transition: none;
@@ -4094,9 +4125,10 @@ button.danger:hover:not(:disabled) {
     .search__grip::before {
         content: "";
         display: block;
+        flex: 0 0 auto;
         width: 2.5rem;
         height: 4px;
-        margin: 0.6rem auto 0;
+        margin-top: 0.6rem;
         border-radius: 999px;
         background: var(--line-strong);
     }
@@ -4151,13 +4183,22 @@ button.danger:hover:not(:disabled) {
         flex: 1 1 auto;
         overflow-y: auto;
         min-height: 0;
+        /* The dock's side gutters, carried by the scroller rather than by the dock, so a swipe
+           that lands anywhere across the width of the results is a swipe on the results. */
+        padding-inline: 1rem;
         overscroll-behavior: contain;
+        /* Panning is the only gesture the results owe a finger. Stated, because a list that has
+           not overflowed yet is a list with nothing to scroll, and the shelf behind is only too
+           happy to take the swipe instead. */
+        touch-action: pan-y;
     }
 
-    /* A breath between the dock's top edge and the first result, and between the last and the box. */
+    /* A breath between the dock's top edge and the first result, and between the last and the box.
+       Both are the scroller's own padding: as a margin, the lower gap was a strip of dock between
+       the results and the field that scrolled the shelf behind when a thumb came down on it. */
     .search__found:not(:empty) {
         padding-top: 0.5rem;
-        margin-bottom: 0.85rem;
+        padding-bottom: 0.85rem;
     }
 
     .search-row {
@@ -4169,6 +4210,8 @@ button.danger:hover:not(:disabled) {
         order: 1;
         flex: 0 0 auto;
         margin: 0;
+        /* The dock's gutters again — see .search__found. */
+        padding-inline: 1rem;
     }
 
     /* Two-up is one-up in a dock this narrow. */
