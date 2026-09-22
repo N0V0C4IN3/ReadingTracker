@@ -552,30 +552,48 @@ header > a:first-child:hover {
     margin: 0 auto;
 }
 
-/* The way back: the same outlined pill as Read more below it, so the page's two small controls
-   are one shape rather than a link and a button that happen to be near each other. */
+/*
+    The way back is one chevron and no word — the word is there for a screen reader — a 2rem
+    square as quiet as a link-button: nothing at rest, the fill when pointed at. It was an
+    outlined pill, "← Back", on a line of its own above the head; the page has no outlined
+    control now but Read more. On a wide screen it hangs in the left margin outside the column,
+    level with the title, the way a running head sits outside a text block (see the min-width
+    rule below); the column itself starts at the cover. Where there is no margin to hang in it
+    stands in the flow above the head, its glyph on the cover's edge.
+*/
+.book {
+    position: relative;
+}
+
 .book__back {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    margin: 0 0 1.1rem;
-    /* Read more's type and padding exactly, so the two pills on the page are one size. */
-    padding: 0.3rem 0.85rem 0.3rem 0.7rem;
-    border: 1px solid var(--line-strong);
-    border-radius: 999px;
-    background: var(--fill);
+    display: inline-grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    margin: -0.3rem 0 0.2rem -0.45rem;
+    border-radius: var(--radius-sm);
     color: var(--ink-soft);
-    font-size: 0.8rem;
-    font-weight: 600;
-    line-height: 1.55;
-    text-decoration: none;
-    transition: background var(--quick) var(--ease), border-color var(--quick) var(--ease);
+    transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.book__back svg {
+    width: 1.05rem;
+    height: 1.05rem;
 }
 
 .book__back:hover {
-    background: var(--fill-hover);
-    border-color: var(--ink-faint);
+    background: var(--fill);
     color: var(--ink);
+}
+
+/* Room in the margin for it: the column plus the arrow and its gap on either side. */
+@media (min-width: 46rem) {
+    .book__back {
+        position: absolute;
+        top: -0.1rem;
+        right: calc(100% + 0.6rem);
+        margin: 0;
+    }
 }
 
 /*
@@ -3771,18 +3789,18 @@ button.danger:hover:not(:disabled) {
     }
 
     /*
-        The status stays beside the title on a phone, as on a desk, but the head becomes a grid
-        for it: with the status taking a column the title's column is narrow, and the chips,
-        which sat under the title in its column, were stacking one to a line. Here they leave
-        the title's column and take the head's full width beneath the cover, which is where a
-        row of chips has room. The cover keeps the title and the authors beside it.
+        On a phone the head is set like a title page: the cover centred and a size up, since it
+        is the centrepiece now rather than a thumbnail beside the text; the status directly
+        beneath it, a label on the jacket; then the title, the authors and the chips, all
+        centred. The description below stays set left — a centred paragraph is harder to read.
+        The way back is the one thing above all this, alone in the top-left corner.
     */
     .book__head {
         display: grid;
-        grid-template-columns: auto minmax(0, 1fr) auto;
-        column-gap: 0.9rem;
+        grid-template-columns: minmax(0, 1fr);
+        justify-items: center;
+        text-align: center;
         row-gap: 0;
-        align-items: start;
     }
 
     .book__ident {
@@ -3790,32 +3808,28 @@ button.danger:hover:not(:disabled) {
     }
 
     .book__cover {
-        grid-column: 1;
-        grid-row: 1 / 3;
-    }
-
-    .book__title {
-        grid-column: 2;
         grid-row: 1;
-        font-size: 1.35rem;
-    }
-
-    /* Under the status as well as the title: only the title has to share its line. */
-    .book__authors {
-        grid-column: 2 / -1;
-        grid-row: 2;
-        font-size: 0.92rem;
+        width: 5.5rem;
     }
 
     .book__status {
-        grid-column: 3;
-        grid-row: 1;
-        margin: 0;
+        grid-row: 2;
+        margin: 0.7rem 0 0.75rem;
+    }
+
+    .book__title {
+        grid-row: 3;
+        font-size: 1.35rem;
+    }
+
+    .book__authors {
+        grid-row: 4;
+        font-size: 0.92rem;
     }
 
     .book__categories {
-        grid-column: 1 / -1;
-        grid-row: 3;
+        grid-row: 5;
+        justify-content: center;
         margin-top: 0.75rem;
     }
 
