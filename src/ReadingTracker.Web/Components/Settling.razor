@@ -19,10 +19,32 @@
 *@
 
 <div class="splash splash--settling">
+    @*
+        All three waits are drawn and app.css shows the one index.html's script picked on the first
+        paint — which is why the pick is made there and not here. It is one answer for the whole
+        visit, so this screen and the runtime's are always wearing the same shape, and the handover
+        stays invisible however many times a Settling is drawn.
+    *@
     <div class="splash__book" aria-hidden="true">
         <div class="splash__page splash__page--left"></div>
         <div class="splash__page splash__page--right"></div>
         <div class="splash__leaf"></div>
+    </div>
+    <div class="splash__stack" aria-hidden="true">
+        <div class="splash__stack-book"></div>
+        <div class="splash__stack-book"></div>
+        <div class="splash__stack-book"></div>
+        <div class="splash__stack-book"></div>
+        <div class="splash__stack-book"></div>
+    </div>
+    <div class="splash__reader" aria-hidden="true">
+        <div class="splash__screen">
+            <div class="splash__line"></div>
+            <div class="splash__line"></div>
+            <div class="splash__line"></div>
+            <div class="splash__line"></div>
+            <div class="splash__line"></div>
+        </div>
     </div>
     <p class="splash__title">ReadingTracker</p>
     @*

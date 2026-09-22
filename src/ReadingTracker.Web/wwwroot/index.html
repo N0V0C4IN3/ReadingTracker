@@ -146,6 +146,26 @@
             }
         };
     </script>
+
+    <!--
+        Which wait this visit gets. Three are drawn on the boot screen and in Settling; this picks
+        one and app.css shows it.
+
+        It runs here, in the head, rather than after the markup: the splash paints as soon as the
+        body is parsed, and a pick made any later would show the page turn for a frame and then
+        swap. It is also picked once per page load rather than per component, because Settling
+        exists to make the handover from the runtime's screen to the app's invisible, and that only
+        holds while both are showing the same shape.
+
+        Anything that stops this running — a blocked script, an old cached copy of this file — sets
+        no attribute, and app.css leaves the page turn showing, which is what was here before.
+    -->
+    <script>
+        (function () {
+            var waits = ["turn", "stack", "reader"];
+            document.documentElement.dataset.loader = waits[Math.floor(Math.random() * waits.length)];
+        })();
+    </script>
 </head>
 
 <body>
@@ -155,10 +175,28 @@
          going round to look busy. -->
     <div id="app">
         <div class="splash">
+            <!-- All three waits are drawn; app.css shows the one the script above drew, and the
+                 page turn when it drew nothing. KEEP IN STEP with Components/Settling.razor. -->
             <div class="splash__book" aria-hidden="true">
                 <div class="splash__page splash__page--left"></div>
                 <div class="splash__page splash__page--right"></div>
                 <div class="splash__leaf"></div>
+            </div>
+            <div class="splash__stack" aria-hidden="true">
+                <div class="splash__stack-book"></div>
+                <div class="splash__stack-book"></div>
+                <div class="splash__stack-book"></div>
+                <div class="splash__stack-book"></div>
+                <div class="splash__stack-book"></div>
+            </div>
+            <div class="splash__reader" aria-hidden="true">
+                <div class="splash__screen">
+                    <div class="splash__line"></div>
+                    <div class="splash__line"></div>
+                    <div class="splash__line"></div>
+                    <div class="splash__line"></div>
+                    <div class="splash__line"></div>
+                </div>
             </div>
             <p class="splash__title">ReadingTracker</p>
             <div class="splash__track" role="progressbar" aria-label="Loading ReadingTracker">
