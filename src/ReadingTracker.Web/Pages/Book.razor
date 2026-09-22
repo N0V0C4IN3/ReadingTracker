@@ -151,7 +151,21 @@
             }
             else
             {
-                <Settling />
+                @*
+                    Nothing is drawn for this wait, on purpose. The page is already showing it:
+                    the jacket's colours are put on before anything is fetched and the cover is
+                    asked for alongside Library rather than after it, so the mesh is this book's
+                    mesh while this book is on its way, and it eases rather than blinks. A wait
+                    drawn on top of that is a second, louder answer to a question already
+                    answered — and a worse one, because it is the same shape for every book.
+
+                    The Settling above is a different case and stays: it covers the handover
+                    from the runtime's own boot screen, where there is no page yet to speak for
+                    itself, and taking it out would put a blank frame in the middle of that.
+
+                    None of the mesh reaches a screen reader, so the wait is still said here.
+                *@
+                <span class="visually-hidden" role="status">Loading</span>
             }
         </section>
     </Authorized>

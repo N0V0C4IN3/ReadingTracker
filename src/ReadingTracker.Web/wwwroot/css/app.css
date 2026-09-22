@@ -240,6 +240,9 @@ body {
         up and down with it. Safari also ignores the attachment and lets the mesh scroll with the
         page, which is a smaller thing to live with than an edge. Chrome composites a fixed root
         background, so it costs nothing on the scroll.
+
+        KEEP IN STEP with .splash--settling, which paints this same canvas over the page it is
+        covering so that covering the page does not cover the mesh.
     */
     background-image:
         radial-gradient(56rem 40rem at 12% 12%, var(--wash-accent), transparent 66%),
@@ -1594,18 +1597,34 @@ button.danger:hover:not(:disabled) {
 
     No curve on the shorthand; the drop sets its own below.
 */
+/*
+    The lean is `left` on a relatively positioned book, not a translateX inside the keyframes.
+    Two reasons. It keeps the animated property to translateY and opacity alone, which is the pair
+    a browser is happiest handing to the compositor — a transform whose value is built out of a
+    custom property is the kind of thing that quietly stops qualifying. And it separates the two
+    ideas: where a book sits is a static fact about that book, and the only thing the animation is
+    for is the falling.
+*/
 .splash__stack-book {
+    position: relative;
     height: 0.34em;
     border-radius: 0.08em;
     background: var(--accent);
-    animation: stack 2.4s infinite;
+    animation: stack 1.6s infinite;
 }
 
-.splash__stack-book:nth-child(1) { width: 2.4em; --x: -0.26em; animation-delay: 0s; }
-.splash__stack-book:nth-child(2) { width: 2.0em; --x:  0.32em; animation-delay: 0.18s; }
-.splash__stack-book:nth-child(3) { width: 2.6em; --x: -0.34em; animation-delay: 0.36s; }
-.splash__stack-book:nth-child(4) { width: 1.8em; --x:  0.22em; animation-delay: 0.54s; }
-.splash__stack-book:nth-child(5) { width: 2.2em; --x: -0.3em;  animation-delay: 0.72s; }
+/*
+    The stagger is 0.1s, not 0.18s, and the cycle is 1.6s, not 2.4s. This is drawn over waits that
+    are frequently shorter than it: a book's details arrive in a few hundred milliseconds, and at
+    the old timings the last book had not landed until 1.3s, so what a reader actually saw was two
+    or three books arriving and the whole thing vanishing mid-fall. A wait that is never seen
+    finishing reads as a stutter rather than as an animation. The whole pile is now down by 0.78s.
+*/
+.splash__stack-book:nth-child(1) { width: 2.4em; left: -0.26em; animation-delay: 0s; }
+.splash__stack-book:nth-child(2) { width: 2.0em; left:  0.32em; animation-delay: 0.1s; }
+.splash__stack-book:nth-child(3) { width: 2.6em; left: -0.34em; animation-delay: 0.2s; }
+.splash__stack-book:nth-child(4) { width: 1.8em; left:  0.22em; animation-delay: 0.3s; }
+.splash__stack-book:nth-child(5) { width: 2.2em; left: -0.3em;  animation-delay: 0.4s; }
 
 /*
     Straight down, from two and a half book-heights of clear air, on a curve that accelerates: a
@@ -1614,14 +1633,14 @@ button.danger:hover:not(:disabled) {
     landings read as a pile rather than as a slide-in.
 */
 @keyframes stack {
-    0%        { opacity: 0; transform: translate(var(--x), -2.6em);
+    0%        { opacity: 0; transform: translateY(-2.6em);
                 animation-timing-function: cubic-bezier(0.4, 0, 0.85, 0.4); }
-    24%       { opacity: 1; transform: translate(var(--x), 0);
+    24%       { opacity: 1; transform: translateY(0);
                 animation-timing-function: var(--ease-out); }
-    29%       { transform: translate(var(--x), -0.1em); }
-    35%       { transform: translate(var(--x), 0); }
-    76%       { opacity: 1; transform: translate(var(--x), 0); }
-    88%, 100% { opacity: 0; transform: translate(var(--x), 0.3em); }
+    29%       { transform: translateY(-0.1em); }
+    35%       { transform: translateY(0); }
+    76%       { opacity: 1; transform: translateY(0); }
+    88%, 100% { opacity: 0; transform: translateY(0.3em); }
 }
 
 /*
@@ -1670,15 +1689,17 @@ button.danger:hover:not(:disabled) {
     border-radius: 0.05em;
     background: var(--accent);
     transform-origin: left center;
-    animation: render 2.4s var(--ease-out) infinite;
+    /* Shortened with the stack, and for the same reason: the page has to finish setting itself
+       inside the wait it is drawn over, or a reader only ever sees the first two lines. */
+    animation: render 1.6s var(--ease-out) infinite;
 }
 
 /* Ragged down the right, the way set type is. */
 .splash__line:nth-child(1) { top: 0.3em;  width: 1.5em;  animation-delay: 0s; }
-.splash__line:nth-child(2) { top: 0.62em; width: 1.15em; animation-delay: 0.13s; }
-.splash__line:nth-child(3) { top: 0.94em; width: 1.4em;  animation-delay: 0.26s; }
-.splash__line:nth-child(4) { top: 1.26em; width: 0.95em; animation-delay: 0.39s; }
-.splash__line:nth-child(5) { top: 1.58em; width: 1.3em;  animation-delay: 0.52s; }
+.splash__line:nth-child(2) { top: 0.62em; width: 1.15em; animation-delay: 0.09s; }
+.splash__line:nth-child(3) { top: 0.94em; width: 1.4em;  animation-delay: 0.18s; }
+.splash__line:nth-child(4) { top: 1.26em; width: 0.95em; animation-delay: 0.27s; }
+.splash__line:nth-child(5) { top: 1.58em; width: 1.3em;  animation-delay: 0.36s; }
 
 @keyframes render {
     0%, 4%    { transform: scaleX(0); opacity: 0; }
@@ -1700,7 +1721,27 @@ button.danger:hover:not(:disabled) {
        middle of signing in is worse than that. */
     z-index: 25;
     min-height: 100vh;
-    background: var(--page);
+    /*
+        The body's own canvas, painted again, rather than a flat fill of var(--page). What this
+        covers it covers completely, and a flat fill covers the mesh along with everything else.
+        On the Book page that showed: the nearest positioned ancestor is the 40rem column, so
+        the wait was a slab of bare page colour down the middle with the mesh still there either
+        side of it. And the mesh is not idle during that wait — the jacket's colours are gliding
+        into it (see the registered properties above), which is the only thing on screen that is
+        about the book being waited for.
+
+        Attached to the viewport, as on the body, so the four fields land in the same places
+        whatever this happens to be sitting in and its edges do not show.
+
+        KEEP IN STEP with the mesh on body.
+    */
+    background-color: var(--page);
+    background-image:
+        radial-gradient(56rem 40rem at 12% 12%, var(--wash-accent), transparent 66%),
+        radial-gradient(52rem 38rem at 88% 4%, var(--wash-warm), transparent 66%),
+        radial-gradient(56rem 40rem at 76% 96%, var(--wash-cool), transparent 66%),
+        radial-gradient(48rem 34rem at 14% 100%, var(--wash-accent), transparent 66%);
+    background-attachment: fixed;
 }
 
 /* The download is finished by the time this draws; the bar says so rather than restarting. */
