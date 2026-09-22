@@ -552,30 +552,48 @@ header > a:first-child:hover {
     margin: 0 auto;
 }
 
-/* The way back: the same outlined pill as Read more below it, so the page's two small controls
-   are one shape rather than a link and a button that happen to be near each other. */
+/*
+    The way back is one chevron and no word — the word is there for a screen reader — a 2rem
+    square as quiet as a link-button: nothing at rest, the fill when pointed at. It was an
+    outlined pill, "← Back", on a line of its own above the head; the page has no outlined
+    control now but Read more. On a wide screen it hangs in the left margin outside the column,
+    level with the title, the way a running head sits outside a text block (see the min-width
+    rule below); the column itself starts at the cover. Where there is no margin to hang in it
+    stands in the flow above the head, its glyph on the cover's edge.
+*/
+.book {
+    position: relative;
+}
+
 .book__back {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    margin: 0 0 1.1rem;
-    /* Read more's type and padding exactly, so the two pills on the page are one size. */
-    padding: 0.3rem 0.85rem 0.3rem 0.7rem;
-    border: 1px solid var(--line-strong);
-    border-radius: 999px;
-    background: var(--fill);
+    display: inline-grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    margin: -0.3rem 0 0.2rem -0.45rem;
+    border-radius: var(--radius-sm);
     color: var(--ink-soft);
-    font-size: 0.8rem;
-    font-weight: 600;
-    line-height: 1.55;
-    text-decoration: none;
-    transition: background var(--quick) var(--ease), border-color var(--quick) var(--ease);
+    transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.book__back svg {
+    width: 1.05rem;
+    height: 1.05rem;
 }
 
 .book__back:hover {
-    background: var(--fill-hover);
-    border-color: var(--ink-faint);
+    background: var(--fill);
     color: var(--ink);
+}
+
+/* Room in the margin for it: the column plus the arrow and its gap on either side. */
+@media (min-width: 46rem) {
+    .book__back {
+        position: absolute;
+        top: -0.1rem;
+        right: calc(100% + 0.6rem);
+        margin: 0;
+    }
 }
 
 /*
@@ -2285,19 +2303,165 @@ button.danger:hover:not(:disabled) {
     flex-wrap: wrap;
 }
 
-.status-select {
+/*
+    The status as a flat control — a fill, a dot in the standing's colour, the word, a chevron —
+    and a list of its own beneath, drawn here rather than by the platform. Built the way the
+    account menu is: trigger, scrim, menu; and the same frosted glass, in the @supports block
+    with the header's.
+
+    The dot is the standing's colour, not the card's accent: a book wanted is on a green card
+    too, and its dot has to say "not yet" on its own — so it is a ring, and dropped is a ring in
+    grey against on hold's solid grey.
+*/
+.status {
+    position: relative;
+}
+
+.status__trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.3rem 0.5rem 0.3rem 0.6rem;
+    background: var(--fill);
+    color: var(--ink);
     font-size: 0.85rem;
-    font-weight: 700;
-    padding: 0.3rem 0.5rem;
+    font-weight: 600;
+    white-space: nowrap;
 }
 
-.status-select--reading {
-    border-color: var(--accent);
-    color: var(--accent);
+.status__trigger:hover:not(:disabled),
+.status__trigger[aria-expanded="true"] {
+    background: var(--fill-hover);
 }
 
-.status-select--finished {
-    background: var(--accent-soft);
+.status__chevron {
+    width: 0.85em;
+    height: 0.85em;
+    color: var(--ink-faint);
+    transition: transform var(--quick) var(--ease);
+}
+
+.status__trigger[aria-expanded="true"] .status__chevron {
+    transform: rotate(180deg);
+}
+
+.status__dot {
+    flex: 0 0 auto;
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    background: var(--dot, var(--ink-faint));
+}
+
+/*
+    The trigger's dot takes the card's accent, which already agrees with the standing — green
+    (or the jacket's colour, on the Book page) for a book in hand, grey parked, amber finished.
+    The list's dots cannot: on a parked card the accent is grey, and the reader choosing there
+    still needs to see which rows are the live ones. So the rows carry the theme's own colours.
+*/
+.status {
+    --status-alive: #2f6b4f;
+    --status-done: #8a6a2a;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .status {
+        --status-alive: #8ec5a4;
+        --status-done: #e6b260;
+    }
+}
+
+:root[data-theme="dark"] .status {
+    --status-alive: #8ec5a4;
+    --status-done: #e6b260;
+}
+
+.status__trigger--wanttoread,
+.status__trigger--reading { --dot: var(--accent); }
+.status__trigger--finished { --dot: var(--warn); }
+.status__trigger--onhold,
+.status__trigger--dropped { --dot: var(--ink-faint); }
+
+.status__row--wanttoread,
+.status__row--reading { --dot: var(--status-alive); }
+.status__row--finished { --dot: var(--status-done); }
+.status__row--onhold,
+.status__row--dropped { --dot: var(--ink-faint); }
+
+/* Not yet begun, and given up: rings rather than dots. */
+.status__trigger--wanttoread .status__dot,
+.status__row--wanttoread .status__dot,
+.status__trigger--dropped .status__dot,
+.status__row--dropped .status__dot {
+    background: transparent;
+    box-shadow: inset 0 0 0 1.5px var(--dot);
+}
+
+.status__scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    cursor: default;
+}
+
+.status__scrim:hover:not(:disabled) {
+    background: transparent;
+}
+
+.status__menu {
+    position: absolute;
+    top: calc(100% + 0.35rem);
+    right: 0;
+    z-index: 2;
+    min-width: 11.5rem;
+    margin: 0;
+    padding: 0.35rem;
+    list-style: none;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--card);
+    box-shadow: var(--shadow-lifted);
+    animation: unfold 240ms var(--ease-out) backwards;
+}
+
+.status__row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    margin: 0;
+    padding: 0.5rem 0.6rem;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ink);
+    font-size: 0.92rem;
+    font-weight: 500;
+    text-align: left;
+    white-space: nowrap;
+    transition: background-color var(--quick) var(--ease);
+}
+
+.status__row:hover:not(:disabled),
+.status__row:focus-visible {
+    background: var(--fill);
+}
+
+/* The row the book is on, tinted in its own dot's colour. */
+.status__row--on,
+.status__row--on:hover:not(:disabled),
+.status__row--on:focus-visible {
+    background: color-mix(in srgb, var(--dot) 13%, transparent);
+    color: var(--dot);
+    font-weight: 600;
+}
+
+.status__tick {
+    width: 0.9em;
+    height: 0.9em;
+    margin-left: auto;
 }
 
 /* Pulled out to the card's edge, so a row of quiet actions lines up with the title above it. */
@@ -3535,7 +3699,8 @@ button.danger:hover:not(:disabled) {
 
     /* The account menu is frosted glass over the shelf: sheerer than the header and blurred less,
        so the shelf shows through as shapes that cannot be read. */
-    .account__menu {
+    .account__menu,
+    .status__menu {
         background: var(--card-frosted);
         -webkit-backdrop-filter: var(--blur-soft);
         backdrop-filter: var(--blur-soft);
@@ -3624,18 +3789,18 @@ button.danger:hover:not(:disabled) {
     }
 
     /*
-        The status stays beside the title on a phone, as on a desk, but the head becomes a grid
-        for it: with the status taking a column the title's column is narrow, and the chips,
-        which sat under the title in its column, were stacking one to a line. Here they leave
-        the title's column and take the head's full width beneath the cover, which is where a
-        row of chips has room. The cover keeps the title and the authors beside it.
+        On a phone the head is set like a title page: the cover centred and a size up, since it
+        is the centrepiece now rather than a thumbnail beside the text; the status directly
+        beneath it, a label on the jacket; then the title, the authors and the chips, all
+        centred. The description below stays set left — a centred paragraph is harder to read.
+        The way back is the one thing above all this, alone in the top-left corner.
     */
     .book__head {
         display: grid;
-        grid-template-columns: auto minmax(0, 1fr) auto;
-        column-gap: 0.9rem;
+        grid-template-columns: minmax(0, 1fr);
+        justify-items: center;
+        text-align: center;
         row-gap: 0;
-        align-items: start;
     }
 
     .book__ident {
@@ -3643,32 +3808,28 @@ button.danger:hover:not(:disabled) {
     }
 
     .book__cover {
-        grid-column: 1;
-        grid-row: 1 / 3;
-    }
-
-    .book__title {
-        grid-column: 2;
         grid-row: 1;
-        font-size: 1.35rem;
-    }
-
-    /* Under the status as well as the title: only the title has to share its line. */
-    .book__authors {
-        grid-column: 2 / -1;
-        grid-row: 2;
-        font-size: 0.92rem;
+        width: 5.5rem;
     }
 
     .book__status {
-        grid-column: 3;
-        grid-row: 1;
-        margin: 0;
+        grid-row: 2;
+        margin: 0.7rem 0 0.75rem;
+    }
+
+    .book__title {
+        grid-row: 3;
+        font-size: 1.35rem;
+    }
+
+    .book__authors {
+        grid-row: 4;
+        font-size: 0.92rem;
     }
 
     .book__categories {
-        grid-column: 1 / -1;
-        grid-row: 3;
+        grid-row: 5;
+        justify-content: center;
         margin-top: 0.75rem;
     }
 
@@ -4028,5 +4189,51 @@ button.danger:hover:not(:disabled) {
 
     .result button {
         flex: 0 0 auto;
+    }
+}
+
+/*
+    On a phone the status list is a sheet from the foot of the screen, the way the search dock
+    is, and the scrim dims what is behind it: a menu anchored to a card halfway down a scrolling
+    shelf is easy to lose under a thumb.
+*/
+@media (max-width: 560px) {
+    /* Stated for the hovered scrim too: the finger that opened the sheet is still over it. Above
+       the search dock and its + (z-index 10), which the sheet is asking the reader to ignore. */
+    .status__scrim,
+    .status__scrim:hover:not(:disabled) {
+        z-index: 11;
+        background: rgb(0 0 0 / 28%);
+    }
+
+    .status__menu {
+        position: fixed;
+        top: auto;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 12;
+        min-width: 0;
+        padding: 0.5rem 0.75rem calc(0.75rem + env(safe-area-inset-bottom));
+        border: 0;
+        border-radius: 18px 18px 0 0;
+        animation: dock 260ms var(--ease-out) backwards;
+    }
+
+    /* The grip the dock has, so the sheet reads as the same kind of thing — though this one is
+       not dragged, only dismissed. */
+    .status__menu::before {
+        content: "";
+        display: block;
+        width: 2.25rem;
+        height: 4px;
+        margin: 0 auto 0.5rem;
+        border-radius: 2px;
+        background: var(--line-strong);
+    }
+
+    .status__row {
+        padding: 0.8rem 0.75rem;
+        font-size: 1rem;
     }
 }

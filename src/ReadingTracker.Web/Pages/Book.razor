@@ -37,14 +37,14 @@
     </Authorizing>
     <NotAuthorized>
         <section class="book">
-            <a class="book__back" href="">← Back</a>
+            <a class="book__back" href="" aria-label="Your shelf"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg></a>
             <p class="notice">Sign in to see this book. You will be brought back here.</p>
             <button type="button" class="button--primary" @onclick="SignIn">Sign in</button>
         </section>
     </NotAuthorized>
     <Authorized>
         <section class="book">
-            <a class="book__back" href="">← Back</a>
+            <a class="book__back" href="" aria-label="Your shelf"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg></a>
 
             @if (_entry is { } entry)
             {
