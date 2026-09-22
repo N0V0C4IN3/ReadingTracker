@@ -2285,19 +2285,165 @@ button.danger:hover:not(:disabled) {
     flex-wrap: wrap;
 }
 
-.status-select {
+/*
+    The status as a flat control — a fill, a dot in the standing's colour, the word, a chevron —
+    and a list of its own beneath, drawn here rather than by the platform. Built the way the
+    account menu is: trigger, scrim, menu; and the same frosted glass, in the @supports block
+    with the header's.
+
+    The dot is the standing's colour, not the card's accent: a book wanted is on a green card
+    too, and its dot has to say "not yet" on its own — so it is a ring, and dropped is a ring in
+    grey against on hold's solid grey.
+*/
+.status {
+    position: relative;
+}
+
+.status__trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.3rem 0.5rem 0.3rem 0.6rem;
+    background: var(--fill);
+    color: var(--ink);
     font-size: 0.85rem;
-    font-weight: 700;
-    padding: 0.3rem 0.5rem;
+    font-weight: 600;
+    white-space: nowrap;
 }
 
-.status-select--reading {
-    border-color: var(--accent);
-    color: var(--accent);
+.status__trigger:hover:not(:disabled),
+.status__trigger[aria-expanded="true"] {
+    background: var(--fill-hover);
 }
 
-.status-select--finished {
-    background: var(--accent-soft);
+.status__chevron {
+    width: 0.85em;
+    height: 0.85em;
+    color: var(--ink-faint);
+    transition: transform var(--quick) var(--ease);
+}
+
+.status__trigger[aria-expanded="true"] .status__chevron {
+    transform: rotate(180deg);
+}
+
+.status__dot {
+    flex: 0 0 auto;
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    background: var(--dot, var(--ink-faint));
+}
+
+/*
+    The trigger's dot takes the card's accent, which already agrees with the standing — green
+    (or the jacket's colour, on the Book page) for a book in hand, grey parked, amber finished.
+    The list's dots cannot: on a parked card the accent is grey, and the reader choosing there
+    still needs to see which rows are the live ones. So the rows carry the theme's own colours.
+*/
+.status {
+    --status-alive: #2f6b4f;
+    --status-done: #8a6a2a;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .status {
+        --status-alive: #8ec5a4;
+        --status-done: #e6b260;
+    }
+}
+
+:root[data-theme="dark"] .status {
+    --status-alive: #8ec5a4;
+    --status-done: #e6b260;
+}
+
+.status__trigger--wanttoread,
+.status__trigger--reading { --dot: var(--accent); }
+.status__trigger--finished { --dot: var(--warn); }
+.status__trigger--onhold,
+.status__trigger--dropped { --dot: var(--ink-faint); }
+
+.status__row--wanttoread,
+.status__row--reading { --dot: var(--status-alive); }
+.status__row--finished { --dot: var(--status-done); }
+.status__row--onhold,
+.status__row--dropped { --dot: var(--ink-faint); }
+
+/* Not yet begun, and given up: rings rather than dots. */
+.status__trigger--wanttoread .status__dot,
+.status__row--wanttoread .status__dot,
+.status__trigger--dropped .status__dot,
+.status__row--dropped .status__dot {
+    background: transparent;
+    box-shadow: inset 0 0 0 1.5px var(--dot);
+}
+
+.status__scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    cursor: default;
+}
+
+.status__scrim:hover:not(:disabled) {
+    background: transparent;
+}
+
+.status__menu {
+    position: absolute;
+    top: calc(100% + 0.35rem);
+    right: 0;
+    z-index: 2;
+    min-width: 11.5rem;
+    margin: 0;
+    padding: 0.35rem;
+    list-style: none;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--card);
+    box-shadow: var(--shadow-lifted);
+    animation: unfold 240ms var(--ease-out) backwards;
+}
+
+.status__row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    margin: 0;
+    padding: 0.5rem 0.6rem;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ink);
+    font-size: 0.92rem;
+    font-weight: 500;
+    text-align: left;
+    white-space: nowrap;
+    transition: background-color var(--quick) var(--ease);
+}
+
+.status__row:hover:not(:disabled),
+.status__row:focus-visible {
+    background: var(--fill);
+}
+
+/* The row the book is on, tinted in its own dot's colour. */
+.status__row--on,
+.status__row--on:hover:not(:disabled),
+.status__row--on:focus-visible {
+    background: color-mix(in srgb, var(--dot) 13%, transparent);
+    color: var(--dot);
+    font-weight: 600;
+}
+
+.status__tick {
+    width: 0.9em;
+    height: 0.9em;
+    margin-left: auto;
 }
 
 /* Pulled out to the card's edge, so a row of quiet actions lines up with the title above it. */
@@ -3535,7 +3681,8 @@ button.danger:hover:not(:disabled) {
 
     /* The account menu is frosted glass over the shelf: sheerer than the header and blurred less,
        so the shelf shows through as shapes that cannot be read. */
-    .account__menu {
+    .account__menu,
+    .status__menu {
         background: var(--card-frosted);
         -webkit-backdrop-filter: var(--blur-soft);
         backdrop-filter: var(--blur-soft);
@@ -4028,5 +4175,51 @@ button.danger:hover:not(:disabled) {
 
     .result button {
         flex: 0 0 auto;
+    }
+}
+
+/*
+    On a phone the status list is a sheet from the foot of the screen, the way the search dock
+    is, and the scrim dims what is behind it: a menu anchored to a card halfway down a scrolling
+    shelf is easy to lose under a thumb.
+*/
+@media (max-width: 560px) {
+    /* Stated for the hovered scrim too: the finger that opened the sheet is still over it. Above
+       the search dock and its + (z-index 10), which the sheet is asking the reader to ignore. */
+    .status__scrim,
+    .status__scrim:hover:not(:disabled) {
+        z-index: 11;
+        background: rgb(0 0 0 / 28%);
+    }
+
+    .status__menu {
+        position: fixed;
+        top: auto;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 12;
+        min-width: 0;
+        padding: 0.5rem 0.75rem calc(0.75rem + env(safe-area-inset-bottom));
+        border: 0;
+        border-radius: 18px 18px 0 0;
+        animation: dock 260ms var(--ease-out) backwards;
+    }
+
+    /* The grip the dock has, so the sheet reads as the same kind of thing — though this one is
+       not dragged, only dismissed. */
+    .status__menu::before {
+        content: "";
+        display: block;
+        width: 2.25rem;
+        height: 4px;
+        margin: 0 auto 0.5rem;
+        border-radius: 2px;
+        background: var(--line-strong);
+    }
+
+    .status__row {
+        padding: 0.8rem 0.75rem;
+        font-size: 1rem;
     }
 }

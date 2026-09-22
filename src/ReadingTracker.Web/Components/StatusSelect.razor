@@ -1,19 +1,53 @@
 @using ReadingTracker.Web.Services
 
-@* The ReadingStatus, as one select coloured by where the book stands. Picking says what was picked; the host makes the change. *@
+@*
+    The ReadingStatus, as a word with a dot in the standing's colour. Tapping it opens the five
+    statuses as a list drawn by the stylesheet rather than the platform — the same shape as the
+    account menu: a trigger, a scrim that catches the tap that closes it, and a menu that unfolds
+    beneath. On a phone the list comes up from the foot of the screen instead. Picking says what
+    was picked; the host makes the change.
 
-<div class="entry__status">
-    <label class="visually-hidden" for="@($"status-{Entry.Id}")">Reading status</label>
-    <select id="@($"status-{Entry.Id}")"
-            class="status-select status-select--@Entry.Status.ToLowerInvariant()"
-            value="@Entry.Status"
-            @onchange="PickAsync"
+    This was a <select> once, and the one control on the card the browser drew itself: its
+    dropped list came in the platform's type and colours, over a card in the app's. The list is
+    the app's now, and the trigger is flat like everything beside it.
+*@
+
+<div class="entry__status status" @onkeydown="CloseOnEscape">
+    <button type="button"
+            class="status__trigger status__trigger--@Entry.Status.ToLowerInvariant()"
+            aria-haspopup="listbox"
+            aria-expanded="@(_open ? "true" : "false")"
+            @onclick="Toggle"
             disabled="@Disabled">
-        @foreach (var status in Statuses)
-        {
-            <option value="@status.Key" selected="@(status.Key == Entry.Status)">@status.Value</option>
-        }
-    </select>
+        <span class="visually-hidden">Reading status:</span>
+        <i class="status__dot" aria-hidden="true"></i>
+        @Statuses[Entry.Status]
+        <svg class="status__chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6.5l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
+    </button>
+
+    @if (_open)
+    {
+        <button type="button" class="status__scrim" tabindex="-1" aria-hidden="true" @onclick="Close"></button>
+        <ul class="status__menu" role="listbox" aria-label="Reading status">
+            @foreach (var status in Statuses)
+            {
+                var on = status.Key == Entry.Status;
+                <li role="option" aria-selected="@(on ? "true" : "false")">
+                    <button type="button"
+                            class="status__row status__row--@status.Key.ToLowerInvariant() @(on ? "status__row--on" : null)"
+                            @ref="_rows[status.Key]"
+                            @onclick="() => PickAsync(status.Key)">
+                        <i class="status__dot" aria-hidden="true"></i>
+                        @status.Value
+                        @if (on)
+                        {
+                            <svg class="status__tick" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                        }
+                    </button>
+                </li>
+            }
+        </ul>
+    }
 </div>
 
 @code {
@@ -36,9 +70,41 @@
     [Parameter]
     public EventCallback<string> OnPick { get; set; }
 
-    private async Task PickAsync(ChangeEventArgs e)
+    private bool _open;
+    private bool _justOpened;
+    private readonly Dictionary<string, ElementReference> _rows = new();
+
+    private void Toggle()
     {
-        if (e.Value?.ToString() is { } status)
+        _open = !_open;
+        _justOpened = _open;
+    }
+
+    private void Close() => _open = false;
+
+    private void CloseOnEscape(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            Close();
+        }
+    }
+
+    /// <summary>Focus lands on the current status as the list opens, so the keyboard is already in it.</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_justOpened && _rows.TryGetValue(Entry.Status, out var current))
+        {
+            _justOpened = false;
+            await current.FocusAsync();
+        }
+    }
+
+    private async Task PickAsync(string status)
+    {
+        Close();
+
+        if (status != Entry.Status)
         {
             await OnPick.InvokeAsync(status);
         }
