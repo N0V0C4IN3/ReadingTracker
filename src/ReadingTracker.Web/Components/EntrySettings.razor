@@ -12,7 +12,9 @@
     the screen over a scrim, the way the status list and the log form do. Finding an edition is a
     second view of the same panel rather than more of it: the library's search, in the main
     search's field and cards, with the results scrolling inside it, so a long list never pushes
-    the page (or the sheet) past the screen.
+    the page (or the sheet) past the screen. On a phone that view is the shelf search's own kind
+    of sheet: the field at its foot, and a grip that drags it between a peek, a half and nearly
+    full (js/sheet.js).
 *@
 
 <button type="button" class="sheet__scrim" tabindex="-1" aria-hidden="true" @onclick="OnClose"></button>
@@ -82,6 +84,8 @@
     }
     else
     {
+        <button type="button" class="search__grip" aria-label="Resize search results"></button>
+
         <button type="button" class="link-button settings__back" @onclick="CloseEditionSearch">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5L5.5 8l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg>
             Settings
@@ -219,6 +223,10 @@
     private ElementReference _panel;
     private ElementReference _queryBox;
     private IJSObjectReference? _lift;
+    private IJSObjectReference? _sheet;
+
+    /// <summary>Whether sheet.js has been asked to make the edition search draggable.</summary>
+    private bool _draggable;
 
     private int? CurrentPageCount => Entry.PageCountOverride ?? Entry.Book?.TotalPages;
 
@@ -353,6 +361,17 @@
         {
             _lift = await JS.InvokeAsync<IJSObjectReference>("import", "./js/liftSheet.js");
             await _lift.InvokeVoidAsync("attach", _panel);
+            _sheet = await JS.InvokeAsync<IJSObjectReference>("import", "./js/sheet.js");
+        }
+
+        // The edition search is draggable while it is open, and the Settings view is not: it goes
+        // back to the height of what it holds. sheet.js attaches nothing on a wide screen.
+        if (_sheet is not null && _draggable != _editionOpen)
+        {
+            _draggable = _editionOpen;
+            await (_draggable
+                ? _sheet.InvokeVoidAsync("attach", _panel, "default")
+                : _sheet.InvokeVoidAsync("detach", _panel));
         }
 
         if (_focusQuery && _editionOpen)
@@ -373,6 +392,12 @@
         {
             await _lift.InvokeVoidAsync("detach", _panel);
             await _lift.DisposeAsync();
+
+            if (_sheet is not null)
+            {
+                await _sheet.InvokeVoidAsync("detach", _panel, true);
+                await _sheet.DisposeAsync();
+            }
         }
         catch (JSDisconnectedException)
         {
