@@ -105,19 +105,30 @@
 @property --wash-warm { syntax: "<color>"; inherits: true; initial-value: rgb(212 160 84 / 12%); }
 @property --wash-cool { syntax: "<color>"; inherits: true; initial-value: rgb(86 132 176 / 12%); }
 @property --mesh-hue { syntax: "<number>"; inherits: true; initial-value: 0; }
+@property --mesh-glow { syntax: "<number>"; inherits: true; initial-value: 1; }
 
 /*
     The mesh takes a shade of its own on each of the shelf's tabs. Its four fields of colour (on
     body) keep their places and their lightness; only their hue moves, by a few degrees round
     the wheel (oklch, so a shift is as strong in one colour as another), and switching tab glides
     from one shade to the next, so the page changes with the choice rather than only the list
-    under it. All is the mesh as it always was; off the shelf there are no tabs, and it drifts
+    under it. All has a shade too (see below); off the shelf there are no tabs, and it drifts
     home.
 */
 :root {
-    transition: --mesh-hue 2200ms var(--ease-out);
+    transition:
+        --mesh-hue 2200ms var(--ease-out),
+        --mesh-glow 2200ms var(--ease-out);
 }
 
+/*
+    All has a shade of its own too. Left unturned it was the one tab whose fields kept their
+    plain colours, and in the dark those read as the dullest of the set — next to its
+    neighbours, nearly black. It turns a little toward Reading's warmth and its fields glow a
+    little stronger (--mesh-glow scales how opaque they are), so it is of a piece with the rest
+    rather than the gap between them. Off the shelf the mesh still drifts home to no shift at all.
+*/
+:root:has(.chip--on[data-status="All"]) { --mesh-hue: 14; --mesh-glow: 1.45; }
 :root:has(.chip--on[data-status="Reading"]) { --mesh-hue: 28; }
 :root:has(.chip--on[data-status="WantToRead"]) { --mesh-hue: 60; }
 :root:has(.chip--on[data-status="Finished"]) { --mesh-hue: -38; }
@@ -139,7 +150,8 @@
         --wash-accent 1200ms var(--ease-out),
         --wash-warm 1200ms var(--ease-out),
         --wash-cool 1200ms var(--ease-out),
-        --mesh-hue 2200ms var(--ease-out);
+        --mesh-hue 2200ms var(--ease-out),
+        --mesh-glow 2200ms var(--ease-out);
 }
 
 /*
@@ -278,10 +290,10 @@ body {
         covering so that covering the page does not cover the mesh.
     */
     background-image:
-        radial-gradient(56rem 40rem at 12% 12%, oklch(from var(--wash-accent) l c calc(h + var(--mesh-hue)) / alpha), transparent 66%),
-        radial-gradient(52rem 38rem at 88% 4%, oklch(from var(--wash-warm) l c calc(h + var(--mesh-hue)) / alpha), transparent 66%),
-        radial-gradient(56rem 40rem at 76% 96%, oklch(from var(--wash-cool) l c calc(h + var(--mesh-hue)) / alpha), transparent 66%),
-        radial-gradient(48rem 34rem at 14% 100%, oklch(from var(--wash-accent) l c calc(h + var(--mesh-hue)) / alpha), transparent 66%);
+        radial-gradient(56rem 40rem at 12% 12%, oklch(from var(--wash-accent) l c calc(h + var(--mesh-hue)) / calc(alpha * var(--mesh-glow))), transparent 66%),
+        radial-gradient(52rem 38rem at 88% 4%, oklch(from var(--wash-warm) l c calc(h + var(--mesh-hue)) / calc(alpha * var(--mesh-glow))), transparent 66%),
+        radial-gradient(56rem 40rem at 76% 96%, oklch(from var(--wash-cool) l c calc(h + var(--mesh-hue)) / calc(alpha * var(--mesh-glow))), transparent 66%),
+        radial-gradient(48rem 34rem at 14% 100%, oklch(from var(--wash-accent) l c calc(h + var(--mesh-hue)) / calc(alpha * var(--mesh-glow))), transparent 66%);
     background-attachment: fixed;
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
@@ -1809,10 +1821,10 @@ button.danger:hover:not(:disabled) {
     */
     background-color: var(--page);
     background-image:
-        radial-gradient(56rem 40rem at 12% 12%, oklch(from var(--wash-accent) l c calc(h + var(--mesh-hue)) / alpha), transparent 66%),
-        radial-gradient(52rem 38rem at 88% 4%, oklch(from var(--wash-warm) l c calc(h + var(--mesh-hue)) / alpha), transparent 66%),
-        radial-gradient(56rem 40rem at 76% 96%, oklch(from var(--wash-cool) l c calc(h + var(--mesh-hue)) / alpha), transparent 66%),
-        radial-gradient(48rem 34rem at 14% 100%, oklch(from var(--wash-accent) l c calc(h + var(--mesh-hue)) / alpha), transparent 66%);
+        radial-gradient(56rem 40rem at 12% 12%, oklch(from var(--wash-accent) l c calc(h + var(--mesh-hue)) / calc(alpha * var(--mesh-glow))), transparent 66%),
+        radial-gradient(52rem 38rem at 88% 4%, oklch(from var(--wash-warm) l c calc(h + var(--mesh-hue)) / calc(alpha * var(--mesh-glow))), transparent 66%),
+        radial-gradient(56rem 40rem at 76% 96%, oklch(from var(--wash-cool) l c calc(h + var(--mesh-hue)) / calc(alpha * var(--mesh-glow))), transparent 66%),
+        radial-gradient(48rem 34rem at 14% 100%, oklch(from var(--wash-accent) l c calc(h + var(--mesh-hue)) / calc(alpha * var(--mesh-glow))), transparent 66%);
     background-attachment: fixed;
 }
 
@@ -4645,6 +4657,18 @@ button.danger:hover:not(:disabled) {
 
     .filters::-webkit-scrollbar {
         display: none;
+    }
+
+    /*
+        The list under the tabs is swiped through them (js/shelfSwipe.js), and follows the
+        finger while it does. Sideways the page has nowhere to scroll, so the browser is told as
+        much: a drag that starts sideways is left to the script and is never also a scroll, which
+        is what lets the script's listeners stay passive. Up and down, and pinching, are the
+        page's as ever; the sheets the cards open scroll by themselves, so this stops at them.
+    */
+    .shelf > .entries,
+    .shelf > .empty {
+        touch-action: pan-y pinch-zoom;
     }
 
     .filters .chip {
