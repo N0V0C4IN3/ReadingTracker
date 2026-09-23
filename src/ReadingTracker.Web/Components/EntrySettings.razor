@@ -1,93 +1,133 @@
 @using ReadingTracker.Web.Services
 @inject GatewayCatalogClient Catalog
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 @*
     How the reader tracks this book and how long their copy is: the TrackingMethod, their own
     page count, and — the other way a count goes wrong — the edition itself, found by searching
     the library from here. Each change is the host's to make; this panel says what was asked.
+
+    In the card it is a panel of three centred settings; on a phone it comes up from the foot of
+    the screen over a scrim, the way the status list and the log form do. Finding an edition is a
+    second view of the same panel rather than more of it: the library's search, in the main
+    search's field and cards, with the results scrolling inside it, so a long list never pushes
+    the page (or the sheet) past the screen.
 *@
 
-<div class="panel">
-    <div class="field">
-        <label for="@($"method-{Entry.Id}")">Track by</label>
-        <select id="@($"method-{Entry.Id}")" value="@Entry.TrackingMethod" @onchange="TrackingMethodChangedAsync" disabled="@Disabled">
-            <option value="Pages" selected="@(Entry.TrackingMethod == "Pages")">Pages</option>
-            <option value="Percentage" selected="@(Entry.TrackingMethod == "Percentage")">Percentage</option>
-        </select>
-        @* Switching is a display-time conversion, never a rewrite of past sessions —
-           each keeps the unit it was logged in. Saying so stops it looking lossy. *@
-        <p class="hint">Past sessions keep the unit they were logged in.</p>
-    </div>
+<button type="button" class="sheet__scrim" tabindex="-1" aria-hidden="true" @onclick="OnClose"></button>
 
-    <div class="field">
-        <label for="@($"pages-{Entry.Id}")">Pages in your edition</label>
-        <input id="@($"pages-{Entry.Id}")" type="number" min="1" @bind="_pageCount" disabled="@Disabled" />
-        <button type="button" @onclick="() => OnPageCount(_pageCount)" disabled="@Disabled">Save</button>
-        @if (Entry.PageCountOverride is not null)
+<div class="panel sheet settings @(_editionOpen ? "settings--finding" : null)" @ref="_panel" @onkeydown="CloseOnEscapeAsync">
+    <p class="sheet__title">
+        @(_editionOpen ? "Find your edition" : "Settings")
+        @if (Title is { } title)
         {
-            <button type="button" class="link-button" @onclick="() => OnPageCount(null)" disabled="@Disabled">
-                Use the catalog's count
-            </button>
+            <span class="sheet__book">@title</span>
         }
-        <p class="hint">
-            @if (Entry.PageCountOverride is { } own)
-            {
-                <text>Yours: @own pages.</text>
-            }
-            else if (Entry.Book?.TotalPages is { } catalogued)
-            {
-                <text>The catalog says @catalogued pages.</text>
-            }
-            else
-            {
-                <text>Nobody has a page count for this book, so percentages are unavailable until you set one.</text>
-            }
-        </p>
-    </div>
+    </p>
 
-    @*
-        The wrong edition is the other way a count goes wrong, and the fix for it is
-        not a number but the right book. Pointing the entry at it keeps everything
-        — status, sessions, the device linked to it — where re-adding would not.
-    *@
-    <div class="field field--edition">
-        <label for="@($"edition-{Entry.Id}")">Edition</label>
-        @if (_editions is null && !_editionOpen)
-        {
-            <button type="button" class="link-button" @onclick="OpenEditionSearch" disabled="@Disabled">
-                Reading a different edition? Find it
-            </button>
-        }
-        else
-        {
-            <div class="edition__search">
-                <input id="@($"edition-{Entry.Id}")" type="search" placeholder="Title, author or ISBN"
-                       @bind="_editionQuery" @bind:event="oninput" @onkeydown="SearchEditionOnEnterAsync"
-                       disabled="@(Disabled || _editionBusy)" />
-                <button type="button" @onclick="() => SearchEditionAsync(1)" disabled="@(Disabled || _editionBusy || string.IsNullOrWhiteSpace(_editionQuery))">
-                    @(_editionBusy ? "Searching…" : "Search")
+    @if (!_editionOpen)
+    {
+        <div class="settings__grid">
+            <section class="settings__item">
+                <label class="settings__label" for="@($"method-{Entry.Id}")">Track by</label>
+                <TrackingSelect Id="@($"method-{Entry.Id}")" Value="@Entry.TrackingMethod" Disabled="Disabled" OnPick="PickTrackingMethodAsync" />
+                @* Switching is a display-time conversion, never a rewrite of past sessions —
+                   each keeps the unit it was logged in. Saying so stops it looking lossy. *@
+                <p class="hint">Past sessions keep the unit they were logged in.</p>
+            </section>
+
+            <section class="settings__item">
+                <label class="settings__label" for="@($"pages-{Entry.Id}")">Pages in your edition</label>
+                <div class="settings__pages">
+                    <input id="@($"pages-{Entry.Id}")" type="number" min="1" inputmode="numeric" @bind="_pageCount" @bind:event="oninput" disabled="@Disabled" />
+                    <button type="button" @onclick="() => OnPageCount(_pageCount)" disabled="@(Disabled || _pageCount is not > 0 || _pageCount == CurrentPageCount)">Save</button>
+                </div>
+                <p class="hint">
+                    @if (Entry.PageCountOverride is { } own)
+                    {
+                        <text>Yours: @own pages. </text>
+                        <button type="button" class="link-button" @onclick="() => OnPageCount(null)" disabled="@Disabled">Use the catalog's count</button>
+                    }
+                    else if (Entry.Book?.TotalPages is { } catalogued)
+                    {
+                        <text>The catalog says @catalogued pages.</text>
+                    }
+                    else
+                    {
+                        <text>Nobody has a page count for this book, so percentages are unavailable until you set one.</text>
+                    }
+                </p>
+            </section>
+
+            @*
+                The wrong edition is the other way a count goes wrong, and the fix for it is
+                not a number but the right book. Pointing the entry at it keeps everything
+                — status, sessions, the device linked to it — where re-adding would not.
+            *@
+            <section class="settings__item">
+                <span class="settings__label">Edition</span>
+                <button type="button" class="status__trigger settings__find" @onclick="OpenEditionSearchAsync" disabled="@Disabled">
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+                    Find a different one
                 </button>
-                <button type="button" class="link-button" @onclick="CloseEditionSearch" disabled="@Disabled">Cancel</button>
-            </div>
-            <p class="hint">Your status, sessions and device link stay; only the page count follows the new edition.</p>
+                <p class="hint">Your status, sessions and device link stay.</p>
+            </section>
+        </div>
 
-            @if (_editionProblem is { } editionProblem)
-            {
-                <p class="hint hint--bad" role="alert">@editionProblem</p>
-            }
+        @* The phone's way out: the Settings button that opened the sheet is under the scrim. *@
+        <div class="sheet__foot">
+            <button type="button" class="link-button" @onclick="OnClose">Done</button>
+        </div>
+    }
+    else
+    {
+        <button type="button" class="link-button settings__back" @onclick="CloseEditionSearch">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5L5.5 8l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            Settings
+        </button>
 
+        <div class="settings__search">
+            <label class="search__field">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+                <input @ref="_queryBox" placeholder="Title, author or ISBN" aria-label="Find your edition"
+                       @bind="_editionQuery" @bind:event="oninput" @onkeydown="SearchEditionOnEnterAsync"
+                       disabled="@Disabled" />
+                @if (_editionQuery.Length > 0)
+                {
+                    <button type="button" class="search__clear" aria-label="Clear search" @onclick="ClearQuery">
+                        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
+                    </button>
+                }
+            </label>
+            <button type="button" class="button--primary" @onclick="() => SearchEditionAsync(1)" disabled="@(Disabled || _editionBusy || string.IsNullOrWhiteSpace(_editionQuery))">
+                @(_editionBusy ? "Searching…" : "Search")
+            </button>
+        </div>
+        <p class="hint settings__note">Only the page count follows the new edition.</p>
+
+        @if (_editionProblem is { } editionProblem)
+        {
+            <p class="hint hint--bad settings__note" role="alert">@editionProblem</p>
+        }
+
+        <div class="settings__results">
             @if (_editions is { } editions)
             {
-                @if (editions.Results.Count == 0)
+                @if (_found.Count == 0)
                 {
-                    <p class="hint">Nothing in the library matches that.</p>
+                    <p class="muted settings__none">Nothing in the library matches that.</p>
                 }
                 else
                 {
-                    <ul class="editions">
-                        @foreach (var found in editions.Results)
+                    <p class="group">In the library · @(editions.HasMore ? $"{_found.Count}+" : _found.Count.ToString())</p>
+
+                    @* More results are added under the ones already there, rather than replacing
+                       them: the list scrolls in its own window, so there is no page to turn. *@
+                    <div class="lib-grid">
+                        @foreach (var (found, at) in _found.Select((found, at) => (found, at)))
                         {
-                            <li class="lib-card @(found.Id == Entry.BookId ? "lib-card--mine" : null)" @key="found.Id">
+                            <div class="lib-card @(found.Id == Entry.BookId ? "lib-card--mine" : null)" @key="found.Id" style="--at:@(at - _firstNew)">
                                 @if (found.CoverUrl is { } jacket)
                                 {
                                     <img src="@jacket" alt="" loading="lazy" />
@@ -111,23 +151,29 @@
                                 else
                                 {
                                     <button type="button" class="button--add" @onclick="() => UseEditionAsync(found)" disabled="@Disabled">
-                                        Use this edition
+                                        Use this
                                     </button>
                                 }
-                            </li>
+                            </div>
                         }
-                    </ul>
+                    </div>
 
                     @if (editions.HasMore)
                     {
-                        <button type="button" class="link-button" @onclick="() => SearchEditionAsync(editions.Page + 1)" disabled="@(Disabled || _editionBusy)">
-                            More results
-                        </button>
+                        <div class="settings__more">
+                            <button type="button" class="link-button" @onclick="() => SearchEditionAsync(editions.Page + 1)" disabled="@(Disabled || _editionBusy)">
+                                @(_editionBusy ? "Searching…" : "More results")
+                            </button>
+                        </div>
                     }
                 }
             }
-        }
-    </div>
+            else if (_editionBusy)
+            {
+                <p class="muted settings__none">Searching the library…</p>
+            }
+        </div>
+    }
 </div>
 
 @code {
@@ -136,6 +182,14 @@
 
     [Parameter]
     public bool Disabled { get; set; }
+
+    /// <summary>The book, named at the head of the phone's sheet, which covers the card it came from.</summary>
+    [Parameter]
+    public string? Title { get; set; }
+
+    /// <summary>Closes the panel: the scrim, Escape, or Done.</summary>
+    [Parameter]
+    public EventCallback OnClose { get; set; }
 
     [Parameter, EditorRequired]
     public required Func<string, Task> OnTrackingMethod { get; set; }
@@ -149,37 +203,95 @@
     public required Func<Guid, Task<bool>> OnEdition { get; set; }
 
     private int? _pageCount;
+    private int? _shownPageCount;
 
     private bool _editionOpen;
     private string _editionQuery = "";
     private bool _editionBusy;
     private BookSearchPage? _editions;
+    private readonly List<BookSearchResult> _found = [];
+
+    /// <summary>Where the page just added starts, so only its cards play the arrival.</summary>
+    private int _firstNew;
     private string? _editionProblem;
+    private bool _focusQuery;
 
-    protected override void OnParametersSet() =>
-        _pageCount = Entry.PageCountOverride ?? Entry.Book?.TotalPages;
+    private ElementReference _panel;
+    private ElementReference _queryBox;
+    private IJSObjectReference? _lift;
 
-    private async Task TrackingMethodChangedAsync(ChangeEventArgs e)
+    private int? CurrentPageCount => Entry.PageCountOverride ?? Entry.Book?.TotalPages;
+
+    /// <summary>
+    /// The box follows the count the entry has, but only when that count changes: a re-render of
+    /// the card mid-typing (the shelf refreshing, say) would otherwise put the old number back.
+    /// </summary>
+    protected override void OnParametersSet()
     {
-        if (e.Value?.ToString() is { } method)
+        if (CurrentPageCount != _shownPageCount)
         {
-            await OnTrackingMethod(method);
+            _pageCount = _shownPageCount = CurrentPageCount;
         }
     }
 
-    private void OpenEditionSearch()
+    private Task PickTrackingMethodAsync(string method) => OnTrackingMethod(method);
+
+    /// <summary>Escape steps back: out of the edition search to Settings, then out of Settings.</summary>
+    private async Task CloseOnEscapeAsync(KeyboardEventArgs e)
+    {
+        if (e.Key != "Escape")
+        {
+            return;
+        }
+
+        if (_editionOpen)
+        {
+            CloseEditionSearch();
+        }
+        else
+        {
+            await OnClose.InvokeAsync();
+        }
+    }
+
+
+    /// <summary>
+    /// Opens on a search already made for the book's own title — the likeliest way to find
+    /// another printing of it — so the first thing shown is a list, not an empty box.
+    /// </summary>
+    private async Task OpenEditionSearchAsync()
     {
         _editionOpen = true;
         _editionQuery = Entry.Book?.Title ?? "";
         _editions = null;
+        _found.Clear();
         _editionProblem = null;
+
+        if (!string.IsNullOrWhiteSpace(_editionQuery))
+        {
+            await SearchEditionAsync(1);
+        }
+        else
+        {
+            _focusQuery = true;
+        }
     }
 
     private void CloseEditionSearch()
     {
         _editionOpen = false;
         _editions = null;
+        _found.Clear();
         _editionProblem = null;
+    }
+
+    private void ClearQuery()
+    {
+        _editionQuery = "";
+        _editions = null;
+        _found.Clear();
+        _editionProblem = null;
+        _focusQuery = true;
     }
 
     private async Task SearchEditionOnEnterAsync(KeyboardEventArgs e)
@@ -201,6 +313,13 @@
 
             if (found is not null)
             {
+                if (page == 1)
+                {
+                    _found.Clear();
+                }
+
+                _firstNew = _found.Count;
+                _found.AddRange(found.Results.Where(result => _found.All(shown => shown.Id != result.Id)));
                 _editions = found;
             }
             else
@@ -224,6 +343,40 @@
         if (await OnEdition(book.Id))
         {
             CloseEditionSearch();
+        }
+    }
+
+    /// <summary>Kept above an iOS keyboard on a phone (js/liftSheet.js), as the log form is.</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _lift = await JS.InvokeAsync<IJSObjectReference>("import", "./js/liftSheet.js");
+            await _lift.InvokeVoidAsync("attach", _panel);
+        }
+
+        if (_focusQuery && _editionOpen)
+        {
+            _focusQuery = false;
+            await _queryBox.FocusAsync();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_lift is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _lift.InvokeVoidAsync("detach", _panel);
+            await _lift.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // The page went with the circuit; there is nothing to let go of.
         }
     }
 }

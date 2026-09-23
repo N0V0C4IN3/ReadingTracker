@@ -1,0 +1,101 @@
+@*
+    The TrackingMethod, drawn the way the status is (StatusSelect): a flat trigger with a chevron,
+    and a list of its own beneath it rather than the platform's <select>. It lives inside
+    Settings, which on a phone is already a sheet, so here the list always drops down under the
+    trigger instead of becoming a second sheet (app.css, .settings .status__menu).
+*@
+
+<div class="status tracking" @onkeydown="CloseOnEscape" @onkeydown:stopPropagation="_open">
+    <button type="button"
+            id="@Id"
+            class="status__trigger"
+            aria-haspopup="listbox"
+            aria-expanded="@(_open ? "true" : "false")"
+            @onclick="Toggle"
+            disabled="@Disabled">
+        @Methods.GetValueOrDefault(Value, Value)
+        <svg class="status__chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6.5l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
+    </button>
+
+    @if (_open)
+    {
+        <button type="button" class="status__scrim" tabindex="-1" aria-hidden="true" @onclick="Close"></button>
+        <ul class="status__menu" role="listbox" aria-label="Track by">
+            @foreach (var method in Methods)
+            {
+                var on = method.Key == Value;
+                <li role="option" aria-selected="@(on ? "true" : "false")">
+                    <button type="button"
+                            class="status__row @(on ? "status__row--on" : null)"
+                            @ref="_rows[method.Key]"
+                            @onclick="() => PickAsync(method.Key)">
+                        @method.Value
+                        @if (on)
+                        {
+                            <svg class="status__tick" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                        }
+                    </button>
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    private static readonly Dictionary<string, string> Methods = new()
+    {
+        ["Pages"] = "Pages",
+        ["Percentage"] = "Percentage",
+    };
+
+    [Parameter, EditorRequired]
+    public required string Value { get; set; }
+
+    [Parameter]
+    public string? Id { get; set; }
+
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnPick { get; set; }
+
+    private bool _open;
+    private bool _justOpened;
+    private readonly Dictionary<string, ElementReference> _rows = new();
+
+    private void Toggle()
+    {
+        _open = !_open;
+        _justOpened = _open;
+    }
+
+    private void Close() => _open = false;
+
+    private void CloseOnEscape(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            Close();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_justOpened && _rows.TryGetValue(Value, out var current))
+        {
+            _justOpened = false;
+            await current.FocusAsync();
+        }
+    }
+
+    private async Task PickAsync(string method)
+    {
+        Close();
+
+        if (method != Value)
+        {
+            await OnPick.InvokeAsync(method);
+        }
+    }
+}

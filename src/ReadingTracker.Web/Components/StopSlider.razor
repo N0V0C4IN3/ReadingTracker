@@ -1,0 +1,91 @@
+@using ReadingTracker.Web.Services
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@*
+    "How much did you read?" said as where the reader stopped: the whole book is the slider, the
+    part already read is drawn in, and the thumb is slid forward from it. The amount it gives the
+    form is where they stopped less where they were (StopRange).
+
+    One slider the width of the book, so the part already read and the thumb agree to the pixel,
+    and a nudge either side of the page number, since on a phone a page is a couple of pixels of
+    slider and the last page or two is easier said with a tap.
+*@
+
+<div class="stop" style="--read: @Fraction(Range.Read); --to: @Fraction(Stop)">
+    <div class="stop__head">
+        <label class="stop__label" for="@($"stop-{_id}")">Stopped at</label>
+        <span class="stop__gain @(Stop == Range.Read ? "stop__gain--none" : null)">@Range.Gain(Stop)</span>
+    </div>
+
+    <div class="stop__reading">
+        <button type="button" class="stop__nudge" aria-label="@(Range.Pages ? "One page back" : "One percent back")"
+                disabled="@(Stop <= Range.Read)" @onclick="() => MoveTo(Stop - 1)">−</button>
+        <output class="stop__place" for="@($"stop-{_id}")">
+            @Range.Place(Stop)
+            @if (Range.Pages)
+            {
+                <span class="stop__of">of @Range.Total</span>
+            }
+        </output>
+        <button type="button" class="stop__nudge" aria-label="@(Range.Pages ? "One page on" : "One percent on")"
+                disabled="@(Stop >= Range.Total)" @onclick="() => MoveTo(Stop + 1)">+</button>
+    </div>
+
+    <input id="@($"stop-{_id}")" class="stop__range" type="range" @ref="_slider"
+           min="0" max="@Range.Total" step="1" value="@Stop" data-floor="@Range.Read"
+           aria-valuetext="@($"{Range.Place(Stop)}, {Range.Gain(Stop)}")"
+           @oninput="Slid" />
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required StopRange Range { get; set; }
+
+    /// <summary>The amount read this time, in the book's unit.</summary>
+    [Parameter]
+    public decimal? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<decimal?> ValueChanged { get; set; }
+
+    private readonly string _id = Guid.NewGuid().ToString("N")[..8];
+    private ElementReference _slider;
+    private IJSObjectReference? _module;
+
+    private int Stop => Range.StopFor(Value);
+
+    private string Fraction(int at) =>
+        ((double)at / Range.Total).ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
+
+    private Task MoveTo(int stop) => ValueChanged.InvokeAsync(Range.AmountTo(stop));
+
+    private Task Slid(ChangeEventArgs change) =>
+        int.TryParse(change.Value as string, out var stop) ? MoveTo(stop) : Task.CompletedTask;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/stopSlider.js");
+            await _module.InvokeVoidAsync("holdFloor", _slider);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _module.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // The page went with the circuit; there is nothing to let go of.
+        }
+    }
+}

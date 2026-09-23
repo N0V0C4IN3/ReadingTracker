@@ -170,6 +170,11 @@
             field and the grip are hidden, and what remains is the library's answer, in place under
             the shelf.
         *@
+        @if (_searchOpen)
+        {
+            @* Phone only (app.css): a tap anywhere off the open dock closes it, as its ✕ does. *@
+            <button type="button" class="search__scrim" tabindex="-1" aria-hidden="true" @onclick="ClearSearch"></button>
+        }
         <section class="search @(_searchOpen ? "search--open" : null)" @ref="_dockEl">
             <button type="button" class="search__grip" aria-label="Resize search results"></button>
 
@@ -791,6 +796,7 @@
     /// <summary>Whether the + now on screen has its in-tap opener (sheet.js armOpener) attached.</summary>
     private bool _fabArmed;
     private IJSObjectReference? _sheet;
+    private IJSObjectReference? _exit;
 
     private void OpenSearch()
     {
@@ -809,6 +815,7 @@
         if (firstRender)
         {
             _sheet = await JS.InvokeAsync<IJSObjectReference>("import", "./js/sheet.js");
+            _exit = await JS.InvokeAsync<IJSObjectReference>("import", "./js/motion.js");
         }
 
         if (_focusQuery)
@@ -847,6 +854,13 @@
 
     private async Task ClearSearch()
     {
+        // The phone's dock drops away before it is closed; closing it first would leave nothing
+        // on screen to play that on.
+        if (_searchOpen && _exit is not null)
+        {
+            await _exit.InvokeVoidAsync("playOut", _dockEl);
+        }
+
         _query = "";
         _searched = null;
         _results = null;

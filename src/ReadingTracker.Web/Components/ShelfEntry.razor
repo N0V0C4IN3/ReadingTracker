@@ -90,6 +90,11 @@
         @if (_panel == Panel.Log && Logging)
         {
             <SessionForm Unit="@Entry.TrackingMethod"
+                         EffectivePageCount="Entry.EffectivePageCount"
+                         Progress="Entry.Progress"
+                         Brief
+                         DetailsHref="@PageHref"
+                         Title="@Entry.Book?.Title"
                          SubmitLabel="Log it"
                          OnSubmit="LogAsync"
                          OnCancel="Close" />
@@ -97,13 +102,22 @@
 
         @if (_panel == Panel.History)
         {
-            <SessionHistory Sessions="Sessions"
-                            Unit="@Entry.TrackingMethod"
-                            EffectivePageCount="Entry.EffectivePageCount"
-                            Reasons="Reasons"
-                            OnCorrectDay="CorrectDayAsync"
-                            OnDeleteDay="DeleteDayAsync"
-                            OnEditingChanged="EditingChanged" />
+            @* In the card, the days under it; on a phone, a sheet over the shelf like the log form
+               and Settings, with Done at its foot since the History button is under the scrim. *@
+            <button type="button" class="sheet__scrim" tabindex="-1" aria-hidden="true" @onclick="Close"></button>
+            <div class="sheet history-sheet">
+                <p class="sheet__title">History <span class="sheet__book">@Entry.Book?.Title</span></p>
+                <SessionHistory Sessions="Sessions"
+                                Unit="@Entry.TrackingMethod"
+                                EffectivePageCount="Entry.EffectivePageCount"
+                                Reasons="Reasons"
+                                OnCorrectDay="CorrectDayAsync"
+                                OnDeleteDay="DeleteDayAsync"
+                                OnEditingChanged="EditingChanged" />
+                <div class="sheet__foot">
+                    <button type="button" class="link-button" @onclick="Close">Done</button>
+                </div>
+            </div>
         }
 
         @if (_panel == Panel.Settings)
@@ -112,7 +126,9 @@
                            Disabled="Working"
                            OnTrackingMethod="ChangeTrackingMethodAsync"
                            OnPageCount="SetPageCountAsync"
-                           OnEdition="UseEditionAsync" />
+                           OnEdition="UseEditionAsync"
+                           OnClose="Close"
+                           Title="@Entry.Book?.Title" />
         }
 
         @if (_panel == Panel.Finished)
