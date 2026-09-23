@@ -330,7 +330,9 @@ public static class BookEndpoints
             lookup.Book.CoverUrl,
             lookup.Book.TotalPages,
             lookup.Book.Source.ToString(),
-            lookup.Book.Description,
+            // Cleaned when it was stored, and again on the way out: a Book cached before the
+            // cleaning learned something new is served as though it had been cached after.
+            DescriptionText.Clean(lookup.Book.Description),
             lookup.Book.Publisher,
             lookup.Book.PublishedDate,
             lookup.Book.Categories,
