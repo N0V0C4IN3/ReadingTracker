@@ -1,37 +1,73 @@
 @using ReadingTracker.Web.Services
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 @*
     "I read this much." Used both to log a new stretch of reading and to correct one already
     recorded — the shape is identical, and Library takes the same body for both.
 
-    A reader knows how much they got through; asking them which page they stopped on makes them
-    go and look. So the amount is what is asked for, in whatever method they track this book by
-    (ADR-0010). Library validates it properly — some reading, and not more than the whole book in
-    one sitting — and the caller shows what it says; this form only stops obviously empty input
-    from making the trip.
+    What is sent is an amount, in whatever method they track this book by (ADR-0010). A new stretch
+    of a book with a known length is said by sliding to where the reader stopped (StopSlider), and
+    the amount is worked out from it; a correction, or a book with no length to slide along, is
+    said as the number itself. Library validates it properly — some reading, and not more than
+    the whole book in one sitting — and the caller shows what it says; this form only stops
+    obviously empty input from making the trip.
+
+    Brief is the shelf card's form: the slider and nothing else, logged for today. The day and the
+    time spent are the Book page's, which has the room for them.
+
+    On a phone a new log comes up as a sheet from the foot of the screen, over a scrim, the way
+    the status list does (the stylesheet decides; on a wide screen the scrim and the title are
+    not drawn and the form stays in the card). A tap on the scrim, or Escape, is Cancel. A
+    correction stays where it is: it is a row of the history being edited in place.
 *@
 
-<div class="panel">
+@if (Sheet)
+{
+    <button type="button" class="sheet__scrim" tabindex="-1" aria-hidden="true" @onclick="OnCancel"></button>
+}
+
+<div class="panel @(Sheet ? "sheet" : null)" @ref="_panel" @onkeydown="CancelOnEscape">
+    @if (Sheet && Title is { } title)
+    {
+        <p class="sheet__title">Log reading <span class="sheet__book">@title</span></p>
+    }
+
     <div class="session-form">
-        <div class="field">
-            <label for="@($"read-{_id}")">Read</label>
-            <input id="@($"read-{_id}")" type="number" step="any" min="0" @bind="_amount" />
-            <span class="unit">@UnitLabel</span>
-        </div>
+        @if (Range is { } range)
+        {
+            <StopSlider Range="range" @bind-Value="_amount" />
+        }
+        else
+        {
+            <div class="field">
+                <label for="@($"read-{_id}")">Read</label>
+                <input id="@($"read-{_id}")" type="number" step="any" min="0" @bind="_amount" />
+                <span class="unit">@UnitLabel</span>
+            </div>
+        }
 
-        <div class="field">
-            <label for="@($"on-{_id}")">On</label>
-            <input id="@($"on-{_id}")" type="date" @bind="_occurredOn" />
-        </div>
+        @if (!Brief)
+        {
+            <div class="field">
+                <label for="@($"on-{_id}")">On</label>
+                <input id="@($"on-{_id}")" type="date" @bind="_occurredOn" />
+            </div>
 
-        <div class="field">
-            @* Optional, and said in the label rather than as a placeholder: on a phone the box is
-               half a card wide and a placeholder ran into the unit beside it. *@
-            <label for="@($"mins-{_id}")">For <span class="field__note">(optional)</span></label>
-            <input id="@($"mins-{_id}")" type="number" min="1" @bind="_minutes" />
-            <span class="unit">minutes</span>
-        </div>
+            <div class="field">
+                @* Optional, and said in the label rather than as a placeholder: on a phone the box is
+                   half a card wide and a placeholder ran into the unit beside it. *@
+                <label for="@($"mins-{_id}")">For <span class="field__note">(optional)</span></label>
+                <input id="@($"mins-{_id}")" type="number" min="1" @bind="_minutes" />
+                <span class="unit">minutes</span>
+            </div>
+        }
     </div>
+
+    @if (Brief && DetailsHref is { } details)
+    {
+        <p class="hint session-form__brief">Logged for today. <a href="@details">A different day, or the time it took?</a></p>
+    }
 
     @if (_complaint is { } complaint)
     {
@@ -62,6 +98,62 @@
     [Parameter]
     public EventCallback OnCancel { get; set; }
 
+    /// <summary>The book's length, which with <see cref="Progress"/> gives the slider its ends.</summary>
+    [Parameter]
+    public int? EffectivePageCount { get; set; }
+
+    /// <summary>How far the reader has got, which is where the slider starts.</summary>
+    [Parameter]
+    public Progress? Progress { get; set; }
+
+    /// <summary>How much read and nothing else, for today: the shelf card's form.</summary>
+    [Parameter]
+    public bool Brief { get; set; }
+
+    /// <summary>Where the rest of the form is when this one is <see cref="Brief"/>: the Book page.</summary>
+    [Parameter]
+    public string? DetailsHref { get; set; }
+
+    /// <summary>The book's title, for the head of the sheet — which covers the card it came from.</summary>
+    [Parameter]
+    public string? Title { get; set; }
+
+    private ElementReference _panel;
+    private IJSObjectReference? _lift;
+
+    /// <summary>A new log is a sheet on a phone; a correction is not.</summary>
+    private bool Sheet => Existing is null;
+
+    private Task CancelOnEscape(KeyboardEventArgs e) => e.Key == "Escape" ? OnCancel.InvokeAsync() : Task.CompletedTask;
+
+    /// <summary>Kept above an iOS keyboard, which comes up over the foot of the screen (js/liftSheet.js).</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && Sheet)
+        {
+            _lift = await JS.InvokeAsync<IJSObjectReference>("import", "./js/liftSheet.js");
+            await _lift.InvokeVoidAsync("attach", _panel);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_lift is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _lift.InvokeVoidAsync("detach", _panel);
+            await _lift.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // The page went with the circuit, and the sheet with it.
+        }
+    }
+
     private readonly string _id = Guid.NewGuid().ToString("N")[..8];
 
     private decimal? _amount;
@@ -70,6 +162,9 @@
     private string? _complaint;
 
     private string UnitLabel => Unit == "Percentage" ? "%" : "pages";
+
+    /// <summary>What a new stretch can be slid along; none for a correction, which is a number.</summary>
+    private StopRange? Range => Existing is null ? StopRange.For(Unit, EffectivePageCount, Progress) : null;
 
     protected override void OnParametersSet()
     {
@@ -91,9 +186,9 @@
 
     private async Task SubmitAsync()
     {
-        if (_amount is not { } amount)
+        if (_amount is not { } amount || amount <= 0)
         {
-            _complaint = "Say how much you read.";
+            _complaint = Range is null ? "Say how much you read." : "Slide to where you stopped.";
             return;
         }
 

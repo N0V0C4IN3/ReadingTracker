@@ -2753,46 +2753,147 @@ button.danger:hover:not(:disabled) {
 }
 
 /*
-    Finding the right edition, inside Settings: the search on its own line under the label, and
-    the library's answer as the same compact cards the shelf's search uses, one to a row since
-    the panel is narrower than the page.
+    Settings: three settings side by side where the card is wide enough, each centred over its
+    own hint — a small label, the control, a line on what it does. The controls are the app's,
+    not the platform's: Track by is the status's trigger and list (TrackingSelect), and the
+    edition is found with the main search's field and cards.
 */
-.field--edition {
-    align-items: flex-start;
+.settings {
+    text-align: center;
 }
 
-.edition__search {
-    flex: 1 1 100%;
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
+.settings__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 1.25rem 1.5rem;
+    padding: 0.35rem 0 0.15rem;
 }
 
-.edition__search input {
-    flex: 1 1 12rem;
-    min-width: 0;
-}
-
-.field--edition .hint {
-    flex-basis: 100%;
-    margin: 0;
-}
-
-.editions {
-    flex: 1 1 100%;
-    /* A flex item's minimum is its content's width, and a title with nowrap is wide: without
-       this the list grows past the panel and the button on each card goes with it. */
-    min-width: 0;
+.settings__item {
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 0.5rem;
-    margin: 0;
-    padding: 0;
-    list-style: none;
+    min-width: 0;
 }
 
-.editions > .lib-card {
-    max-width: 100%;
+/* The small capitals of the shelf's group headings. */
+.settings__label {
+    font-size: 0.72rem;
+    font-weight: 650;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+}
+
+.settings__item .hint {
+    max-width: 16rem;
+    margin: 0;
+    text-wrap: balance;
+}
+
+.settings__item .hint .link-button {
+    display: inline;
+    padding: 0;
+    font-size: inherit;
+}
+
+.settings__pages {
+    display: flex;
+    gap: 0.4rem;
+}
+
+.settings__pages input {
+    width: 5.5rem;
+    text-align: center;
+}
+
+/* No standing to colour it, so the list's tint is the card's. */
+.tracking {
+    --dot: var(--accent);
+}
+
+/* Under its trigger, centred on it, whatever the width of the column it is in. */
+.settings .status__menu {
+    right: auto;
+    left: 50%;
+    width: 11.5rem;
+    min-width: 0;
+    margin-left: -5.75rem;
+    text-align: left;
+}
+
+.settings__find svg {
+    width: 0.95em;
+    height: 0.95em;
+    color: var(--ink-faint);
+}
+
+/* A phone's way out of a sheet; in the card the button that opened it closes it. */
+.sheet__foot {
+    display: none;
+}
+
+.settings__back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    float: left;
+}
+
+.settings__back svg {
+    width: 0.95em;
+    height: 0.95em;
+}
+
+.settings__search {
+    clear: both;
+    display: flex;
+    gap: 0.5rem;
+    max-width: 34rem;
+    margin: 0 auto;
+    padding-top: 0.5rem;
+}
+
+.settings__search .button--primary {
+    flex: 0 0 auto;
+    padding-inline: 1.25rem;
+    font-weight: 600;
+}
+
+.settings__note {
+    margin: 0.45rem 0 0;
+}
+
+/*
+    The results scroll in a window of their own, so a page of editions is read inside the panel
+    rather than by scrolling the page down to the foot of it.
+*/
+.settings__results {
+    max-height: 24rem;
+    margin-top: 0.9rem;
+    padding: 0.1rem 0.25rem 0.25rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    text-align: left;
+}
+
+.settings__results:empty {
+    display: none;
+}
+
+.settings__results .lib-grid {
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+}
+
+.settings__none {
+    margin: 0.5rem 0;
+    text-align: center;
+}
+
+.settings__more {
+    margin-top: 0.6rem;
+    text-align: center;
 }
 
 /* Progress ---------------------------------------------------------------- */
@@ -2918,6 +3019,14 @@ button.danger:hover:not(:disabled) {
     background: var(--fill);
 }
 
+/* A sheet's parts — the log form's and Settings': drawn only on a phone, where the panel comes up
+   from the foot of the screen (see the max-width: 560px rules). In the card, as here, it is a
+   panel like the others. */
+.sheet__scrim,
+.sheet__title {
+    display: none;
+}
+
 .panel--danger {
     background: var(--danger-soft);
 }
@@ -2938,6 +3047,7 @@ button.danger:hover:not(:disabled) {
 }
 
 .panel,
+.history-sheet,
 .entry__reasons {
     animation: unfold 240ms var(--ease-out) backwards;
 }
@@ -2946,6 +3056,74 @@ button.danger:hover:not(:disabled) {
 @keyframes dock {
     from { opacity: 0; transform: translateY(1.5rem); }
     to { opacity: 1; transform: none; }
+}
+
+/*
+    Leaving. Blazor takes a closed menu, sheet or panel out of the page at once; js/motion.js puts
+    it back with .is-leaving for as long as one of these takes, so everything goes the way it
+    came. A panel in a card fades and folds its height away, so the card closes up with it
+    rather than snapping shut after it (where a browser cannot animate a height to nothing, it
+    only fades, and the card closes up at the end). A menu lifts back towards its trigger. On a
+    phone, sheets drop back off the foot of the screen (the max-width: 560px rules).
+*/
+@keyframes fold {
+    to {
+        opacity: 0;
+        height: 0;
+        margin-block: 0;
+        padding-block: 0;
+    }
+}
+
+@keyframes lift {
+    to { opacity: 0; transform: translateY(-0.3rem); }
+}
+
+@keyframes clear {
+    to { opacity: 0; }
+}
+
+@keyframes undock {
+    to { transform: translateY(100%); }
+}
+
+/* Coming, the same way backwards: a panel grows its height open (js/motion.js). */
+@keyframes grow {
+    from {
+        opacity: 0;
+        height: 0;
+        margin-block: 0;
+        padding-block: 0;
+    }
+}
+
+.panel.is-entering,
+.sheet.is-entering {
+    interpolate-size: allow-keywords;
+    overflow: hidden;
+    animation: grow 240ms var(--ease-out) backwards;
+}
+
+.is-leaving {
+    pointer-events: none;
+}
+
+.panel.is-leaving,
+.sheet.is-leaving {
+    interpolate-size: allow-keywords;
+    overflow: hidden;
+    animation: fold 200ms var(--ease) forwards;
+}
+
+.status__menu.is-leaving,
+.account__menu.is-leaving,
+.goal__menu.is-leaving {
+    animation: lift 160ms var(--ease) forwards;
+}
+
+.status__scrim.is-leaving,
+.account__scrim.is-leaving {
+    animation: clear 160ms var(--ease) forwards;
 }
 
 .field {
@@ -3011,6 +3189,162 @@ button.danger:hover:not(:disabled) {
     gap: 0.5rem;
     align-items: center;
     margin-top: 0.9rem;
+}
+
+/*
+    Where the reader stopped (StopSlider): a head saying how much that is, the page itself between
+    a nudge either side, and the book as one slider under them -- the part already read drawn in
+    quiet ink, what this sitting adds in the accent, the rest bare.
+
+    The browser keeps the thumb's centre half a thumb in from either end of the track, so a stop
+    at a fraction f of the book sits at r + (width - 2r) * f, not at f of the width. The two parts
+    are painted by that same sum, so the read part ends where the thumb starts from, to the pixel.
+*/
+.stop {
+    --thumb: 1.75rem;
+    --at-read: calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--read));
+    --at-stop: calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--to));
+    --track: linear-gradient(90deg,
+        var(--ink-faint) 0 var(--at-read),
+        var(--accent) var(--at-read) var(--at-stop),
+        var(--fill-hover) var(--at-stop) 100%);
+
+    flex: 1 1 100%;
+    min-width: 0;
+}
+
+.stop__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.stop__label {
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+}
+
+.stop__gain {
+    font-size: 0.85rem;
+    font-weight: 650;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    transition: opacity var(--quick) var(--ease);
+}
+
+/* Nothing added yet: the figure stays in its place, so the head does not shift when it arrives. */
+.stop__gain--none {
+    opacity: 0;
+}
+
+.stop__reading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin: 0.35rem 0 0.2rem;
+}
+
+.stop__place {
+    font-size: 1.35rem;
+    font-weight: 700;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.stop__of {
+    margin-left: 0.2rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--ink-soft);
+}
+
+/* A thumb's worth of target, round, quiet until pointed at: the slider is the main control. */
+.stop__nudge {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    border-radius: 999px;
+    font-size: 1.2rem;
+    line-height: 1;
+}
+
+/* The input is as tall as a thumb can hit; the track drawn inside it is not. */
+.stop__range {
+    display: block;
+    width: 100%;
+    height: 2.75rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    appearance: none;
+    cursor: pointer;
+    touch-action: pan-y;
+}
+
+.stop__range::-webkit-slider-runnable-track {
+    height: 0.6rem;
+    border-radius: 999px;
+    background: var(--track);
+}
+
+.stop__range::-moz-range-track {
+    height: 0.6rem;
+    border-radius: 999px;
+    background: var(--track);
+}
+
+.stop__range::-webkit-slider-thumb {
+    appearance: none;
+    width: var(--thumb);
+    height: var(--thumb);
+    margin-top: calc((0.6rem - var(--thumb)) / 2);
+    border: 3px solid var(--accent);
+    border-radius: 999px;
+    background: var(--card);
+    box-shadow: var(--shadow);
+    transition: transform var(--quick) var(--ease);
+}
+
+.stop__range::-moz-range-thumb {
+    box-sizing: border-box;
+    width: var(--thumb);
+    height: var(--thumb);
+    border: 3px solid var(--accent);
+    border-radius: 999px;
+    background: var(--card);
+    box-shadow: var(--shadow);
+}
+
+.stop__range:active::-webkit-slider-thumb {
+    transform: scale(1.12);
+}
+
+.stop__range:focus-visible {
+    outline: none;
+}
+
+.stop__range:focus-visible::-webkit-slider-thumb {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+}
+
+.stop__range:focus-visible::-moz-range-thumb {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+}
+
+/* The card's form ends in where the rest of it is: the Book page. */
+.session-form__brief {
+    margin: 0.4rem 0 0;
 }
 
 /* Sessions ---------------------------------------------------------------- */
@@ -3412,6 +3746,10 @@ button.danger:hover:not(:disabled) {
 
 /* The way into the phone's search dock. On a wider screen the panel is simply on the page. */
 .search__fab {
+    display: none;
+}
+
+.search__scrim {
     display: none;
 }
 
@@ -4213,6 +4551,11 @@ button.danger:hover:not(:disabled) {
     .session-form .field:nth-child(3) { grid-column: 2; grid-row: 1; }
     .session-form .field:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
 
+    /* With the stop slider in place of Read, the slider has the first row and the minutes the
+       third: half a card was too narrow for the date beside them. */
+    .session-form .stop { grid-column: 1 / -1; grid-row: 1; }
+    .session-form:has(> .stop) .field:nth-child(3) { grid-column: 1 / -1; grid-row: 3; }
+
     .session-form .field label {
         font-size: 0.68rem;
         letter-spacing: 0.08em;
@@ -4397,6 +4740,25 @@ button.danger:hover:not(:disabled) {
         animation: dock 320ms var(--ease-out) backwards;
     }
 
+    /* Closed, it drops back off the foot of the screen first (Home.razor, motion.js playOut). */
+    .search--open.is-leaving {
+        animation: undock 220ms cubic-bezier(0.4, 0, 1, 1) forwards;
+    }
+
+    /* Everything off the open dock is a tap that closes it, the same as its ✕. Clear, not dimmed:
+       the shelf behind is narrowing as the reader types, and is worth seeing. */
+    .search__scrim,
+    .search__scrim:hover:not(:disabled) {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 9;
+        padding: 0;
+        border-radius: 0;
+        background: transparent;
+        cursor: default;
+    }
+
     .search__fab {
         position: fixed;
         right: 1rem;
@@ -4528,5 +4890,196 @@ button.danger:hover:not(:disabled) {
     .status__row {
         padding: 0.8rem 0.75rem;
         font-size: 1rem;
+    }
+
+    /*
+        Logging reading is the same kind of sheet: up from the foot of the screen over the same
+        scrim, with the same grip and the same slide, so the two things a card opens on a phone
+        open the same way. The book is named at its head, since the sheet covers the card it
+        came from, and it keeps its own Cancel: the Log reading button that would otherwise close
+        it is under the scrim.
+    */
+    .sheet__scrim,
+    .sheet__scrim:hover:not(:disabled) {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 11;
+        padding: 0;
+        border-radius: 0;
+        background: rgb(0 0 0 / 28%);
+        cursor: default;
+        animation: fade 200ms var(--ease-out) backwards;
+    }
+
+    .sheet {
+        position: fixed;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 12;
+        max-height: 85dvh;
+        margin: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 0.5rem 1rem calc(1rem + env(safe-area-inset-bottom));
+        border-radius: 18px 18px 0 0;
+        background: var(--card-frosted);
+        -webkit-backdrop-filter: var(--blur-soft);
+        backdrop-filter: var(--blur-soft);
+        box-shadow: var(--shadow-lifted);
+        animation: dock 260ms var(--ease-out) backwards;
+    }
+
+    .sheet::before {
+        content: "";
+        display: block;
+        width: 2.25rem;
+        height: 4px;
+        margin: 0 auto 0.75rem;
+        border-radius: 2px;
+        background: var(--line-strong);
+    }
+
+    .sheet__title {
+        display: block;
+        margin: 0 0 0.9rem;
+        font-size: 1.05rem;
+        font-weight: 650;
+    }
+
+    .sheet__book {
+        display: block;
+        margin-top: 0.1rem;
+        overflow: hidden;
+        font-size: 0.88rem;
+        font-weight: 500;
+        color: var(--ink-soft);
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+
+    .entry__body > .panel.sheet > .session-form__actions .link-button {
+        display: inline-flex;
+    }
+
+    /*
+        Settings is the same sheet. Its three settings stack, each still centred over its hint,
+        with Done at the foot. Track by's list stays a list under its trigger here — the sheet is
+        already the thing that came up from the foot, and a second sheet over it would hide the
+        setting it is for.
+    */
+    .settings__grid {
+        grid-template-columns: 1fr;
+        gap: 0;
+        padding: 0;
+    }
+
+    .settings__item {
+        padding: 0.9rem 0;
+    }
+
+    .settings__item + .settings__item {
+        border-top: 1px solid var(--line);
+    }
+
+    .settings .status__scrim,
+    .settings .status__scrim:hover:not(:disabled) {
+        background: transparent;
+    }
+
+    .settings .status__menu {
+        position: absolute;
+        top: calc(100% + 0.35rem);
+        right: auto;
+        bottom: auto;
+        left: 50%;
+        padding: 0.35rem;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        /* Solid: glass inside the sheet's glass has nothing left to blur, and the settings
+           beneath read straight through it. */
+        background: var(--card);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+        animation: unfold 240ms var(--ease-out) backwards;
+    }
+
+    .settings .status__menu::before {
+        display: none;
+    }
+
+    .sheet__foot {
+        display: block;
+        text-align: center;
+        padding-top: 0.4rem;
+    }
+
+    .sheet__foot .link-button {
+        display: inline-flex;
+        padding-inline: 1.5rem;
+    }
+
+    /* Finding an edition takes the sheet nearly to the top, and the results scroll inside it
+       under a field that stays put. */
+    .panel.sheet.settings--finding {
+        display: flex;
+        flex-direction: column;
+        height: 92dvh;
+        max-height: none;
+        overflow: hidden;
+    }
+
+    /* A hint's basis is the width of a row; in this column it would be the height of one. */
+    .settings--finding > * {
+        flex: 0 0 auto;
+    }
+
+    .settings--finding > .settings__back {
+        align-self: flex-start;
+    }
+
+    .settings--finding > .settings__results {
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: none;
+        margin-inline: -0.25rem;
+        touch-action: pan-y;
+    }
+
+    .settings--finding .settings__results:empty {
+        display: block;
+    }
+
+    /* The search's + sits under either sheet at the same corner as its last button, and its glow
+       showed through the frosted sheet behind it. It goes while a sheet is up. */
+    body:has(.sheet, .status__menu) .search__fab {
+        visibility: hidden;
+    }
+
+    /* Sheets, and the status list that is one here, drop back off the foot of the screen, and
+       their scrim clears as they go. Track by's list inside Settings is a dropdown still, and
+       lifts away like one. */
+    /* A sheet comes up from the foot rather than growing in place. */
+    .sheet.is-entering {
+        overflow-y: auto;
+        animation: dock 260ms var(--ease-out) backwards;
+    }
+
+    .sheet.is-leaving,
+    .status__menu.is-leaving {
+        overflow: hidden;
+        animation: undock 220ms cubic-bezier(0.4, 0, 1, 1) forwards;
+    }
+
+    .settings .status__menu.is-leaving {
+        animation: lift 160ms var(--ease) forwards;
+    }
+
+    .sheet__scrim.is-leaving,
+    .sheet__scrim.is-leaving:hover:not(:disabled),
+    .status__scrim.is-leaving,
+    .status__scrim.is-leaving:hover:not(:disabled) {
+        animation: clear 220ms cubic-bezier(0.4, 0, 1, 1) forwards;
     }
 }

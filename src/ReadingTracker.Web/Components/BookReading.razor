@@ -62,6 +62,9 @@
     @if (_panel == Panel.Log && Logging)
     {
         <SessionForm Unit="@Entry.TrackingMethod"
+                     EffectivePageCount="Entry.EffectivePageCount"
+                     Progress="Entry.Progress"
+                     Title="@Entry.Book?.Title"
                      SubmitLabel="Log it"
                      OnSubmit="LogAsync"
                      OnCancel="Close" />
@@ -109,7 +112,9 @@
                        Disabled="Working"
                        OnTrackingMethod="ChangeTrackingMethodAsync"
                        OnPageCount="SetPageCountAsync"
-                       OnEdition="UseEditionAsync" />
+                       OnEdition="UseEditionAsync"
+                       OnClose="Close"
+                       Title="@Title" />
     }
 
     @if (_panel == Panel.Remove)
