@@ -1,4 +1,4 @@
-// The phone's search dock as a bottom sheet you can drag between three heights: a peek (just the
+// A phone's search as a bottom sheet you can drag between three heights: a peek (just the
 // field and its handle), a default half, and nearly full. Blazor owns whether the dock is open;
 // this owns only how tall it is while it is, so a drag never round-trips to .NET — the height is
 // written straight to the element on every frame of a drag and snapped on release.
@@ -6,6 +6,11 @@
 // Everything here is a no-op where it cannot apply: called on a wide screen, or where pointer
 // events are missing, it attaches nothing and the dock keeps whatever height the stylesheet gave
 // it. The sheet is only ever this on a phone.
+//
+// Two searches use it: the shelf's dock (Home.razor) and finding an edition inside Settings
+// (EntrySettings.razor). Each has a .search__grip, which the stylesheet shows only where the
+// sheet can be dragged; a grip that is not shown means the search is not a sheet here, and
+// nothing is attached.
 
 const SNAP = { default: 0.55, full: 0.92 };
 const controllers = new WeakMap();
@@ -41,7 +46,7 @@ export function attach(el, startState = 'default') {
     }
 
     const grip = el.querySelector('.search__grip');
-    if (!grip) {
+    if (!grip || getComputedStyle(grip).display === 'none') {
         return;
     }
 
@@ -194,7 +199,11 @@ export function showTop(el) {
     }
 }
 
-export function detach(el) {
+/**
+ * Lets the sheet go. keepSize leaves it at the height and lift it has, for a sheet that is
+ * leaving the page (js/motion.js plays it out) rather than staying on it at another height.
+ */
+export function detach(el, keepSize = false) {
     const c = el && controllers.get(el);
     if (!c) {
         return;
@@ -207,12 +216,15 @@ export function detach(el) {
     window.visualViewport?.removeEventListener('resize', c.follow);
     window.visualViewport?.removeEventListener('scroll', c.follow);
     c.cancel();
+    controllers.delete(el);
+    if (keepSize) {
+        return;
+    }
     el.style.height = '';
     el.style.bottom = '';
     el.style.transition = '';
     el.style.animation = '';
     delete el.dataset.sheet;
-    controllers.delete(el);
 }
 
 const armed = new WeakSet();

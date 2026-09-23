@@ -37,6 +37,9 @@ function leave(node, parent, next) {
     // Put back where it was, if where it was is still there.
     parent.insertBefore(node, next && next.parentNode === parent ? next : null);
     node.inert = true;
+    // A dragged sheet (sheet.js) is left with its animation switched off inline, which would
+    // outrank the exit below.
+    node.style.animation = '';
     node.classList.add('is-leaving');
 
     const animation = getComputedStyle(node).animationName;
@@ -102,6 +105,7 @@ export function playOut(el) {
             return;
         }
 
+        el.style.animation = '';
         el.classList.add('is-leaving');
         const animation = getComputedStyle(el).animationName;
         if (!animation || animation === 'none') {

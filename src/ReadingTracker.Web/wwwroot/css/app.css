@@ -104,6 +104,25 @@
 @property --wash-accent { syntax: "<color>"; inherits: true; initial-value: rgb(47 107 79 / 14%); }
 @property --wash-warm { syntax: "<color>"; inherits: true; initial-value: rgb(212 160 84 / 12%); }
 @property --wash-cool { syntax: "<color>"; inherits: true; initial-value: rgb(86 132 176 / 12%); }
+@property --mesh-hue { syntax: "<number>"; inherits: true; initial-value: 0; }
+
+/*
+    The mesh takes a shade of its own on each of the shelf's tabs. Its four fields of colour (on
+    body) keep their places and their lightness; only their hue moves, by a few degrees round
+    the wheel (oklch, so a shift is as strong in one colour as another), and switching tab glides
+    from one shade to the next, so the page changes with the choice rather than only the list
+    under it. All is the mesh as it always was; off the shelf there are no tabs, and it drifts
+    home.
+*/
+:root {
+    transition: --mesh-hue 2200ms var(--ease-out);
+}
+
+:root:has(.chip--on[data-status="Reading"]) { --mesh-hue: 28; }
+:root:has(.chip--on[data-status="WantToRead"]) { --mesh-hue: 60; }
+:root:has(.chip--on[data-status="Finished"]) { --mesh-hue: -38; }
+:root:has(.chip--on[data-status="OnHold"]) { --mesh-hue: -18; }
+:root:has(.chip--on[data-status="Dropped"]) { --mesh-hue: 95; }
 
 /*
     Only while a page is wearing a jacket, and only from the frame after it has put on what it
@@ -119,7 +138,8 @@
         --accent-ink 900ms var(--ease-out),
         --wash-accent 1200ms var(--ease-out),
         --wash-warm 1200ms var(--ease-out),
-        --wash-cool 1200ms var(--ease-out);
+        --wash-cool 1200ms var(--ease-out),
+        --mesh-hue 2200ms var(--ease-out);
 }
 
 /*
@@ -242,7 +262,8 @@ body {
         Four broad fields of colour blended into one soft mesh — green, amber, blue, green — so the
         translucent surfaces above have something to be translucent against wherever they sit on
         the page, not only in the top corners. Fixed, so it does not slide about as the shelf
-        scrolls.
+        scrolls. Each field's hue is shifted by --mesh-hue, the shade of the shelf tab that is open
+        (see there); on All, and off the shelf, it is no shift at all.
 
         On the body, and not on a fixed element of its own — that was tried. The body's background
         is the canvas: it is painted under every part of the screen the browser shows the page
@@ -257,10 +278,10 @@ body {
         covering so that covering the page does not cover the mesh.
     */
     background-image:
-        radial-gradient(56rem 40rem at 12% 12%, var(--wash-accent), transparent 66%),
-        radial-gradient(52rem 38rem at 88% 4%, var(--wash-warm), transparent 66%),
-        radial-gradient(56rem 40rem at 76% 96%, var(--wash-cool), transparent 66%),
-        radial-gradient(48rem 34rem at 14% 100%, var(--wash-accent), transparent 66%);
+        radial-gradient(56rem 40rem at 12% 12%, oklch(from var(--wash-accent) l c calc(h + var(--mesh-hue)) / alpha), transparent 66%),
+        radial-gradient(52rem 38rem at 88% 4%, oklch(from var(--wash-warm) l c calc(h + var(--mesh-hue)) / alpha), transparent 66%),
+        radial-gradient(56rem 40rem at 76% 96%, oklch(from var(--wash-cool) l c calc(h + var(--mesh-hue)) / alpha), transparent 66%),
+        radial-gradient(48rem 34rem at 14% 100%, oklch(from var(--wash-accent) l c calc(h + var(--mesh-hue)) / alpha), transparent 66%);
     background-attachment: fixed;
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
@@ -1786,10 +1807,10 @@ button.danger:hover:not(:disabled) {
     */
     background-color: var(--page);
     background-image:
-        radial-gradient(56rem 40rem at 12% 12%, var(--wash-accent), transparent 66%),
-        radial-gradient(52rem 38rem at 88% 4%, var(--wash-warm), transparent 66%),
-        radial-gradient(56rem 40rem at 76% 96%, var(--wash-cool), transparent 66%),
-        radial-gradient(48rem 34rem at 14% 100%, var(--wash-accent), transparent 66%);
+        radial-gradient(56rem 40rem at 12% 12%, oklch(from var(--wash-accent) l c calc(h + var(--mesh-hue)) / alpha), transparent 66%),
+        radial-gradient(52rem 38rem at 88% 4%, oklch(from var(--wash-warm) l c calc(h + var(--mesh-hue)) / alpha), transparent 66%),
+        radial-gradient(56rem 40rem at 76% 96%, oklch(from var(--wash-cool) l c calc(h + var(--mesh-hue)) / alpha), transparent 66%),
+        radial-gradient(48rem 34rem at 14% 100%, oklch(from var(--wash-accent) l c calc(h + var(--mesh-hue)) / alpha), transparent 66%);
     background-attachment: fixed;
 }
 
@@ -2831,6 +2852,11 @@ button.danger:hover:not(:disabled) {
 
 /* A phone's way out of a sheet; in the card the button that opened it closes it. */
 .sheet__foot {
+    display: none;
+}
+
+/* The edition search is dragged by this only where it is a sheet, on a phone (see there). */
+.settings .search__grip {
     display: none;
 }
 
@@ -4273,9 +4299,10 @@ button.danger:hover:not(:disabled) {
         backdrop-filter: var(--blur);
     }
 
-    /* The account menu is frosted glass over the shelf: sheerer than the header and blurred less,
-       so the shelf shows through as shapes that cannot be read. */
+    /* The header's menus and the status list are frosted glass over the shelf: sheerer than the
+       header and blurred less, so the shelf shows through as shapes that cannot be read. */
     .account__menu,
+    .goal__menu,
     .status__menu {
         background: var(--card-frosted);
         -webkit-backdrop-filter: var(--blur-soft);
@@ -4490,6 +4517,8 @@ button.danger:hover:not(:disabled) {
         color: var(--ink-faint);
     }
 
+    /* Still the big target a thumb wants, but in the wide screen's voice: the accent as a soft
+       tint and a word, not a slab of solid fill under the figure. */
     .entry__actions .button--log {
         flex: 1 1 100%;
         justify-content: center;
@@ -4497,13 +4526,13 @@ button.danger:hover:not(:disabled) {
         padding: 0.7rem 1rem;
         font-size: 1.02rem;
         border-radius: 12px;
-        background: var(--accent);
-        color: var(--accent-ink);
-        box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
+        background: var(--accent-soft);
+        color: var(--accent);
+        box-shadow: none;
     }
 
     .entry__actions .button--log:hover:not(:disabled) {
-        background: var(--accent-hover);
+        background: color-mix(in srgb, var(--accent) 22%, transparent);
     }
 
     .entry__actions .link-button + .link-button::before {
@@ -4854,11 +4883,12 @@ button.danger:hover:not(:disabled) {
 */
 @media (max-width: 560px) {
     /* Stated for the hovered scrim too: the finger that opened the sheet is still over it. Above
-       the search dock and its + (z-index 10), which the sheet is asking the reader to ignore. */
+       the search dock and its + (z-index 10) and the header (20): while a sheet is up, nothing
+       behind it answers but the scrim, which closes it. */
     .status__scrim,
     .status__scrim:hover:not(:disabled) {
-        z-index: 11;
-        background: rgb(0 0 0 / 28%);
+        z-index: 21;
+        background: rgb(0 0 0 / 40%);
     }
 
     .status__menu {
@@ -4867,7 +4897,7 @@ button.danger:hover:not(:disabled) {
         right: 0;
         bottom: 0;
         left: 0;
-        z-index: 12;
+        z-index: 22;
         min-width: 0;
         padding: 0.5rem 0.75rem calc(0.75rem + env(safe-area-inset-bottom));
         border: 0;
@@ -4904,10 +4934,10 @@ button.danger:hover:not(:disabled) {
         display: block;
         position: fixed;
         inset: 0;
-        z-index: 11;
+        z-index: 21;
         padding: 0;
         border-radius: 0;
-        background: rgb(0 0 0 / 28%);
+        background: rgb(0 0 0 / 40%);
         cursor: default;
         animation: fade 200ms var(--ease-out) backwards;
     }
@@ -4917,7 +4947,7 @@ button.danger:hover:not(:disabled) {
         right: 0;
         bottom: 0;
         left: 0;
-        z-index: 12;
+        z-index: 22;
         max-height: 85dvh;
         margin: 0;
         overflow-y: auto;
@@ -5015,19 +5045,43 @@ button.danger:hover:not(:disabled) {
         padding-top: 0.4rem;
     }
 
+    /* Done is a word in the accent, as Log reading is on the card: the way on, without the
+       weight of a filled button at the foot of a sheet that is mostly settings. */
     .sheet__foot .link-button {
         display: inline-flex;
         padding-inline: 1.5rem;
+        color: var(--accent);
+        font-weight: 600;
     }
 
-    /* Finding an edition takes the sheet nearly to the top, and the results scroll inside it
-       under a field that stays put. */
+    .sheet__foot .link-button:hover:not(:disabled) {
+        background: var(--accent-soft);
+        color: var(--accent);
+    }
+
+    /*
+        Finding an edition is the shelf search's kind of sheet: its grip drags it between a peek
+        (the field and no more), a half and nearly full, and taps between the peek and the half
+        (js/sheet.js). The field is at its foot, under the thumb, and the results scroll above it.
+        It opens at the half; sheet.js owns the height from then on, and the transition is what
+        makes its snaps glide.
+    */
     .panel.sheet.settings--finding {
+        /* The grip, the heading, the field and its note: 24 + 40 + 54 + 24 + 16 of padding. */
+        --sheet-peek: 158px;
+
         display: flex;
         flex-direction: column;
-        height: 92dvh;
+        height: 55dvh;
         max-height: none;
         overflow: hidden;
+        padding-top: 0;
+        transition: height 260ms var(--ease-out);
+    }
+
+    /* The search's own grip stands in for the sheet's. */
+    .panel.sheet.settings--finding::before {
+        display: none;
     }
 
     /* A hint's basis is the width of a row; in this column it would be the height of one. */
@@ -5035,20 +5089,67 @@ button.danger:hover:not(:disabled) {
         flex: 0 0 auto;
     }
 
+    .settings--finding > .search__grip {
+        display: flex;
+        order: -2;
+        margin-inline: -1rem;
+    }
+
+    /* One line at the head: the way back on the left, what this is in the middle. */
+    .settings--finding > .sheet__title {
+        order: -1;
+        margin: 0 0 0.5rem;
+        line-height: 2rem;
+    }
+
+    .settings--finding .sheet__book {
+        display: none;
+    }
+
     .settings--finding > .settings__back {
-        align-self: flex-start;
+        position: absolute;
+        top: 1.5rem;
+        left: 0.5rem;
     }
 
     .settings--finding > .settings__results {
+        order: 1;
         flex: 1 1 auto;
         min-height: 0;
         max-height: none;
-        margin-inline: -0.25rem;
+        margin: 0 -0.25rem;
         touch-action: pan-y;
     }
 
     .settings--finding .settings__results:empty {
         display: block;
+    }
+
+    /* Peeked, the sheet is the field; a strip of results squeezed above it is only noise. */
+    .settings--finding[data-sheet="peek"] > .settings__results {
+        visibility: hidden;
+    }
+
+    .settings--finding > .settings__search {
+        order: 2;
+        padding-top: 0.6rem;
+    }
+
+    .settings--finding > .settings__note {
+        order: 3;
+    }
+
+    /*
+        Nothing behind a sheet moves either. A finger on the scrim would otherwise scroll the
+        page under it, since the scrim has nothing of its own to scroll.
+    */
+    .sheet__scrim,
+    .status__scrim {
+        touch-action: none;
+    }
+
+    html:has(.sheet__scrim:not(.is-leaving), .status__menu:not(.is-leaving)) {
+        overflow: hidden;
     }
 
     /* The search's + sits under either sheet at the same corner as its last button, and its glow

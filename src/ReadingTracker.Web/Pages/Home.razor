@@ -36,6 +36,7 @@
                         {
                             <button type="button"
                                     class="chip @(value == _filter ? "chip--on" : null)"
+                                    data-status="@(value ?? "All")"
                                     aria-pressed="@(value == _filter)"
                                     disabled="@Searching"
                                     @onclick="() => FilterAsync(value)">
