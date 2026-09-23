@@ -697,9 +697,11 @@ header > a:first-child:hover {
     align-items: flex-start;
 }
 
+/* Tall enough to stand beside the title, the authors and two rows of categories, rather than
+   ending halfway down them. A phone sets its own size — see the phone rules. */
 .book__cover {
     flex: 0 0 auto;
-    width: 4.5rem;
+    width: 6rem;
     border-radius: 8px;
     overflow: hidden;
     box-shadow: var(--shadow);
