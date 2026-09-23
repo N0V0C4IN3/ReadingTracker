@@ -123,7 +123,7 @@ jobs:
       # its scaling — is deliberately left as whatever Azure already holds, so a deployment
       # cannot quietly revert a setting somebody changed in the portal to put out a fire.
       - name: Deploy the new image
-        uses: azure/cli@v2
+        uses: azure/cli@v3
         with:
           azcliversion: latest
           inlineScript: |
@@ -136,7 +136,7 @@ jobs:
       # the revision healthy from its own probe; this asks the service the same question from
       # outside, which is the only place a reader ever asks it from.
       - name: Check it answers
-        uses: azure/cli@v2
+        uses: azure/cli@v3
         with:
           azcliversion: latest
           inlineScript: |
