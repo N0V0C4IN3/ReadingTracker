@@ -601,12 +601,13 @@ header > a:first-child:hover {
     color: var(--ink);
 }
 
-/* Room in the margin for it: the column plus the arrow and its gap on either side. */
-@media (min-width: 46rem) {
+/* Room in the margin for it: the column plus the arrow and its gap on either side, and the page's
+   own padding outside that. The gap is 1.4rem: at 0.6rem the chevron crowded the cover. */
+@media (min-width: 49rem) {
     .book__back {
         position: absolute;
         top: -0.1rem;
-        right: calc(100% + 0.6rem);
+        right: calc(100% + 1.4rem);
         margin: 0;
     }
 }
