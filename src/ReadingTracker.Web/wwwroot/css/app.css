@@ -2330,8 +2330,7 @@ button.danger:hover:not(:disabled) {
 */
 .entry {
     display: flex;
-    gap: 1.1rem;
-    padding: 1.1rem;
+    align-items: stretch;
     border: 1px solid var(--line);
     border-radius: var(--radius);
     background: var(--card-shelf);
@@ -2513,6 +2512,29 @@ button.danger:hover:not(:disabled) {
 }
 
 /*
+    On the card the cover is not a thumbnail but a strip down its left edge, the full height of
+    the card, cropped to fit: however tall the card grows, the jacket grows with it, so there is
+    never a column of empty card under a small cover. The body beside it carries the card's
+    padding. A phone lays the card out another way — see the phone rules.
+*/
+.entry__cover {
+    position: relative;
+    width: 8.25rem;
+    min-height: 11rem;
+    border-radius: calc(var(--radius) - 1px) 0 0 calc(var(--radius) - 1px);
+}
+
+.entry__cover > * {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 0;
+    aspect-ratio: auto;
+}
+
+/*
     Title and authors top left, the status top right, then the progress on a line of its own —
     the figure at its left end, what it counts at its right — the bar across beneath, and
     everything after that full width — see ShelfEntry.razor. minmax(0, 1fr) rather than 1fr so
@@ -2521,6 +2543,7 @@ button.danger:hover:not(:disabled) {
 .entry__body {
     flex: 1 1 auto;
     min-width: 0;
+    padding: 1.1rem 1.3rem;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     column-gap: 1rem;
@@ -4386,9 +4409,151 @@ button.danger:hover:not(:disabled) {
         flex: 0 0 auto;
     }
 
-    .entry {
+    /*
+        On a phone the card has a banner: the jacket blurred into a band across its top, the
+        status on the band at the right, and the cover overlapping it at the left with the title
+        and authors beside it, all inside the band's colour. The figure, the bar and the actions
+        run full width beneath, so nothing is left empty under the cover. --cover is the jacket's
+        address, set on the card by ShelfEntry.
+
+        The body is display: contents so every piece sits on the card's own grid. Spacing is
+        margins rather than row gaps, so a row with nothing in it (no device line) costs nothing.
+
+        The band is painted over the card's background, never under it: under it, it would show
+        through the sheer glass only while nothing on the card starts a stacking context, and the
+        card's rise-in does, so the band would brighten for the length of the arrival and dim at
+        its end. Over it, the pieces that sit on the band are lifted above it by being positioned
+        themselves; nothing else reaches the band, and the sheets the card opens are left alone.
+    */
+    .entry:not(.entry--pending) {
+        --band: 9.75rem;
+
+        position: relative;
+        display: grid;
+        grid-template-columns: 4.75rem minmax(0, 1fr);
+        grid-template-areas:
+            "cover  status"
+            "cover  head"
+            "fig    fig"
+            "track  track"
+            "device device"
+            "acts   acts";
+        grid-template-rows: auto 1fr auto auto auto auto;
+        column-gap: 0.9rem;
+        padding: 0.7rem 0.9rem 0.9rem;
+    }
+
+    .entry:not(.entry--pending)::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto 0;
+        height: var(--band);
+        background: var(--cover, var(--accent-soft)) center / cover;
+        filter: blur(18px) saturate(1.3);
+        opacity: 0.5;
+        clip-path: inset(0 round calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0);
+        mask-image: linear-gradient(to bottom, #000 50%, transparent);
+        pointer-events: none;
+    }
+
+    /* The band takes the card's standing, as the cover does: grey set aside, warm read. */
+    .entry--parked:not(.entry--pending)::before {
+        filter: blur(18px) grayscale(1);
+    }
+
+    .entry--finished:not(.entry--pending)::before {
+        filter: blur(18px) sepia(0.75) saturate(0.7);
+    }
+
+    .entry:not(.entry--pending) .entry__body {
+        display: contents;
+    }
+
+    .entry:not(.entry--pending) .entry__cover,
+    .entry:not(.entry--pending) .entry__head,
+    .entry:not(.entry--pending) .progress__figure,
+    .entry:not(.entry--pending) .progress__device,
+    .entry:not(.entry--pending) .entry__actions,
+    .entry:not(.entry--pending) .entry__reasons {
+        position: relative;
+    }
+
+    .entry:not(.entry--pending) .entry__cover {
+        grid-area: cover;
+        align-self: start;
+        width: auto;
+        min-height: 0;
+        margin-top: 1.4rem;
+        border-radius: 8px;
+        box-shadow: 0 6px 16px rgb(0 0 0 / 22%);
+    }
+
+    .entry:not(.entry--pending) .entry__cover > * {
+        position: static;
+        height: auto;
+    }
+
+    .entry:not(.entry--pending) .entry__cover > .entry__cover-placeholder {
+        aspect-ratio: 2 / 3;
+    }
+
+    .entry:not(.entry--pending) .entry__status {
+        grid-area: status;
+        justify-self: end;
+    }
+
+    /* On the band rather than on the card, so frosted enough to read against any jacket. */
+    .entry:not(.entry--pending) .status__trigger {
+        background: var(--card-raised);
+        box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
+    }
+
+    .entry:not(.entry--pending) .entry__head {
+        grid-area: head;
+        align-self: end;
+        margin-top: 0.5rem;
+    }
+
+    .entry:not(.entry--pending) .progress__figure {
+        grid-area: fig;
+        margin-top: 0.75rem;
+    }
+
+    .entry:not(.entry--pending) .progress__track {
+        grid-area: track;
+        margin-top: 0.55rem;
+    }
+
+    .entry:not(.entry--pending) .progress__device {
+        grid-area: device;
+        margin-top: 0.45rem;
+    }
+
+    .entry:not(.entry--pending) .entry__actions {
+        grid-area: acts;
+        margin-top: 0.75rem;
+    }
+
+    /* The ghosts keep the plain shape: a small cover beside the bones. */
+    .entry--pending {
         gap: 0.85rem;
         padding: 0.9rem;
+    }
+
+    .entry--pending .entry__cover {
+        width: 3.25rem;
+        min-height: 0;
+        border-radius: 8px;
+    }
+
+    .entry--pending .entry__cover > * {
+        position: static;
+        height: auto;
+        aspect-ratio: 2 / 3;
+    }
+
+    .entry--pending .entry__body {
+        padding: 0;
     }
 
     /*
@@ -4994,10 +5159,12 @@ button.danger:hover:not(:disabled) {
     }
 
     /*
-        Settings is the same sheet. Its three settings stack, each still centred over its hint,
-        with Done at the foot. Track by's list stays a list under its trigger here — the sheet is
-        already the thing that came up from the foot, and a second sheet over it would hide the
-        setting it is for.
+        Settings is the same sheet, set as a phone's settings list: each setting is one row, its
+        name at the left and its control at the right, with the hint in small type beneath and a
+        rule between rows. Stacked and centred — label, then control, then hint — three settings
+        took most of the screen to say three short things. Done is at the foot. Track by's list
+        stays a list under its trigger here — the sheet is already the thing that came up from the
+        foot, and a second sheet over it would hide the setting it is for.
     */
     .settings__grid {
         grid-template-columns: 1fr;
@@ -5006,11 +5173,48 @@ button.danger:hover:not(:disabled) {
     }
 
     .settings__item {
-        padding: 0.9rem 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "label control"
+            "hint  hint";
+        align-items: center;
+        gap: 0.3rem 1rem;
+        padding: 0.7rem 0;
+        text-align: left;
     }
 
     .settings__item + .settings__item {
         border-top: 1px solid var(--line);
+    }
+
+    .settings__label {
+        grid-area: label;
+        font-size: 0.95rem;
+        font-weight: 550;
+        letter-spacing: 0;
+        text-transform: none;
+        color: var(--ink);
+    }
+
+    .settings__item > :nth-child(2) {
+        grid-area: control;
+        justify-self: end;
+    }
+
+    .settings__item .hint {
+        grid-area: hint;
+        max-width: none;
+        text-wrap: pretty;
+    }
+
+    .settings__pages input {
+        width: 4.5rem;
+    }
+
+    /* The sheet's title sits closer: the rows under it carry their own space. */
+    .settings > .sheet__title {
+        margin-bottom: 0.3rem;
     }
 
     .settings .status__scrim,
@@ -5021,9 +5225,10 @@ button.danger:hover:not(:disabled) {
     .settings .status__menu {
         position: absolute;
         top: calc(100% + 0.35rem);
-        right: auto;
+        right: 0;
         bottom: auto;
-        left: 50%;
+        left: auto;
+        margin-left: 0;
         padding: 0.35rem;
         border: 1px solid var(--line);
         border-radius: var(--radius-sm);
