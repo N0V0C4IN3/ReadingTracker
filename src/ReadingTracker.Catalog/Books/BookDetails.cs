@@ -1,4 +1,3 @@
-using System.Net;
 using System.Text.RegularExpressions;
 
 namespace ReadingTracker.Catalog.Books;
@@ -33,38 +32,10 @@ public sealed record BookDetails(
         string? publishedDate,
         IEnumerable<string?>? categories) =>
         new(
-            CleanDescription(description),
+            DescriptionText.Clean(description),
             Blank(publisher) ? null : publisher!.Trim(),
             Blank(publishedDate) ? null : publishedDate!.Trim(),
             CleanCategories(categories));
-
-    /// <summary>
-    /// Google Books' descriptions are HTML — paragraphs, line breaks, the odd bold run — and
-    /// Open Library's are plain text with its own line breaks. Both come out as paragraphs of
-    /// plain text: block-level markup and a blank line (two breaks together, of either kind)
-    /// end a paragraph, a lone break is a space, every other tag is dropped, entities are
-    /// decoded, and whitespace inside a paragraph is one space.
-    /// </summary>
-    public static string? CleanDescription(string? description)
-    {
-        if (Blank(description))
-        {
-            return null;
-        }
-
-        var text = LineBreaks.Replace(description!, "\n");
-        text = BlockTags.Replace(text, "\n\n");
-        text = OtherTags.Replace(text, string.Empty);
-        text = WebUtility.HtmlDecode(text);
-
-        var paragraphs = ParagraphGap.Split(text)
-            .Select(paragraph => InnerSpace.Replace(paragraph, " ").Trim())
-            .Where(paragraph => paragraph.Length > 0);
-
-        var joined = string.Join("\n\n", paragraphs);
-
-        return joined.Length == 0 ? null : joined;
-    }
 
     /// <summary>
     /// Google lists categories as paths — "Fiction / Science Fiction / Space Opera" — and
@@ -107,16 +78,6 @@ public sealed record BookDetails(
     private static bool Blank(string? value) => string.IsNullOrWhiteSpace(value);
 
     private static readonly char[] Separators = ['/'];
-
-    private static readonly Regex LineBreaks = new(@"<\s*br\s*/?\s*>|\r?\n", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
-    private static readonly Regex BlockTags = new(
-        @"</?\s*(p|div|ul|ol|li|h[1-6]|blockquote)\b[^>]*>",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
-    private static readonly Regex OtherTags = new(@"<[^>]+>", RegexOptions.Compiled);
-
-    private static readonly Regex ParagraphGap = new(@"\n[ \t]*\n", RegexOptions.Compiled);
 
     private static readonly Regex InnerSpace = new(@"\s+", RegexOptions.Compiled);
 }
