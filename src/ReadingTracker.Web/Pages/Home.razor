@@ -817,6 +817,10 @@
         {
             _sheet = await JS.InvokeAsync<IJSObjectReference>("import", "./js/sheet.js");
             _exit = await JS.InvokeAsync<IJSObjectReference>("import", "./js/motion.js");
+
+            // On a phone a sideways swipe across the shelf moves between the status tabs.
+            await using var swipe = await JS.InvokeAsync<IJSObjectReference>("import", "./js/shelfSwipe.js");
+            await swipe.InvokeVoidAsync("attach");
         }
 
         if (_focusQuery)
