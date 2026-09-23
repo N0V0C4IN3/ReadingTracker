@@ -1,0 +1,5 @@
+root = true
+
+[*.cs]
+# Unused usings: a warning in the editor, and what `dotnet format` removes (see .claude/hooks).
+dotnet_diagnostic.IDE0005.severity = warning
