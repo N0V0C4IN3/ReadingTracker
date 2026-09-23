@@ -4091,14 +4091,23 @@ button.danger:hover:not(:disabled) {
         The filters are a row of underlined tabs you swipe, not pills that wrap: six labels do
         not fit across a phone at any pill size without one of them breaking in the middle. Bled
         to the screen's edges so the last tab can hang off it and say there is more.
+
+        They swipe sideways and nothing else. overflow-x on its own makes overflow-y auto too,
+        and the tabs' underline hangs a pixel below the strip, so the strip scrolled up and down
+        by that pixel under a thumb and floated; and a swipe that reached either end carried on
+        into the page. The strip is held on the vertical and keeps its swipes to itself, and its
+        rule is drawn inside it rather than under it, so the chosen tab's underline covers the
+        rule without hanging out of the strip to do it.
     */
     .filters {
         flex-wrap: nowrap;
         overflow-x: auto;
+        overflow-y: hidden;
+        overscroll-behavior-x: contain;
         gap: 1.1rem;
         margin-inline: -1rem;
         padding-inline: 1rem;
-        border-bottom: 1px solid var(--line);
+        box-shadow: inset 0 -1px 0 var(--line);
         scrollbar-width: none;
     }
 
@@ -4109,7 +4118,6 @@ button.danger:hover:not(:disabled) {
     .filters .chip {
         flex: 0 0 auto;
         padding: 0.45rem 0 0.6rem;
-        margin-bottom: -1px;
         border-radius: 0;
         border-bottom: 2px solid transparent;
         background: none;
