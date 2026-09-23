@@ -286,12 +286,17 @@ body {
         page, which is a smaller thing to live with than an edge. Chrome composites a fixed root
         background, so it costs nothing on the scroll.
 
+        The two fields at the top are placed a length down from the top rather than a share of
+        the height. Where the mesh is fixed the two are the same thing; where Safari scrolls it,
+        a share is a share of the whole page, and on a long shelf — All, most of all — 12% of it
+        lies screens below the top, which was left all but bare.
+
         KEEP IN STEP with .splash--settling, which paints this same canvas over the page it is
         covering so that covering the page does not cover the mesh.
     */
     background-image:
-        radial-gradient(56rem 40rem at 12% 12%, oklch(from var(--wash-accent) l c calc(h + var(--mesh-hue)) / calc(alpha * var(--mesh-glow))), transparent 66%),
-        radial-gradient(52rem 38rem at 88% 4%, oklch(from var(--wash-warm) l c calc(h + var(--mesh-hue)) / calc(alpha * var(--mesh-glow))), transparent 66%),
+        radial-gradient(56rem 40rem at 12% 6rem, oklch(from var(--wash-accent) l c calc(h + var(--mesh-hue)) / calc(alpha * var(--mesh-glow))), transparent 66%),
+        radial-gradient(52rem 38rem at 88% 2rem, oklch(from var(--wash-warm) l c calc(h + var(--mesh-hue)) / calc(alpha * var(--mesh-glow))), transparent 66%),
         radial-gradient(56rem 40rem at 76% 96%, oklch(from var(--wash-cool) l c calc(h + var(--mesh-hue)) / calc(alpha * var(--mesh-glow))), transparent 66%),
         radial-gradient(48rem 34rem at 14% 100%, oklch(from var(--wash-accent) l c calc(h + var(--mesh-hue)) / calc(alpha * var(--mesh-glow))), transparent 66%);
     background-attachment: fixed;
@@ -1821,8 +1826,8 @@ button.danger:hover:not(:disabled) {
     */
     background-color: var(--page);
     background-image:
-        radial-gradient(56rem 40rem at 12% 12%, oklch(from var(--wash-accent) l c calc(h + var(--mesh-hue)) / calc(alpha * var(--mesh-glow))), transparent 66%),
-        radial-gradient(52rem 38rem at 88% 4%, oklch(from var(--wash-warm) l c calc(h + var(--mesh-hue)) / calc(alpha * var(--mesh-glow))), transparent 66%),
+        radial-gradient(56rem 40rem at 12% 6rem, oklch(from var(--wash-accent) l c calc(h + var(--mesh-hue)) / calc(alpha * var(--mesh-glow))), transparent 66%),
+        radial-gradient(52rem 38rem at 88% 2rem, oklch(from var(--wash-warm) l c calc(h + var(--mesh-hue)) / calc(alpha * var(--mesh-glow))), transparent 66%),
         radial-gradient(56rem 40rem at 76% 96%, oklch(from var(--wash-cool) l c calc(h + var(--mesh-hue)) / calc(alpha * var(--mesh-glow))), transparent 66%),
         radial-gradient(48rem 34rem at 14% 100%, oklch(from var(--wash-accent) l c calc(h + var(--mesh-hue)) / calc(alpha * var(--mesh-glow))), transparent 66%);
     background-attachment: fixed;
