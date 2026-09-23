@@ -73,18 +73,30 @@
                             {
                                 <p class="book__authors">@byline</p>
                             }
-                            @if (_book is { Categories.Count: > 0 } placed)
-                            {
-                                <ul class="book__categories" aria-label="Categories">
-                                    @foreach (var category in placed.Categories)
+                            <div class="book__reveal book__reveal--chips @Revealed">
+                                <div class="book__reveal-inner">
+                                    @if (_book is { Categories.Count: > 0 } placed)
                                     {
-                                        <li class="chip chip--tag">@category</li>
+                                        <ul class="book__categories" aria-label="Categories">
+                                            @foreach (var category in placed.Categories)
+                                            {
+                                                <li class="chip chip--tag">@category</li>
+                                            }
+                                        </ul>
                                     }
-                                </ul>
-                            }
+                                </div>
+                            </div>
                         </div>
                     </Head>
                     <ChildContent>
+                    @*
+                        Catalog's part comes in after the rest of the page is already standing, so it
+                        is given a box that is there from the start with nothing in it, and opens to
+                        whatever Catalog said: what is under it is pushed down along with the box
+                        rather than jumping the height of the description in one frame.
+                    *@
+                    <div class="book__reveal @Revealed">
+                    <div class="book__reveal-inner">
                     @if (_book is { Paragraphs.Count: > 0 } described)
                     {
                         @*
@@ -111,6 +123,8 @@
                     {
                         <p class="hint book__note">The book's details could not be fetched just now. They will be here next time.</p>
                     }
+                    </div>
+                    </div>
 
                     @{ var facts = EditionFacts(entry).ToList(); }
 
@@ -194,6 +208,10 @@
     private CatalogBook? _book;
     private BookUnavailable? _bookProblem;
     private bool _readingMore;
+
+    /// <summary>Catalog's boxes open once it has answered, whatever it answered — a note that it
+    /// could not be reached comes in the same way the description would have.</summary>
+    private string? Revealed => _book is not null || _bookProblem is not null ? "book__reveal--open" : null;
 
     /// <summary>
     /// Whether Library has answered. Between asking and answering the page settles rather than

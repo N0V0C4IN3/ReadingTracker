@@ -615,8 +615,7 @@ header > a:first-child:hover {
     The page is built in two arrivals — the entry from Library, then the book's details from
     Catalog — and each part rises into place as it comes, a beat apart, the way the shelf's cards
     do. Backwards rather than both, for the same reason as the cards: a kept final frame keeps
-    its transform. The details (categories, the description) are rendered only once Catalog has
-    answered, so their animation plays on insertion, which is exactly when they should move.
+    its transform.
 */
 .book__head,
 .book__edition,
@@ -627,10 +626,47 @@ header > a:first-child:hover {
 .book__edition { animation-delay: 70ms; }
 .book > .reading { animation-delay: 140ms; }
 
+/*
+    Catalog's part (the categories, the description) lands on a page that is already standing,
+    and dropped in whole it shoved everything under it down by its height in one frame. So each
+    has a box that stands empty from the first frame and opens to its content's height once
+    Catalog answers — 0fr to 1fr, which glides where a height to auto would not — carrying the
+    edition line and the reading half down with it. The words fade in once the room is mostly
+    there: fading rather than rising, since a rise inside a box that is itself opening reads as
+    two motions.
+
+    The inside is clipped while the box opens, and stops being clipped once it is open, so the
+    Read more pill's focus ring is not cut off at the box's edge.
+*/
+.book__reveal {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 420ms var(--ease-out);
+}
+
+.book__reveal--open {
+    grid-template-rows: 1fr;
+}
+
+.book__reveal-inner {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.book__reveal--open .book__reveal-inner {
+    overflow: visible;
+    transition: overflow 0s 420ms allow-discrete;
+}
+
 .book__categories,
 .book__about,
 .book__note {
-    animation: rise 480ms var(--ease-out) backwards;
+    animation: fade 380ms var(--ease-out) 160ms backwards;
+}
+
+@keyframes fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 .book__head {
@@ -4028,8 +4064,12 @@ button.danger:hover:not(:disabled) {
         font-size: 0.92rem;
     }
 
-    .book__categories {
+    .book__reveal--chips {
         grid-row: 5;
+        justify-self: stretch;
+    }
+
+    .book__categories {
         justify-content: center;
         margin-top: 0.75rem;
     }
