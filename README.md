@@ -44,7 +44,7 @@ A device token puts an e-reader on the shelf without a Google sign-in — the [K
 
 ![Import from Hardcover: 50 books in the file, counted by status, listed with their authors and finish dates](docs/screenshots/import.png)
 
-On a phone, and the account menu:
+The shelf on a phone, and the account menu:
 
 <p>
   <img src="docs/screenshots/phone.png" width="300" alt="The shelf on a phone, on the Reading tab: the same cards in one column, with a round add button in the corner" />
