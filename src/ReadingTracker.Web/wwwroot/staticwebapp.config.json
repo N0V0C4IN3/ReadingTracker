@@ -6,7 +6,7 @@
       "/_content/*",
       "/css/*",
       "/js/*",
-      "/*.{png,ico,json,txt,xml,webmanifest}"
+      "/*.{png,svg,ico,json,txt,xml,webmanifest}"
     ]
   },
   "mimeTypes": {
