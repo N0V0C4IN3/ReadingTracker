@@ -24,19 +24,19 @@ On the shelf, each book carries its reading status, a progress bar derived from 
 
 The shelf, grouped by status with what is being read at the top, and the year's goal in the header:
 
-![The shelf: Reading at the top with progress bars, then Want to read, each group under its own heading; the header shows 11 of 24 books towards the year's goal](docs/screenshots/shelf.png)
+![The shelf on the All tab: each book a card with its cover, a status pill and a progress bar, Reading at the top and then Want to read, each group under its own heading; the header shows 11 of 24 books towards the year's goal](docs/screenshots/shelf.png)
 
-Logging a session is one form on the card, and the sessions behind the bar are a click away:
+Logging a session is one form on the card — say where you stopped — and the sessions behind the bar are a click away:
 
-![A shelf card with the Log reading form open: pages read, the date, and optional minutes](docs/screenshots/log-reading.png)
+![A shelf card with the Log reading form open: stopped at page 12 of 231 on a slider, logged for today, with a link to change the day or add the time it took](docs/screenshots/log-reading.png)
 
-![The same card with its History open: 96 pages on 21 Sep 2026, 50 minutes, with Correct and Delete](docs/screenshots/history.png)
+![The same card with its History open: 12 pages on Monday 21 Sept, with Correct and Delete](docs/screenshots/history.png)
 
 Finished books say when, and sit in that order; the year's goal opens from the header:
 
-![The Finished tab: sepia cards each saying Read, all N pages, and the day it was finished](docs/screenshots/finished.png)
+![The Finished tab: cards each saying Read, all N pages, and the day it was finished, newest first](docs/screenshots/finished.png)
 
-![The goal popover: 11 of 24 books in 2026, 8 behind pace, and a field to change the goal](docs/screenshots/goal.png)
+![The goal popover: 11 of 24 books in 2026, 7 behind pace, and a field to change the goal](docs/screenshots/goal.png)
 
 A device token puts an e-reader on the shelf without a Google sign-in — the [KOReader plugin](readingtracker.koplugin/) syncs progress from the device — and a Hardcover export lands in one go:
 
@@ -44,14 +44,23 @@ A device token puts an e-reader on the shelf without a Google sign-in — the [K
 
 ![Import from Hardcover: 50 books in the file, counted by status, listed with their authors and finish dates](docs/screenshots/import.png)
 
+On a phone the status tabs become a strip, and the shelf swipes through them. The list follows the finger; let go far enough, or flick, and the next tab's list slides in from the other side, the page taking on that tab's shade. At either end, and on a drag too short to count, the list gives a little and springs back:
+
 <p>
-  <img src="docs/screenshots/phone.png" width="300" alt="The shelf on a phone: the same cards in one column, with a round add button in the corner" />
+  <img src="docs/screenshots/swipe-tabs.webp" width="300" alt="Swiping on a phone: Reading to Want to read to Finished and back to All, each list sliding out with the finger and the next sliding in, the background's shade shifting with the tab" />
+  <img src="docs/screenshots/swipe-edge.webp" width="300" alt="The edges of the swipe: dragging right on All, the first tab, holds the list back and it springs home; a short drag left springs back too; a longer one turns to Reading" />
+</p>
+
+The phone at rest, and the account menu:
+
+<p>
+  <img src="docs/screenshots/phone.png" width="300" alt="The shelf on a phone, on the Reading tab: the same cards in one column, with a round add button in the corner" />
   <img src="docs/screenshots/account-menu.png" width="420" alt="The account menu: signed in as, Devices, Import, a Dark mode switch, Sign out" />
 </p>
 
 Signed out, the welcome page keeps a reader company with a quote:
 
-![The welcome page: a sign-in button and a quote about books](docs/screenshots/welcome.png)
+![The welcome page: a greeting, the dev sign-in, a fan of book covers with Middlemarch in front, and a quote about reading](docs/screenshots/welcome.png)
 
 The pictures are of a local run with the dev sign-in; the token shown was revoked as soon as the picture was taken.
 
