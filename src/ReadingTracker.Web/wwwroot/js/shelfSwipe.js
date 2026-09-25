@@ -180,20 +180,21 @@ async function turn(list, next, direction) {
     list.style.opacity = '0';
     await new Promise(done => afterTransition(list, 190, done));
 
-    // Kept out of sight, not cleared, while Blazor swaps the list: a card both tabs share (a
-    // Reading card, going to All) keeps its element, and a cleared list would show it back in
-    // place for the frames in between — there, then gone, then sliding in. The transform goes
-    // now, for the sheets' sake; the opacity is the arrival's to take over below.
-    list.style.transition = 'none';
-    list.style.transform = '';
-    list.style.willChange = '';
+    // Left as it is, out of sight, while Blazor swaps the list: a card both tabs share (a Reading
+    // card, going to All) keeps its element, and a cleared list would show it back in place for
+    // the frames in between — there, then gone, then sliding in.
     next.click();
 
-    // Blazor has the new list in the page by the frame after next; it may be the same element or,
-    // where one tab has cards and the other none, a different one.
+    // Blazor has the new list in the page by the frame after next; it may be the same element,
+    // which the arrival below takes over, or, where one tab has cards and the other none, a
+    // different one, and then the list that left is cleared here.
     await frame();
     await frame();
     const arriving = document.querySelector(listSelector);
+    if (arriving !== list) {
+        clear(list);
+    }
+
     if (!arriving) {
         return;
     }
