@@ -28,7 +28,7 @@ The shelf, grouped by status with what is being read at the top, and the year's 
 
 Logging a session is one form on the card — say where you stopped — and the sessions behind the bar are a click away:
 
-![A shelf card with the Log reading form open: stopped at page 12 of 245 on a slider, logged for today, with a link to change the day or add the time it took](docs/screenshots/log-reading.png)
+![A shelf card with the Log reading form open: stopped at page 12 of 231 on a slider, logged for today, with a link to change the day or add the time it took](docs/screenshots/log-reading.png)
 
 ![The same card with its History open: 12 pages on Monday 21 Sept, with Correct and Delete](docs/screenshots/history.png)
 
@@ -44,12 +44,14 @@ A device token puts an e-reader on the shelf without a Google sign-in — the [K
 
 ![Import from Hardcover: 50 books in the file, counted by status, listed with their authors and finish dates](docs/screenshots/import.png)
 
-On a phone the status tabs become an underlined strip, and the shelf swipes through them. The list follows the finger and, let go far enough (or flicked), slides away while the next tab's list comes in from the other side; each tab gives the page a shade of its own. At the ends, where there is no tab to go to, the list gives only a little and springs back, as does a drag too short to mean anything:
+On a phone the status tabs become a strip, and the shelf swipes through them. The list follows the finger; let go far enough, or flick, and the next tab's list slides in from the other side, the page taking on that tab's shade. At either end, and on a drag too short to count, the list gives a little and springs back:
 
 <p>
-  <img src="docs/screenshots/swipe-tabs.gif" width="300" alt="Swiping on a phone: Reading to Want to read to Finished and back to All, each list sliding out with the finger and the next sliding in, the background's shade shifting with the tab" />
-  <img src="docs/screenshots/swipe-edge.gif" width="300" alt="The edges of the swipe: dragging right on All, the first tab, holds the list back and it springs home; a short drag left springs back too; a longer one turns to Reading" />
+  <img src="docs/screenshots/swipe-tabs.webp" width="300" alt="Swiping on a phone: Reading to Want to read to Finished and back to All, each list sliding out with the finger and the next sliding in, the background's shade shifting with the tab" />
+  <img src="docs/screenshots/swipe-edge.webp" width="300" alt="The edges of the swipe: dragging right on All, the first tab, holds the list back and it springs home; a short drag left springs back too; a longer one turns to Reading" />
 </p>
+
+The phone at rest, and the account menu:
 
 <p>
   <img src="docs/screenshots/phone.png" width="300" alt="The shelf on a phone, on the Reading tab: the same cards in one column, with a round add button in the corner" />
