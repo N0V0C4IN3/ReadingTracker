@@ -44,14 +44,7 @@ A device token puts an e-reader on the shelf without a Google sign-in — the [K
 
 ![Import from Hardcover: 50 books in the file, counted by status, listed with their authors and finish dates](docs/screenshots/import.png)
 
-On a phone the status tabs become a strip, and the shelf swipes through them. The list follows the finger; let go far enough, or flick, and the next tab's list slides in from the other side, the page taking on that tab's shade. At either end, and on a drag too short to count, the list gives a little and springs back:
-
-<p>
-  <img src="docs/screenshots/swipe-tabs.webp" width="300" alt="Swiping on a phone: Reading to Want to read to Finished and back to All, each list sliding out with the finger and the next sliding in, the background's shade shifting with the tab" />
-  <img src="docs/screenshots/swipe-edge.webp" width="300" alt="The edges of the swipe: dragging right on All, the first tab, holds the list back and it springs home; a short drag left springs back too; a longer one turns to Reading" />
-</p>
-
-The phone at rest, and the account menu:
+The shelf on a phone, and the account menu:
 
 <p>
   <img src="docs/screenshots/phone.png" width="300" alt="The shelf on a phone, on the Reading tab: the same cards in one column, with a round add button in the corner" />
