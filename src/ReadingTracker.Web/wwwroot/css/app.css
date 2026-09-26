@@ -3267,10 +3267,16 @@ button.danger:hover:not(:disabled) {
     The browser keeps the thumb's centre half a thumb in from either end of the track, so a stop
     at a fraction f of the book sits at r + (width - 2r) * f, not at f of the width. The two parts
     are painted by that same sum, so the read part ends where the thumb starts from, to the pixel.
+
+    That first half thumb is the read part's only when something has been read: on a book not yet
+    begun it would be a grey stub ahead of the green, an offset with nothing behind it. So it is
+    --lead, a half thumb times 1 when --read is above nothing and times 0 when it is nothing, and
+    this sitting's green then runs from the very start.
 */
 .stop {
     --thumb: 1.75rem;
-    --at-read: calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--read));
+    --lead: calc(var(--thumb) / 2 * min(1, var(--read) * 1000000));
+    --at-read: calc(var(--lead) + (100% - var(--thumb)) * var(--read));
     --at-stop: calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--to));
     --track: linear-gradient(90deg,
         var(--ink-faint) 0 var(--at-read),
