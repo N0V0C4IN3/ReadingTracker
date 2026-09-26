@@ -3281,6 +3281,11 @@ button.danger:hover:not(:disabled) {
     min-width: 0;
 }
 
+/* A book not yet begun has no read part, not even the half thumb before it: the green runs from zero. */
+.stop--unread {
+    --at-read: 0px;
+}
+
 .stop__head {
     display: flex;
     align-items: baseline;
