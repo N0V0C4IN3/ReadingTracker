@@ -12,7 +12,7 @@
     slider and the last page or two is easier said with a tap.
 *@
 
-<div class="stop" style="--read: @Fraction(Range.Read); --to: @Fraction(Stop)">
+<div class="stop @(Range.Read == 0 ? "stop--unread" : null)" style="--read: @Fraction(Range.Read); --to: @Fraction(Stop)">
     <div class="stop__head">
         <label class="stop__label" for="@($"stop-{_id}")">Stopped at</label>
         <span class="stop__gain @(Stop == Range.Read ? "stop__gain--none" : null)">@Range.Gain(Stop)</span>
