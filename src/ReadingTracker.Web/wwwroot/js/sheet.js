@@ -227,6 +227,30 @@ export function detach(el, keepSize = false) {
     delete el.dataset.sheet;
 }
 
+/**
+ * Where the reader is on the shelf, for going back to it: how far the page is scrolled, how far
+ * the results are scrolled inside the dock, and the dock's height when it is a sheet.
+ */
+export function where(el) {
+    return {
+        page: window.scrollY,
+        results: el?.querySelector('.search__found')?.scrollTop ?? 0,
+        size: el?.dataset.sheet ?? null,
+    };
+}
+
+/**
+ * Puts the reader back where where() found them. Called once the shelf and its results are
+ * rendered again, and the dock attached at its old height, so there is something to scroll.
+ */
+export function returnTo(el, place) {
+    const found = el?.querySelector('.search__found');
+    if (found) {
+        found.scrollTop = place.results;
+    }
+    window.scrollTo({ top: place.page, behavior: 'instant' });
+}
+
 const armed = new WeakSet();
 
 /**
