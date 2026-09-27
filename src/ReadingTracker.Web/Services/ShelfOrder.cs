@@ -17,7 +17,7 @@ public static class ShelfOrder
         // date sorts below every real one when descending, which puts the undated last.
         [.. entries.OrderBy(entry => Rank(entry.Status)).ThenByDescending(FinishedOn)];
 
-    private static int Rank(string status)
+    public static int Rank(string status)
     {
         var at = Statuses.ToList().IndexOf(status);
         return at < 0 ? Statuses.Count : at;

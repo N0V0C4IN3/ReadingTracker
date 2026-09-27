@@ -87,15 +87,42 @@ public class LibraryExportTests
     [Fact]
     public void A_file_that_is_not_a_hardcover_export_is_said_to_be_one()
     {
-        var problem = Assert.Throws<NotAnExport>(() => LibraryExport.Parse("Name,Age\nBob,3", LibraryExport.Hardcover));
+        var problem = Assert.Throws<NotAnExport>(() => LibraryExport.Parse("Name,Age\nBob,3"));
 
-        Assert.Contains("Hardcover", problem.Message);
-        Assert.Contains("Title", problem.Message);
+        Assert.Equal("This does not look like an export from Hardcover, Goodreads or StoryGraph.", problem.Message);
+    }
+
+    [Fact]
+    public void No_sites_columns_are_found_inside_anothers_so_a_file_is_only_ever_one_of_them()
+    {
+        foreach (var one in LibraryExport.All)
+        {
+            foreach (var other in LibraryExport.All.Where(other => other != one))
+            {
+                Assert.False(one.Needed.All(other.Needed.Contains), $"{one.Name}'s columns are all among {other.Name}'s");
+            }
+        }
+    }
+
+    [Fact]
+    public void Only_a_finished_book_keeps_its_day()
+    {
+        var text = Header + "\n" + Row("Again", "A", "Currently Reading", "", "", "", "2019-03-02");
+
+        Assert.Null(Assert.Single(Hardcover(text)).FinishedOn);
+    }
+
+    [Fact]
+    public void An_isbn_10_ending_in_a_small_x_is_still_an_isbn()
+    {
+        var text = Header + "\n" + Row("Ten", "A", "Read", "015603008x", "", "", "");
+
+        Assert.Equal("015603008X", Assert.Single(Hardcover(text)).Isbn);
     }
 
     private static IReadOnlyList<ImportedBook> Hardcover(string text)
     {
-        var (source, books) = LibraryExport.Parse(text, LibraryExport.Hardcover);
+        var (source, books) = LibraryExport.Parse(text);
         Assert.Same(LibraryExport.Hardcover, source);
         return books;
     }
@@ -109,16 +136,16 @@ public class LibraryExportTests
         $"1234,{title},{author},\"Keyes, Daniel\",{additional},\"=\"\"{isbn}\"\"\",\"=\"\"{isbn13}\"\"\",4,4.13,Mariner,Paperback,{pages},2005,1966,{dateRead},2026/04/22,,,{shelf},,,,1,0";
 
     [Fact]
-    public void Reads_a_goodreads_row_and_unwraps_its_isbn_formulas()
+    public void Reads_a_goodreads_row_unwraps_its_isbn_formulas_and_leaves_the_translator_out()
     {
         var text = GoodreadsHeader + "\n" + GoodreadsRow("\"The Last Wish (The Witcher, #0.5)\"", "Andrzej Sapkowski", "Danusia Stok", "0316029181", "9780316029186", "360", "2025/08/09", "read");
 
-        var (source, books) = LibraryExport.Parse(text, LibraryExport.Hardcover);
+        var (source, books) = LibraryExport.Parse(text);
         var book = Assert.Single(books);
 
         Assert.Same(LibraryExport.Goodreads, source);
         Assert.Equal("The Last Wish", book.Title);
-        Assert.Equal(["Andrzej Sapkowski", "Danusia Stok"], book.Authors);
+        Assert.Equal(["Andrzej Sapkowski"], book.Authors);
         Assert.Equal("9780316029186", book.Isbn);
         Assert.Equal(360, book.Pages);
         Assert.Equal("Finished", book.Status);
@@ -130,7 +157,7 @@ public class LibraryExportTests
     {
         var text = GoodreadsHeader + "\n" + GoodreadsRow("Stoner", "John Williams", "", "", "", "", "", "to-read");
 
-        var book = Assert.Single(LibraryExport.Parse(text, LibraryExport.Goodreads).Books);
+        var book = Assert.Single(LibraryExport.Parse(text).Books);
 
         Assert.Null(book.Isbn);
         Assert.Null(book.Pages);
@@ -144,12 +171,14 @@ public class LibraryExportTests
     [InlineData("did-not-finish", "Dropped")]
     [InlineData("dnf", "Dropped")]
     [InlineData("on-hold", "OnHold")]
+    [InlineData("abandoned_books", "Dropped")]
+    [InlineData("household", "WantToRead")]
     [InlineData("favourites", "WantToRead")]
     public void Says_each_goodreads_shelf_in_this_shelfs_words(string shelf, string status)
     {
         var text = GoodreadsHeader + "\n" + GoodreadsRow("A Book", "An Author", "", "", "", "", "", shelf);
 
-        Assert.Equal(status, Assert.Single(LibraryExport.Parse(text, LibraryExport.Goodreads).Books).Status);
+        Assert.Equal(status, Assert.Single(LibraryExport.Parse(text).Books).Status);
     }
 
     // StoryGraph -----------------------------------------------------------------------------
@@ -165,7 +194,7 @@ public class LibraryExportTests
     {
         var text = StoryGraphHeader + "\n" + StoryGraphRow("Good Omens", "\"Terry Pratchett, Neil Gaiman\"", "9780060853983", "read", "2025/06/30");
 
-        var (source, books) = LibraryExport.Parse(text, LibraryExport.Goodreads);
+        var (source, books) = LibraryExport.Parse(text);
         var book = Assert.Single(books);
 
         Assert.Same(LibraryExport.StoryGraph, source);
@@ -182,7 +211,18 @@ public class LibraryExportTests
     {
         var text = StoryGraphHeader + "\n" + StoryGraphRow("Piranesi", "Susanna Clarke", "5f2b1c9e-7d4a-4e1b", "to-read", "");
 
-        Assert.Null(Assert.Single(LibraryExport.Parse(text, LibraryExport.StoryGraph).Books).Isbn);
+        Assert.Null(Assert.Single(LibraryExport.Parse(text).Books).Isbn);
+    }
+
+    [Fact]
+    public void A_storygraph_book_given_up_on_leaves_its_last_day_behind()
+    {
+        var text = StoryGraphHeader + "\n" + StoryGraphRow("Will", "Will Smith", "", "did-not-finish", "2025/02/01");
+
+        var book = Assert.Single(LibraryExport.Parse(text).Books);
+
+        Assert.Equal("Dropped", book.Status);
+        Assert.Null(book.FinishedOn);
     }
 
     [Theory]
@@ -195,6 +235,6 @@ public class LibraryExportTests
     {
         var text = StoryGraphHeader + "\n" + StoryGraphRow("A Book", "An Author", "", storyGraph, "");
 
-        Assert.Equal(status, Assert.Single(LibraryExport.Parse(text, LibraryExport.StoryGraph).Books).Status);
+        Assert.Equal(status, Assert.Single(LibraryExport.Parse(text).Books).Status);
     }
 }

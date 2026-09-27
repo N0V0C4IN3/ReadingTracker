@@ -53,14 +53,14 @@
                         }
                     </ol>
 
-                    @if (_books is null)
+                    @if (_file is not { } file)
                     {
                         <label class="import__drop">
                             <InputFile OnChange="ReadAsync" accept=".csv,text/csv" class="visually-hidden" />
                             <span class="import__drop-glyph" aria-hidden="true">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
                             </span>
-                            <span class="import__drop-text"><strong>Choose the export</strong><span>@_source.FileName</span></span>
+                            <span class="import__drop-text"><strong>Choose the export</strong><span>@(_source.FileName ?? $"the CSV from {_source.Name}")</span></span>
                         </label>
 
                         @if (_readingProblem is { } problem)
@@ -72,23 +72,23 @@
                     {
                         <div class="import__file">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
-                            <span class="import__file-name">@_fileName</span>
+                            <span class="import__file-name">@file.Name</span>
                             <button type="button" class="import__change" @onclick="Reset">Change</button>
                         </div>
 
                         <dl class="import__counts">
-                            @foreach (var group in Groups)
+                            @foreach (var group in file.Groups)
                             {
-                                <dt class="import__status--@group.Status.ToLowerInvariant()"><span class="status__dot" aria-hidden="true"></span>@ReadingStatuses.Label(group.Status)</dt>
+                                <dt class="import__tone--@group.Status.ToLowerInvariant()"><span class="status__dot" aria-hidden="true"></span>@ReadingStatuses.Label(group.Status)</dt>
                                 <dd>@group.Books.Count</dd>
                             }
                             <dt class="import__counts-all">All</dt>
-                            <dd class="import__counts-all">@_books.Count</dd>
+                            <dd class="import__counts-all">@file.Books.Count</dd>
                         </dl>
 
                         <div class="import__go">
-                            <button type="button" class="button--primary" @onclick="Begin">Import @_books.Count @(_books.Count == 1 ? "book" : "books")</button>
-                            <p class="hint">About @Minutes(_books.Count) · you can leave this page</p>
+                            <button type="button" class="button--primary" @onclick="Begin">Import @file.Books.Count @(file.Books.Count == 1 ? "book" : "books")</button>
+                            <p class="hint">About @Minutes(file.Books.Count) · you can leave this page</p>
                         </div>
                     }
                 }
@@ -131,38 +131,30 @@
             <div class="import__list">
                 @if (Job.Running || Job.Done)
                 {
-                    <ul class="import__rows">
+                    <ul class="import__rows import__rows--results">
                         @foreach (var result in Job.Results)
                         {
-                            <li class="import__row import__row--@result.Outcome.ToString().ToLowerInvariant()">
-                                <span class="import__title">@result.Book.Title</span>
-                                <span class="import__by">@string.Join(", ", result.Book.Authors)</span>
-                                <span class="import__status">
-                                    <span class="pill @PillFor(result.Outcome)">@Describe(result.Outcome)</span>
-                                    @if (result.Note is { } note)
-                                    {
-                                        <span class="import__note">@note</span>
-                                    }
-                                </span>
-                            </li>
+                            <ImportRow Book="result.Book" Faded="result.Outcome == ImportOutcome.Failed">
+                                <span class="pill @PillFor(result.Outcome)">@Describe(result.Outcome)</span>
+                                @if (result.Note is { } note)
+                                {
+                                    <span class="import__note">@note</span>
+                                }
+                            </ImportRow>
                         }
                     </ul>
                 }
-                else if (_books is not null)
+                else if (_file is { } loaded)
                 {
-                    @foreach (var group in Groups)
+                    @foreach (var group in loaded.Groups)
                     {
-                        <h2 class="import__group import__status--@group.Status.ToLowerInvariant()">
+                        <h2 class="import__group import__tone--@group.Status.ToLowerInvariant()">
                             <span class="status__dot" aria-hidden="true"></span>@ReadingStatuses.Label(group.Status) · @group.Books.Count
                         </h2>
                         <ul class="import__rows">
                             @foreach (var book in group.Books)
                             {
-                                <li class="import__row">
-                                    <span class="import__title">@book.Title</span>
-                                    <span class="import__by">@string.Join(", ", book.Authors)</span>
-                                    <span class="import__status">@(book.FinishedOn is { } day ? day.ToString("d MMM yyyy") : "")</span>
-                                </li>
+                                <ImportRow Book="book">@book.FinishedOn?.ToString("d MMM yyyy")</ImportRow>
                             }
                         </ul>
                     }
@@ -183,19 +175,24 @@
     private const long MostBytes = 5 * 1024 * 1024;
 
     private LibraryExport _source = LibraryExport.Hardcover;
-    private IReadOnlyList<ImportedBook>? _books;
-    private string? _fileName;
+    private Loaded? _file;
     private string? _readingProblem;
+
+    /// <summary>A file read and ready to import: its books, and the same books under each status.</summary>
+    private sealed record Loaded(string Name, IReadOnlyList<ImportedBook> Books)
+    {
+        /// <summary>In the order the shelf lists them; a status it does not know goes last rather than missing.</summary>
+        public IReadOnlyList<Group> Groups { get; } =
+            [.. Books.GroupBy(book => book.Status)
+                .OrderBy(group => ShelfOrder.Rank(group.Key))
+                .Select(group => new Group(group.Key, [.. group]))];
+    }
+
+    private sealed record Group(string Status, IReadOnlyList<ImportedBook> Books);
 
     protected override void OnInitialized() => Job.Changed += Redraw;
 
     private void Redraw() => _ = InvokeAsync(StateHasChanged);
-
-    /// <summary>The file's books under each status, in the order the shelf lists them.</summary>
-    private IEnumerable<(string Status, IReadOnlyList<ImportedBook> Books)> Groups =>
-        ShelfOrder.Statuses
-            .Select(status => (status, (IReadOnlyList<ImportedBook>)(_books ?? []).Where(book => book.Status == status).ToList()))
-            .Where(group => group.Item2.Count > 0);
 
     /// <summary>The library looks up ten books a minute.</summary>
     private static string Minutes(int books) => (books + 9) / 10 is var minutes && minutes <= 1 ? "a minute" : $"{minutes} minutes";
@@ -214,7 +211,7 @@
         {
             using var reader = new StreamReader(e.File.OpenReadStream(MostBytes));
             var text = await reader.ReadToEndAsync();
-            var (source, books) = LibraryExport.Parse(text, _source);
+            var (source, books) = LibraryExport.Parse(text);
 
             if (books.Count == 0)
             {
@@ -223,8 +220,7 @@
             }
 
             _source = source;
-            _books = books;
-            _fileName = e.File.Name;
+            _file = new Loaded(e.File.Name, books);
         }
         catch (NotAnExport problem)
         {
@@ -232,22 +228,21 @@
         }
         catch (IOException)
         {
-            _readingProblem = $"That file is too large to be a {_source.Name} export.";
+            _readingProblem = "That file is too large to be an export.";
         }
     }
 
     private void Begin()
     {
-        if (_books is { } books && Job.Start(books))
+        if (_file is { } file && Job.Start(file.Books))
         {
-            _books = null;
+            _file = null;
         }
     }
 
     private void Reset()
     {
-        _books = null;
-        _fileName = null;
+        _file = null;
         _readingProblem = null;
         Job.Clear();
     }

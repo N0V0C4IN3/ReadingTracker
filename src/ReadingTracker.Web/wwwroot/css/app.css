@@ -61,6 +61,12 @@
     --warn: #8a6a2a;
     --warn-hover: #74581f;
     --warn-soft: rgb(212 160 84 / 18%);
+    /* A status's own colour — green in hand, amber finished — for a list of statuses. Unlike the
+       accent, a jacket never repaints these, so a row reads the same on every page. */
+    --status-alive: #2f6b4f;
+    --status-done: #8a6a2a;
+    /* How far the sticky header reaches down the page, for anything that must clear it. */
+    --header-offset: 4.5rem;
     /* The page's washes: the accent and two neighbours, an amber and a blue, all as tints. Kept
        this pale on purpose — they are what the sheer cards are sheer against, not a picture. */
     --wash-accent: rgb(47 107 79 / 14%);
@@ -189,6 +195,8 @@
         --warn: #e6b260;
         --warn-hover: #f0c47c;
         --warn-soft: rgb(230 178 96 / 16%);
+        --status-alive: #8ec5a4;
+        --status-done: #e6b260;
         --wash-accent: rgb(142 197 164 / 17%);
         --wash-warm: rgb(230 178 96 / 13%);
         --wash-cool: rgb(120 160 210 / 13%);
@@ -224,6 +232,8 @@
     --warn: #e6b260;
     --warn-hover: #f0c47c;
     --warn-soft: rgb(230 178 96 / 16%);
+    --status-alive: #8ec5a4;
+    --status-done: #e6b260;
     --wash-accent: rgb(142 197 164 / 17%);
     --wash-warm: rgb(230 178 96 / 13%);
     --wash-cool: rgb(120 160 210 / 13%);
@@ -2657,25 +2667,9 @@ button.danger:hover:not(:disabled) {
 /*
     The trigger's dot takes the card's accent, which already agrees with the standing — green
     (or the jacket's colour, on the Book page) for a book in hand, grey parked, amber finished.
-    The list's dots cannot: on a parked card the accent is grey, and the reader choosing there
-    still needs to see which rows are the live ones. So the rows carry the theme's own colours.
+    A list's dots cannot: on a parked card the accent is grey, and the reader choosing there
+    still needs to see which rows are the live ones. So lists carry the statuses' own colours.
 */
-.status {
-    --status-alive: #2f6b4f;
-    --status-done: #8a6a2a;
-}
-
-@media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .status {
-        --status-alive: #8ec5a4;
-        --status-done: #e6b260;
-    }
-}
-
-:root[data-theme="dark"] .status {
-    --status-alive: #8ec5a4;
-    --status-done: #e6b260;
-}
 
 .status__trigger--wanttoread,
 .status__trigger--reading { --dot: var(--accent); }
@@ -2686,18 +2680,25 @@ button.danger:hover:not(:disabled) {
 .status__row--wanttoread,
 .status__row--reading,
 .preview__status--wanttoread,
-.preview__status--reading { --dot: var(--status-alive); }
+.preview__status--reading,
+.import__tone--wanttoread,
+.import__tone--reading { --dot: var(--status-alive); }
 .status__row--finished,
-.preview__status--finished { --dot: var(--status-done); }
+.preview__status--finished,
+.import__tone--finished { --dot: var(--status-done); }
 .status__row--onhold,
-.status__row--dropped { --dot: var(--ink-faint); }
+.status__row--dropped,
+.import__tone--onhold,
+.import__tone--dropped { --dot: var(--ink-faint); }
 
 /* Not yet begun, and given up: rings rather than dots. */
 .status__trigger--wanttoread .status__dot,
 .status__row--wanttoread .status__dot,
 .preview__status--wanttoread .status__dot,
+.import__tone--wanttoread .status__dot,
 .status__trigger--dropped .status__dot,
-.status__row--dropped .status__dot {
+.status__row--dropped .status__dot,
+.import__tone--dropped .status__dot {
     background: transparent;
     box-shadow: inset 0 0 0 1.5px var(--dot);
 }
@@ -3576,7 +3577,7 @@ button.danger:hover:not(:disabled) {
 
 /* Where a page turn brings the page back to: the results' top, clear of the sticky header. */
 .search__found {
-    scroll-margin-top: 4.5rem;
+    scroll-margin-top: var(--header-offset);
 }
 
 /* The drag handle and the dock's own field belong to the phone sheet; a wide screen shows neither. */
@@ -4474,7 +4475,7 @@ main:has(.import) {
 }
 
 .import {
-    --import-top: 4.5rem;
+    --import-top: var(--header-offset);
 
     display: grid;
     grid-template-columns: 21rem minmax(0, 1fr);
@@ -4648,19 +4649,6 @@ main:has(.import) {
     text-align: center;
 }
 
-/* The status colours of the card's menu: green in hand, amber finished, grey set aside. */
-.import__status--wanttoread,
-.import__status--reading { --dot: var(--accent); }
-.import__status--finished { --dot: var(--warn); }
-.import__status--onhold,
-.import__status--dropped { --dot: var(--ink-faint); }
-
-.import__status--wanttoread .status__dot,
-.import__status--dropped .status__dot {
-    background: transparent;
-    box-shadow: inset 0 0 0 1.5px var(--dot);
-}
-
 /* The books: a list that scrolls by itself, down to the foot of the screen and no further. */
 .import__list {
     height: calc(100dvh - var(--import-top) - 1.5rem);
@@ -4761,9 +4749,7 @@ main:has(.import) {
 }
 
 /* While it runs, the last column holds an outcome and sometimes a note, so it takes their width. */
-.import__row--added,
-.import__row--alreadyonshelf,
-.import__row--failed {
+.import__rows--results .import__row {
     grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
 }
 
@@ -4772,19 +4758,15 @@ main:has(.import) {
     font-size: 0.8rem;
 }
 
-.import__row--failed .import__title {
+.import__row--faded .import__title {
     color: var(--ink-soft);
 }
 
 /*
-    A phone stacks the panes: what to do, then the books, in a list a little over half a screen
-    tall. The button leaves the card for a frosted bar at the foot, so it is always a thumb away.
+    Narrower than two panes can share — a small tablet, half a split screen — they stack: what to
+    do, then the books, in a list a little over half a screen tall.
 */
-@media (max-width: 560px) {
-    main:has(.import__go) {
-        padding-bottom: 7rem;
-    }
-
+@media (max-width: 900px) {
     .import {
         grid-template-columns: minmax(0, 1fr);
         gap: 1rem;
@@ -4792,6 +4774,23 @@ main:has(.import) {
 
     .import__side {
         position: static;
+    }
+
+    .import__list {
+        height: 60dvh;
+    }
+}
+
+/*
+    A phone drops the card around what to do, and the button leaves it for a frosted bar at the
+    foot, so it is always a thumb away.
+*/
+@media (max-width: 560px) {
+    main:has(.import__go) {
+        padding-bottom: 7rem;
+    }
+
+    .import__side {
         padding: 0;
         border: 0;
         background: none;
@@ -4844,18 +4843,12 @@ main:has(.import) {
         }
     }
 
-    .import__list {
-        height: 60dvh;
-    }
-
     .import__group {
         padding: 0.55rem 0.9rem;
     }
 
     .import__row,
-    .import__row--added,
-    .import__row--alreadyonshelf,
-    .import__row--failed {
+    .import__rows--results .import__row {
         grid-template-columns: minmax(0, 1fr) auto;
         grid-template-areas: "title status" "by status";
         gap: 0.1rem 0.75rem;
