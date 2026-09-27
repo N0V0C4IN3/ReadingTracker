@@ -4,10 +4,14 @@
 @inject ImportJob Job
 
 @*
-    Bringing a shelf over from Hardcover. Its export (Settings → Export) is a CSV; this reads it
-    in the browser, shows what it would do, and hands it to the ImportJob, which does it one book
-    at a time through the same doors a reader uses by hand — see LibraryImporter — whether or not
-    the reader stays on this page. Nothing leaves the browser but the books.
+    Bringing a shelf over from Hardcover, Goodreads or StoryGraph. Each exports a CSV; this reads
+    it in the browser, shows what it would do, and hands it to the ImportJob, which does it one
+    book at a time through the same doors a reader uses by hand — see LibraryImporter — whether or
+    not the reader stays on this page. Nothing leaves the browser but the books.
+
+    Two panes: on the left, everything to do — where from, how to get the file, the file, what is
+    in it and the button; on the right, the books, in a list that scrolls on its own so the button
+    never scrolls away. On a phone they stack and the button waits at the foot of the screen.
 
     The Gateway paces searches per reader (ADR-0013), so a shelf of fifty takes a few minutes.
     The page counts up as it goes and counts down while it waits, rather than sitting on a spinner.
@@ -24,110 +28,153 @@
     </NotAuthorized>
     <Authorized>
         <section class="import">
-            <div class="shelf__heading">
-                <h1>Import from Hardcover</h1>
-                <p class="muted">
-                    In Hardcover, go to Settings → Export and download the CSV. Every book on it lands
-                    on your shelf at the same status, finished on the same day. Books already here
-                    are left alone; ratings and reviews have no home here and stay behind.
-                </p>
-            </div>
+            <aside class="import__side">
+                <h1>Import your library</h1>
 
-            @if (_books is null && !Job.Running && !Job.Done)
-            {
-                <label class="import__drop">
-                    <InputFile OnChange="ReadAsync" accept=".csv,text/csv" class="visually-hidden" />
-                    <span class="import__drop-glyph" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
-                    </span>
-                    <span class="import__drop-text"><strong>Choose the export</strong><span>hardcover-export-….csv</span></span>
-                </label>
-
-                @if (_readingProblem is { } problem)
+                @if (!Job.Running && !Job.Done)
                 {
-                    <p class="notice notice--bad" role="alert">@problem</p>
-                }
-            }
-            else if (_books is not null && !Job.Running && !Job.Done)
-            {
-                <div class="import__summary">
-                    <p class="import__count"><strong>@_books.Count</strong> books in the file</p>
-                    <ul class="import__statuses">
-                        @foreach (var (status, count) in ByStatus)
-                        {
-                            <li><span class="pill pill--faint">@ReadingStatuses.Label(status) · @count</span></li>
-                        }
-                    </ul>
-                </div>
+                    <fieldset class="import__from">
+                        <legend>From</legend>
+                        <div class="import__sources">
+                            @foreach (var source in LibraryExport.All)
+                            {
+                                <label class="import__source @(source == _source ? "import__source--on" : "")">
+                                    <input type="radio" name="import-source" checked="@(source == _source)" @onchange="() => Pick(source)" />
+                                    <span>@source.Name</span>
+                                </label>
+                            }
+                        </div>
+                    </fieldset>
 
-                <ul class="import__rows">
-                    @foreach (var book in _books)
+                    <ol class="import__steps">
+                        @foreach (var step in _source.Steps)
+                        {
+                            <li>@step</li>
+                        }
+                    </ol>
+
+                    @if (_books is null)
                     {
-                        <li class="import__row">
-                            <span class="import__title">@book.Title</span>
-                            <span class="import__by">@string.Join(", ", book.Authors)</span>
-                            <span class="import__status">@ReadingStatuses.Label(book.Status)@(book.FinishedOn is { } day ? $" · {day:d MMM yyyy}" : "")</span>
-                        </li>
-                    }
-                </ul>
-
-                <div class="import__actions">
-                    <button type="button" class="button--primary" @onclick="Begin">Import @_books.Count books</button>
-                    <button type="button" class="link-button" @onclick="Reset">Choose another file</button>
-                    <p class="hint">Takes a few minutes — the library looks up ten books a minute. You can leave this page; the header shows how it is going.</p>
-                </div>
-            }
-            else
-            {
-                <div class="import__progress" role="status" aria-live="polite">
-                    <p class="import__count">
-                        @if (Job.Done)
-                        {
-                            <strong>Done.</strong> <text>@Job.Count(ImportOutcome.Added) added, @Job.Count(ImportOutcome.AlreadyOnShelf) already here@(Job.Count(ImportOutcome.Failed) is > 0 and var failed ? $", {failed} could not be" : "").</text>
-                        }
-                        else if (Job.WaitingSeconds is { } seconds)
-                        {
-                            <strong>@Job.Results.Count of @Job.Books.Count</strong> <text>· the library takes ten lookups a minute — carrying on in @seconds s</text>
-                        }
-                        else
-                        {
-                            <strong>@Job.Results.Count of @Job.Books.Count</strong> <text>· @Job.Current</text>
-                        }
-                    </p>
-                    <div class="progress__track" aria-hidden="true">
-                        <div class="progress__fill" style="width: @(Job.Books.Count == 0 ? 0 : Job.Results.Count * 100 / Job.Books.Count)%"></div>
-                    </div>
-                </div>
-
-                <ul class="import__rows">
-                    @foreach (var result in Job.Results)
-                    {
-                        <li class="import__row import__row--@result.Outcome.ToString().ToLowerInvariant()">
-                            <span class="import__title">@result.Book.Title</span>
-                            <span class="import__by">@string.Join(", ", result.Book.Authors)</span>
-                            <span class="import__status">
-                                <span class="pill @PillFor(result.Outcome)">@Describe(result.Outcome)</span>
-                                @if (result.Note is { } note)
-                                {
-                                    <span class="import__note">@note</span>
-                                }
+                        <label class="import__drop">
+                            <InputFile OnChange="ReadAsync" accept=".csv,text/csv" class="visually-hidden" />
+                            <span class="import__drop-glyph" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
                             </span>
-                        </li>
-                    }
-                </ul>
+                            <span class="import__drop-text"><strong>Choose the export</strong><span>@_source.FileName</span></span>
+                        </label>
 
-                @if (Job.Done)
-                {
-                    <div class="import__actions">
-                        <a class="button--primary import__shelf" href="/">See your shelf</a>
-                        <button type="button" class="link-button" @onclick="Reset">Import another file</button>
-                    </div>
+                        @if (_readingProblem is { } problem)
+                        {
+                            <p class="notice notice--bad" role="alert">@problem</p>
+                        }
+                    }
+                    else
+                    {
+                        <div class="import__file">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
+                            <span class="import__file-name">@_fileName</span>
+                            <button type="button" class="import__change" @onclick="Reset">Change</button>
+                        </div>
+
+                        <dl class="import__counts">
+                            @foreach (var group in Groups)
+                            {
+                                <dt class="import__status--@group.Status.ToLowerInvariant()"><span class="status__dot" aria-hidden="true"></span>@ReadingStatuses.Label(group.Status)</dt>
+                                <dd>@group.Books.Count</dd>
+                            }
+                            <dt class="import__counts-all">All</dt>
+                            <dd class="import__counts-all">@_books.Count</dd>
+                        </dl>
+
+                        <div class="import__go">
+                            <button type="button" class="button--primary" @onclick="Begin">Import @_books.Count @(_books.Count == 1 ? "book" : "books")</button>
+                            <p class="hint">About @Minutes(_books.Count) · you can leave this page</p>
+                        </div>
+                    }
                 }
                 else
                 {
-                    <p class="hint">You can leave this page; the import carries on and the header shows how it is going.</p>
+                    <div class="import__progress" role="status" aria-live="polite">
+                        <p class="import__count">
+                            @if (Job.Done)
+                            {
+                                <strong>Done.</strong> <text>@Job.Count(ImportOutcome.Added) added, @Job.Count(ImportOutcome.AlreadyOnShelf) already here@(Job.Count(ImportOutcome.Failed) is > 0 and var failed ? $", {failed} could not be" : "").</text>
+                            }
+                            else if (Job.WaitingSeconds is { } seconds)
+                            {
+                                <strong>@Job.Results.Count of @Job.Books.Count</strong> <text>· the library takes ten lookups a minute — carrying on in @seconds s</text>
+                            }
+                            else
+                            {
+                                <strong>@Job.Results.Count of @Job.Books.Count</strong> <text>· @Job.Current</text>
+                            }
+                        </p>
+                        <div class="progress__track" aria-hidden="true">
+                            <div class="progress__fill" style="width: @(Job.Books.Count == 0 ? 0 : Job.Results.Count * 100 / Job.Books.Count)%"></div>
+                        </div>
+                    </div>
+
+                    @if (Job.Done)
+                    {
+                        <div class="import__actions">
+                            <a class="button--primary import__shelf" href="/">See your shelf</a>
+                            <button type="button" class="link-button" @onclick="Reset">Import another file</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="hint">You can leave this page; the import carries on and the header shows how it is going.</p>
+                    }
                 }
-            }
+            </aside>
+
+            <div class="import__list">
+                @if (Job.Running || Job.Done)
+                {
+                    <ul class="import__rows">
+                        @foreach (var result in Job.Results)
+                        {
+                            <li class="import__row import__row--@result.Outcome.ToString().ToLowerInvariant()">
+                                <span class="import__title">@result.Book.Title</span>
+                                <span class="import__by">@string.Join(", ", result.Book.Authors)</span>
+                                <span class="import__status">
+                                    <span class="pill @PillFor(result.Outcome)">@Describe(result.Outcome)</span>
+                                    @if (result.Note is { } note)
+                                    {
+                                        <span class="import__note">@note</span>
+                                    }
+                                </span>
+                            </li>
+                        }
+                    </ul>
+                }
+                else if (_books is not null)
+                {
+                    @foreach (var group in Groups)
+                    {
+                        <h2 class="import__group import__status--@group.Status.ToLowerInvariant()">
+                            <span class="status__dot" aria-hidden="true"></span>@ReadingStatuses.Label(group.Status) · @group.Books.Count
+                        </h2>
+                        <ul class="import__rows">
+                            @foreach (var book in group.Books)
+                            {
+                                <li class="import__row">
+                                    <span class="import__title">@book.Title</span>
+                                    <span class="import__by">@string.Join(", ", book.Authors)</span>
+                                    <span class="import__status">@(book.FinishedOn is { } day ? day.ToString("d MMM yyyy") : "")</span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                }
+                else
+                {
+                    <p class="import__empty">
+                        The books in your file show up here, grouped by how they go on your shelf.
+                        Books already on it are left alone; ratings and reviews have no home here and stay behind.
+                    </p>
+                }
+            </div>
         </section>
     </Authorized>
 </AuthorizeView>
@@ -135,18 +182,29 @@
 @code {
     private const long MostBytes = 5 * 1024 * 1024;
 
+    private LibraryExport _source = LibraryExport.Hardcover;
     private IReadOnlyList<ImportedBook>? _books;
+    private string? _fileName;
     private string? _readingProblem;
 
     protected override void OnInitialized() => Job.Changed += Redraw;
 
     private void Redraw() => _ = InvokeAsync(StateHasChanged);
 
-    private IEnumerable<(string Status, int Count)> ByStatus =>
-        (_books ?? [])
-            .GroupBy(book => book.Status)
-            .Select(group => (group.Key, group.Count()))
-            .OrderByDescending(pair => pair.Item2);
+    /// <summary>The file's books under each status, in the order the shelf lists them.</summary>
+    private IEnumerable<(string Status, IReadOnlyList<ImportedBook> Books)> Groups =>
+        ShelfOrder.Statuses
+            .Select(status => (status, (IReadOnlyList<ImportedBook>)(_books ?? []).Where(book => book.Status == status).ToList()))
+            .Where(group => group.Item2.Count > 0);
+
+    /// <summary>The library looks up ten books a minute.</summary>
+    private static string Minutes(int books) => (books + 9) / 10 is var minutes && minutes <= 1 ? "a minute" : $"{minutes} minutes";
+
+    private void Pick(LibraryExport source)
+    {
+        Reset();
+        _source = source;
+    }
 
     private async Task ReadAsync(InputFileChangeEventArgs e)
     {
@@ -156,7 +214,7 @@
         {
             using var reader = new StreamReader(e.File.OpenReadStream(MostBytes));
             var text = await reader.ReadToEndAsync();
-            var books = HardcoverExport.Parse(text);
+            var (source, books) = LibraryExport.Parse(text, _source);
 
             if (books.Count == 0)
             {
@@ -164,15 +222,17 @@
                 return;
             }
 
+            _source = source;
             _books = books;
+            _fileName = e.File.Name;
         }
-        catch (NotAHardcoverExport problem)
+        catch (NotAnExport problem)
         {
             _readingProblem = problem.Message;
         }
         catch (IOException)
         {
-            _readingProblem = "That file is too large to be a Hardcover export.";
+            _readingProblem = $"That file is too large to be a {_source.Name} export.";
         }
     }
 
@@ -187,6 +247,7 @@
     private void Reset()
     {
         _books = null;
+        _fileName = null;
         _readingProblem = null;
         Job.Clear();
     }
