@@ -1,0 +1,21 @@
+@using ReadingTracker.Web.Services
+
+@* One book in the import's list — title, authors, and whatever the list says in the last column: the day it was finished before the import, how it went during it. *@
+
+<li class="import__row @(Faded ? "import__row--faded" : "")">
+    <span class="import__title" title="@Book.Title">@Book.Title</span>
+    <span class="import__by">@string.Join(", ", Book.Authors)</span>
+    <span class="import__status">@ChildContent</span>
+</li>
+
+@code {
+    [Parameter, EditorRequired]
+    public ImportedBook Book { get; set; } = default!;
+
+    /// <summary>A book that did not make it, set back so the ones that did stand out.</summary>
+    [Parameter]
+    public bool Faded { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

@@ -61,6 +61,12 @@
     --warn: #8a6a2a;
     --warn-hover: #74581f;
     --warn-soft: rgb(212 160 84 / 18%);
+    /* A status's own colour — green in hand, amber finished — for a list of statuses. Unlike the
+       accent, a jacket never repaints these, so a row reads the same on every page. */
+    --status-alive: #2f6b4f;
+    --status-done: #8a6a2a;
+    /* How far the sticky header reaches down the page, for anything that must clear it. */
+    --header-offset: 4.5rem;
     /* The page's washes: the accent and two neighbours, an amber and a blue, all as tints. Kept
        this pale on purpose — they are what the sheer cards are sheer against, not a picture. */
     --wash-accent: rgb(47 107 79 / 14%);
@@ -189,6 +195,8 @@
         --warn: #e6b260;
         --warn-hover: #f0c47c;
         --warn-soft: rgb(230 178 96 / 16%);
+        --status-alive: #8ec5a4;
+        --status-done: #e6b260;
         --wash-accent: rgb(142 197 164 / 17%);
         --wash-warm: rgb(230 178 96 / 13%);
         --wash-cool: rgb(120 160 210 / 13%);
@@ -224,6 +232,8 @@
     --warn: #e6b260;
     --warn-hover: #f0c47c;
     --warn-soft: rgb(230 178 96 / 16%);
+    --status-alive: #8ec5a4;
+    --status-done: #e6b260;
     --wash-accent: rgb(142 197 164 / 17%);
     --wash-warm: rgb(230 178 96 / 13%);
     --wash-cool: rgb(120 160 210 / 13%);
@@ -2657,25 +2667,9 @@ button.danger:hover:not(:disabled) {
 /*
     The trigger's dot takes the card's accent, which already agrees with the standing — green
     (or the jacket's colour, on the Book page) for a book in hand, grey parked, amber finished.
-    The list's dots cannot: on a parked card the accent is grey, and the reader choosing there
-    still needs to see which rows are the live ones. So the rows carry the theme's own colours.
+    A list's dots cannot: on a parked card the accent is grey, and the reader choosing there
+    still needs to see which rows are the live ones. So lists carry the statuses' own colours.
 */
-.status {
-    --status-alive: #2f6b4f;
-    --status-done: #8a6a2a;
-}
-
-@media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .status {
-        --status-alive: #8ec5a4;
-        --status-done: #e6b260;
-    }
-}
-
-:root[data-theme="dark"] .status {
-    --status-alive: #8ec5a4;
-    --status-done: #e6b260;
-}
 
 .status__trigger--wanttoread,
 .status__trigger--reading { --dot: var(--accent); }
@@ -2686,18 +2680,25 @@ button.danger:hover:not(:disabled) {
 .status__row--wanttoread,
 .status__row--reading,
 .preview__status--wanttoread,
-.preview__status--reading { --dot: var(--status-alive); }
+.preview__status--reading,
+.import__tone--wanttoread,
+.import__tone--reading { --dot: var(--status-alive); }
 .status__row--finished,
-.preview__status--finished { --dot: var(--status-done); }
+.preview__status--finished,
+.import__tone--finished { --dot: var(--status-done); }
 .status__row--onhold,
-.status__row--dropped { --dot: var(--ink-faint); }
+.status__row--dropped,
+.import__tone--onhold,
+.import__tone--dropped { --dot: var(--ink-faint); }
 
 /* Not yet begun, and given up: rings rather than dots. */
 .status__trigger--wanttoread .status__dot,
 .status__row--wanttoread .status__dot,
 .preview__status--wanttoread .status__dot,
+.import__tone--wanttoread .status__dot,
 .status__trigger--dropped .status__dot,
-.status__row--dropped .status__dot {
+.status__row--dropped .status__dot,
+.import__tone--dropped .status__dot {
     background: transparent;
     box-shadow: inset 0 0 0 1.5px var(--dot);
 }
@@ -3576,7 +3577,7 @@ button.danger:hover:not(:disabled) {
 
 /* Where a page turn brings the page back to: the results' top, clear of the sticky header. */
 .search__found {
-    scroll-margin-top: 4.5rem;
+    scroll-margin-top: var(--header-offset);
 }
 
 /* The drag handle and the dock's own field belong to the phone sheet; a wide screen shows neither. */
@@ -4465,12 +4466,231 @@ body:has(.preview) .search__fab {
     color: var(--ink-soft);
 }
 
-.import__summary,
+/*
+    Two panes. On the left, a glass card holding everything to do, kept in view; on the right,
+    the books, in a list that scrolls on its own. The page is wider than the others to fit both.
+*/
+main:has(.import) {
+    max-width: 70rem;
+}
+
+.import {
+    --import-top: var(--header-offset);
+
+    display: grid;
+    grid-template-columns: 21rem minmax(0, 1fr);
+    gap: 1.75rem;
+    align-items: start;
+}
+
+.import__side {
+    position: sticky;
+    top: var(--import-top);
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+    padding: 1.25rem;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
+    background: var(--card-raised);
+    box-shadow: var(--shadow-lifted);
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .import__side {
+        background-color: var(--card-frosted);
+        -webkit-backdrop-filter: var(--blur-soft);
+        backdrop-filter: var(--blur-soft);
+    }
+}
+
+.import__side h1 {
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+.import__from {
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.import__sources {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.import__from legend {
+    margin-bottom: 0.5rem;
+    padding: 0;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+}
+
+.import__source {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-height: 2.75rem;
+    padding: 0 0.75rem;
+    border-radius: var(--radius-sm);
+    background: var(--fill);
+    cursor: pointer;
+    transition: background-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease);
+}
+
+.import__source input {
+    margin: 0;
+    accent-color: var(--accent);
+}
+
+.import__source--on {
+    background: var(--accent-soft);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+    font-weight: 600;
+}
+
+.import__steps {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin: 0;
+    padding-left: 1.1rem;
+    font-size: 0.82rem;
+    line-height: 1.45;
+    color: var(--ink-soft);
+}
+
+.import__side .import__drop {
+    padding: 0.9rem 1rem;
+}
+
+.import__side .notice {
+    margin: 0;
+}
+
+.import__file {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 0.6rem 0.55rem 0.75rem;
+    border: 1px dashed var(--line-strong);
+    border-radius: var(--radius-sm);
+}
+
+.import__file svg {
+    flex: 0 0 auto;
+    width: 1.1rem;
+    height: 1.1rem;
+    color: var(--accent);
+}
+
+.import__file-name {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.85rem;
+}
+
+.import__change {
+    padding: 0.3rem 0.65rem;
+    border-radius: 8px;
+    background: var(--fill);
+    font-size: 0.8rem;
+}
+
+.import__counts {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 0.45rem;
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.import__counts dt {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.import__counts dd {
+    margin: 0;
+    padding-left: 0.75rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.import__counts .import__counts-all {
+    padding-top: 0.45rem;
+    border-top: 1px solid var(--line);
+    font-weight: 600;
+}
+
+.import__go {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.import__go .button--primary {
+    min-height: 2.9rem;
+    border-radius: 12px;
+    font-weight: 600;
+}
+
+.import__go .hint {
+    margin: 0;
+    text-align: center;
+}
+
+/* The books: a list that scrolls by itself, down to the foot of the screen and no further. */
+.import__list {
+    height: calc(100dvh - var(--import-top) - 1.5rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--card-sheer);
+}
+
+.import__empty {
+    max-width: 26rem;
+    margin: 3rem auto;
+    padding: 0 1.5rem;
+    text-align: center;
+    line-height: 1.55;
+    color: var(--ink-soft);
+}
+
+/* Each status heads its own books and stays up top while they scroll beneath it. */
+.import__group {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0.6rem 1.1rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--card);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+}
+
 .import__progress {
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
-    margin-bottom: 1rem;
 }
 
 .import__count {
@@ -4483,55 +4703,54 @@ body:has(.preview) .search__fab {
     font-weight: 650;
 }
 
-.import__statuses {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
+/* The books, one ruled row each, on one grid so the columns line up — a ledger to check over. */
+.import__rows {
     margin: 0;
     padding: 0;
     list-style: none;
 }
 
-/* The books, one ruled row each — a ledger to check over, not cards to browse. */
-.import__rows {
-    margin: 0 0 1.2rem;
-    padding: 0;
-    list-style: none;
-    border-top: 1px solid var(--line);
-}
-
 .import__row {
     display: grid;
-    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 7.5rem;
     gap: 0.2rem 1rem;
-    align-items: baseline;
-    padding: 0.5rem 0.2rem;
+    align-items: center;
+    min-height: 2.6rem;
+    padding: 0.35rem 1.1rem;
     border-bottom: 1px solid var(--line);
-    font-size: 0.92rem;
+    font-size: 0.9rem;
 }
 
 .import__title {
-    font-weight: 600;
     min-width: 0;
-    overflow-wrap: anywhere;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
 }
 
 .import__by {
-    color: var(--ink-soft);
-    font-size: 0.85rem;
     min-width: 0;
-    overflow-wrap: anywhere;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--ink-soft);
 }
 
 .import__status {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 0.5rem;
-    justify-self: end;
     font-size: 0.85rem;
     font-variant-numeric: tabular-nums;
     color: var(--ink-soft);
     white-space: nowrap;
+}
+
+/* While it runs, the last column holds an outcome and sometimes a note, so it takes their width. */
+.import__rows--results .import__row {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
 }
 
 .import__note {
@@ -4539,19 +4758,106 @@ body:has(.preview) .search__fab {
     font-size: 0.8rem;
 }
 
-.import__row--failed .import__title {
+.import__row--faded .import__title {
     color: var(--ink-soft);
 }
 
-@media (max-width: 560px) {
-    .import__row {
+/*
+    Narrower than two panes can share — a small tablet, half a split screen — they stack: what to
+    do, then the books, in a list a little over half a screen tall.
+*/
+@media (max-width: 900px) {
+    .import {
         grid-template-columns: minmax(0, 1fr);
+        gap: 1rem;
     }
 
-    .import__status {
-        justify-self: start;
-        white-space: normal;
+    .import__side {
+        position: static;
     }
+
+    .import__list {
+        height: 60dvh;
+    }
+}
+
+/*
+    A phone drops the card around what to do, and the button leaves it for a frosted bar at the
+    foot, so it is always a thumb away.
+*/
+@media (max-width: 560px) {
+    main:has(.import__go) {
+        padding-bottom: 7rem;
+    }
+
+    .import__side {
+        padding: 0;
+        border: 0;
+        background: none;
+        box-shadow: none;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+
+    .import__sources {
+        flex-direction: row;
+    }
+
+    .import__source {
+        flex: 1 1 0;
+        justify-content: center;
+        padding: 0 0.5rem;
+    }
+
+    .import__source input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .import__source:has(input:focus-visible) {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+
+    .import__counts {
+        display: none;
+    }
+
+    .import__go {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 10;
+        padding: 0.75rem 1rem calc(0.9rem + env(safe-area-inset-bottom));
+        border-top: 1px solid var(--line-strong);
+        background: var(--card-raised);
+    }
+
+    @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        .import__go {
+            background-color: var(--card-frosted);
+            -webkit-backdrop-filter: var(--blur-soft);
+            backdrop-filter: var(--blur-soft);
+        }
+    }
+
+    .import__group {
+        padding: 0.55rem 0.9rem;
+    }
+
+    .import__row,
+    .import__rows--results .import__row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas: "title status" "by status";
+        gap: 0.1rem 0.75rem;
+        padding: 0.5rem 0.9rem;
+    }
+
+    .import__title { grid-area: title; }
+    .import__by { grid-area: by; font-size: 0.82rem; }
+    .import__status { grid-area: status; font-size: 0.78rem; }
 }
 
 .import__actions {

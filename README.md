@@ -38,11 +38,11 @@ Finished books say when, and sit in that order; the year's goal opens from the h
 
 ![The goal popover: 11 of 24 books in 2026, 7 behind pace, and a field to change the goal](docs/screenshots/goal.png)
 
-A device token puts an e-reader on the shelf without a Google sign-in — the [KOReader plugin](readingtracker.koplugin/) syncs progress from the device — and a Hardcover export lands in one go:
+A device token puts an e-reader on the shelf without a Google sign-in — the [KOReader plugin](readingtracker.koplugin/) syncs progress from the device — and an export from Hardcover, Goodreads or StoryGraph lands in one go:
 
 ![Your devices: a freshly minted token for a Kindle Paperwhite, shown once, and the device listed below with Never used](docs/screenshots/devices.png)
 
-![Import from Hardcover: 50 books in the file, counted by status, listed with their authors and finish dates](docs/screenshots/import.png)
+![Import from Goodreads: the source picked on the left with the steps to export, the file's 25 books counted by status and one button; on the right the books grouped by status with their authors and finish dates](docs/screenshots/import.png)
 
 The shelf on a phone, and the account menu:
 
