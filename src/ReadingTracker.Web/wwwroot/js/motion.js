@@ -22,6 +22,8 @@ const LEAVES = [
     '.status__scrim',
     '.account__menu',
     '.goal__menu',
+    '.preview',
+    '.preview__scrim',
 ].join(',');
 
 const GROWS = '.panel, .sheet';

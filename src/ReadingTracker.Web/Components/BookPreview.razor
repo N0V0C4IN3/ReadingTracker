@@ -1,0 +1,170 @@
+@using ReadingTracker.Web.Services
+@inject GatewayCatalogClient Catalog
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@*
+    A search result, opened: the book as its page would show it, in a sheet over the results
+    rather than on a page of its own, so closing it puts the reader back exactly where they were
+    in the search. From the right on a wide screen; up from the foot on a phone, where it is the
+    search dock's kind of sheet — the same glass, and the same handle to drag it between a peek
+    (just the way to add it), half the screen and nearly all of it (js/sheet.js).
+
+    What the result already knew — cover, title, authors, page count — is there at once. The
+    rest comes from Catalog on its own and is said as the Book page says it (BookCategories,
+    BookAbout). The page count stands out on its own line, since it is what the reader will be
+    counting against once the book is theirs.
+
+    Instead of logging, the foot adds the book, as whichever status the reader picks; the adding
+    itself is the shelf's (OnAdd), which knows what to reload. One sheet is one result: the
+    shelf keys it by the book, so another result is another sheet.
+*@
+
+<button type="button" class="preview__scrim" tabindex="-1" aria-hidden="true" @onclick="OnClose"></button>
+<aside class="preview" role="dialog" aria-modal="true" aria-labelledby="@($"preview-{Book.Id:N}")" @onkeydown="CloseOnEscape" @ref="_sheetEl">
+    <button type="button" class="search__grip" aria-label="Resize the book's details"></button>
+    <div class="preview__bar">
+        <button type="button" class="preview__close" aria-label="Close" @ref="_close" @onclick="OnClose">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
+        </button>
+    </div>
+
+    <div class="preview__body">
+        <div class="preview__head">
+            <div class="preview__cover">
+                @if ((_book?.CoverUrl ?? Book.CoverUrl) is { } cover)
+                {
+                    <img src="@cover" alt="" />
+                }
+                else
+                {
+                    <div class="entry__cover-placeholder" aria-hidden="true">@BookText.Initial(Book.Title)</div>
+                }
+            </div>
+            <div class="preview__ident">
+                <h2 class="book__title" id="@($"preview-{Book.Id:N}")">@Book.Title</h2>
+                @if (BookText.Byline(Book.Authors, _book?.Imprint) is { } byline)
+                {
+                    <p class="book__authors">@byline</p>
+                }
+                @if ((_book?.TotalPages ?? Book.TotalPages) is { } pages)
+                {
+                    <p class="preview__pages"><strong>@pages</strong> pages</p>
+                }
+                else
+                {
+                    <p class="preview__pages preview__pages--unknown">Page count not known — you can set it once the book is on your shelf</p>
+                }
+                <BookCategories Book="_book" Problem="_bookProblem" />
+            </div>
+        </div>
+
+        <BookAbout Book="_book" Problem="_bookProblem" Facts="Facts" />
+    </div>
+
+    <div class="preview__foot">
+        <AddProblemNotice Problem="Problem" />
+
+        @* Each status with the dot the shelf card's status list gives it (the .status colours). *@
+        <div class="status preview__statuses" role="group" aria-label="Add it as">
+            @foreach (var status in ReadingStatuses.AddableAs)
+            {
+                <button type="button"
+                        class="preview__status preview__status--@status.ToLowerInvariant()"
+                        aria-pressed="@(_status == status ? "true" : "false")"
+                        @onclick="() => _status = status">
+                    <i class="status__dot" aria-hidden="true"></i>
+                    @ReadingStatuses.Label(status)
+                </button>
+            }
+        </div>
+        <button type="button" class="button--primary button--large preview__add" disabled="@Adding" @onclick="() => OnAdd.InvokeAsync(_status)">
+            @(Adding ? "Adding…" : "Add to shelf")
+        </button>
+    </div>
+</aside>
+
+@code {
+    [Parameter, EditorRequired]
+    public required BookSearchResult Book { get; set; }
+
+    /// <summary>Whether the shelf is adding this book right now.</summary>
+    [Parameter]
+    public bool Adding { get; set; }
+
+    /// <summary>What went wrong the last time this book was added, if anything did.</summary>
+    [Parameter]
+    public AddToLibraryProblem? Problem { get; set; }
+
+    /// <summary>Add the book, as the status given.</summary>
+    [Parameter]
+    public EventCallback<string> OnAdd { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private string _status = ReadingStatuses.OnAdding;
+
+    private CatalogBook? _book;
+    private BookUnavailable? _bookProblem;
+
+    private ElementReference _close;
+    private ElementReference _sheetEl;
+    private IJSObjectReference? _sheet;
+    private bool _disposed;
+
+    /// <summary>The edition line: the ISBN, when there is one. The page count is said above.</summary>
+    private IReadOnlyList<string> Facts => _book?.Isbn is { Length: > 0 } isbn ? [$"ISBN {isbn}"] : [];
+
+    protected override async Task OnInitializedAsync() =>
+        (_book, _bookProblem) = await Catalog.GetBookAsync(Book.Id, CancellationToken.None);
+
+    /// <summary>
+    /// Focus goes to Close when the sheet opens, so Escape and Tab start from inside it. On a
+    /// phone the sheet is made draggable, opening at the half; elsewhere attach does nothing.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await _close.FocusAsync();
+        var sheet = await JS.InvokeAsync<IJSObjectReference>("import", "./js/sheet.js");
+
+        // Closed while the script was on its way: attaching now would leave its listeners on a
+        // sheet that is already leaving, with nobody left to take them off.
+        if (_disposed)
+        {
+            await sheet.DisposeAsync();
+            return;
+        }
+
+        _sheet = sheet;
+        await _sheet.InvokeVoidAsync("attach", _sheetEl, "default");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+
+        if (_sheet is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _sheet.InvokeVoidAsync("detach", _sheetEl, true);
+            await _sheet.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // The page went with the circuit; there is nothing to let go of.
+        }
+    }
+
+    private Task CloseOnEscape(KeyboardEventArgs key) =>
+        key.Key == "Escape" ? OnClose.InvokeAsync() : Task.CompletedTask;
+}

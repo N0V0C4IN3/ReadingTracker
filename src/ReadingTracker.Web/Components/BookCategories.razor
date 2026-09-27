@@ -1,0 +1,33 @@
+@using ReadingTracker.Web.Services
+
+@*
+    The book's categories as chips, under its title. They come from Catalog after the rest of the
+    page is standing, so they sit in a box that is there from the start with nothing in it and
+    opens once Catalog has answered, whatever it answered (the .book__reveal of app.css).
+*@
+
+<div class="book__reveal book__reveal--chips @(Answered ? "book__reveal--open" : null)">
+    <div class="book__reveal-inner">
+        @if (Book is { Categories.Count: > 0 } placed)
+        {
+            <ul class="book__categories" aria-label="Categories">
+                @foreach (var category in placed.Categories)
+                {
+                    <li class="chip chip--tag">@category</li>
+                }
+            </ul>
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>What Catalog said of the book; null until it has said it.</summary>
+    [Parameter]
+    public CatalogBook? Book { get; set; }
+
+    /// <summary>Why Catalog could not say, when it could not.</summary>
+    [Parameter]
+    public BookUnavailable? Problem { get; set; }
+
+    private bool Answered => Book is not null || Problem is not null;
+}

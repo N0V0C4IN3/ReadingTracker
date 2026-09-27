@@ -43,7 +43,7 @@ public sealed class LibraryImporter(
             return new(book, ImportOutcome.Failed, problem ?? "could not be found or added to the library");
         }
 
-        var (entry, adding) = await library.AddAsync(found.Id, cancellationToken);
+        var (entry, adding, statusRefused) = await library.AddAsAsync(found.Id, book.Status, cancellationToken, book.FinishedOn);
         if (adding == AddToLibraryProblem.AlreadyInLibrary)
         {
             return new(book, ImportOutcome.AlreadyOnShelf, null);
@@ -60,13 +60,9 @@ public sealed class LibraryImporter(
 
         var notes = new List<string>();
 
-        if (book.Status != "WantToRead")
+        if (statusRefused)
         {
-            var moved = await library.SetStatusAsync(entry.Id, book.Status, cancellationToken, book.FinishedOn);
-            if (!moved.Ok)
-            {
-                notes.Add("added, but its status could not be set");
-            }
+            notes.Add("added, but its status could not be set");
         }
 
         if (found.TotalPages is null && book.Pages is { } pages)

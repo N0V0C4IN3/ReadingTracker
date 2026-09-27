@@ -82,6 +82,13 @@ public sealed record NewSession(
     int? DurationMinutes);
 
 /// <summary>
+/// A book put on the shelf at a chosen status (<see cref="GatewayLibraryClient.AddAsAsync"/>):
+/// the entry as it now stands, or why it could not be added; and whether the book went on but its
+/// status could not be set, which leaves it on Want to read.
+/// </summary>
+public sealed record Shelved(LibraryEntry? Entry, AddToLibraryProblem? Problem, bool StatusRefused);
+
+/// <summary>
 /// Why a reader's shelf could not be shown. The causes are told apart because they call
 /// for different things from the reader: signing in again, waiting, or nothing at all.
 /// </summary>
@@ -227,6 +234,29 @@ public sealed class GatewayLibraryClient(HttpClient httpClient)
 
         var entry = await response.Content.ReadFromJsonAsync<LibraryEntry>(cancellationToken);
         return (entry, null);
+    }
+
+    /// <summary>
+    /// Puts a book on the shelf as <paramref name="status"/>. Library adds only as Want to read,
+    /// so any other status is a second call; the book is on the shelf either way once the first
+    /// has gone through, and <see cref="Shelved.StatusRefused"/> says when the second did not —
+    /// the book is then on Want to read, and the reader should be told so.
+    /// </summary>
+    public async Task<Shelved> AddAsAsync(
+        Guid bookId,
+        string status,
+        CancellationToken cancellationToken,
+        DateOnly? finishedOn = null)
+    {
+        var (entry, problem) = await AddAsync(bookId, cancellationToken);
+
+        if (entry is null || status == entry.Status)
+        {
+            return new(entry, problem, StatusRefused: false);
+        }
+
+        var moved = await SetStatusAsync(entry.Id, status, cancellationToken, finishedOn);
+        return new(moved.Value ?? entry, null, StatusRefused: !moved.Ok);
     }
 
     /// <summary>

@@ -1,0 +1,24 @@
+@using ReadingTracker.Web.Services
+
+@*
+    Why a book could not be put on the shelf, said where the reader asked for it: under the
+    search results, or at the foot of a search result's sheet. Nothing when nothing went wrong.
+*@
+
+@switch (Problem)
+{
+    case AddToLibraryProblem.AlreadyInLibrary:
+        <p class="notice">You already have that book in your library.</p>
+        break;
+    case AddToLibraryProblem.NotSignedIn:
+        <p class="notice">Your session has ended. <a href="authentication/login">Sign in again</a> to add books.</p>
+        break;
+    case AddToLibraryProblem.GatewayUnreachable:
+        <p class="notice">ReadingTracker could not be reached just now. Try again shortly.</p>
+        break;
+}
+
+@code {
+    [Parameter]
+    public AddToLibraryProblem? Problem { get; set; }
+}

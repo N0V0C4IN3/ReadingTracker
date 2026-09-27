@@ -55,7 +55,7 @@
                     <ul class="import__statuses">
                         @foreach (var (status, count) in ByStatus)
                         {
-                            <li><span class="pill pill--faint">@Label(status) · @count</span></li>
+                            <li><span class="pill pill--faint">@ReadingStatuses.Label(status) · @count</span></li>
                         }
                     </ul>
                 </div>
@@ -66,7 +66,7 @@
                         <li class="import__row">
                             <span class="import__title">@book.Title</span>
                             <span class="import__by">@string.Join(", ", book.Authors)</span>
-                            <span class="import__status">@Label(book.Status)@(book.FinishedOn is { } day ? $" · {day:d MMM yyyy}" : "")</span>
+                            <span class="import__status">@ReadingStatuses.Label(book.Status)@(book.FinishedOn is { } day ? $" · {day:d MMM yyyy}" : "")</span>
                         </li>
                     }
                 </ul>
@@ -193,12 +193,6 @@
 
     public void Dispose() => Job.Changed -= Redraw;
 
-    private static string Label(string status) => status switch
-    {
-        "WantToRead" => "Want to read",
-        "OnHold" => "On hold",
-        _ => status,
-    };
 
     private static string Describe(ImportOutcome outcome) => outcome switch
     {

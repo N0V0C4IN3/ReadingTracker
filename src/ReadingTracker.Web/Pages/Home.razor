@@ -9,6 +9,7 @@
 @inject NavigationManager Navigation
 @inject ShelfMemory Memory
 @inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <PageTitle>ReadingTracker</PageTitle>
 
@@ -109,7 +110,7 @@
                         {
                             @if (Grouped && (at == 0 || VisibleEntries[at - 1].Status != entry.Status))
                             {
-                                <p class="group group--shelf" @key="entry.Status">@StatusLabel(entry.Status) <span>· @VisibleEntries.Count(other => other.Status == entry.Status)</span></p>
+                                <p class="group group--shelf" @key="entry.Status">@ReadingStatuses.Label(entry.Status) <span>· @VisibleEntries.Count(other => other.Status == entry.Status)</span></p>
                             }
                             <ShelfEntry @key="entry.Id"
                                         Entry="entry"
@@ -212,26 +213,30 @@
                         @foreach (var (book, at) in found.Results.Select((book, at) => (book, at)))
                         {
                             <div class="lib-card @(OnShelf(book.Id) ? "lib-card--mine" : null)" @key="book.Id" style="--at:@at">
-                                @if (book.CoverUrl is { } cover)
-                                {
-                                    <img src="@cover" alt="" loading="lazy" />
-                                }
-                                else
-                                {
-                                    <div class="result__cover-placeholder" aria-hidden="true"></div>
-                                }
+                                @* The jacket and the words open the book: a sheet for a book that is not
+                                   the reader's yet, its own page for one that is. *@
+                                <button type="button" class="lib-card__open" @onclick="() => OpenResult(book)">
+                                    @if (book.CoverUrl is { } cover)
+                                    {
+                                        <img src="@cover" alt="" loading="lazy" />
+                                    }
+                                    else
+                                    {
+                                        <span class="result__cover-placeholder" aria-hidden="true"></span>
+                                    }
 
-                                <div class="lib-card__body">
-                                    <strong>@book.Title</strong>
-                                    @if (book.Authors.Count > 0)
-                                    {
-                                        <span>@string.Join(", ", book.Authors)</span>
-                                    }
-                                    @if (book.TotalPages is { } pages)
-                                    {
-                                        <span class="lib-card__pages">@pages pages</span>
-                                    }
-                                </div>
+                                    <span class="lib-card__body">
+                                        <strong>@book.Title</strong>
+                                        @if (book.Authors.Count > 0)
+                                        {
+                                            <span>@string.Join(", ", book.Authors)</span>
+                                        }
+                                        @if (book.TotalPages is { } pages)
+                                        {
+                                            <span class="lib-card__pages">@pages pages</span>
+                                        }
+                                    </span>
+                                </button>
 
                                 @if (OnShelf(book.Id))
                                 {
@@ -241,7 +246,7 @@
                                 {
                                     <button type="button"
                                             class="button--add"
-                                            @onclick="() => AddToLibraryAsync(book.Id)"
+                                            @onclick="() => AddToLibraryAsync(book.Id, ReadingStatuses.OnAdding)"
                                             disabled="@(_adding == book.Id)">
                                         @(_adding == book.Id ? "Adding…" : "Add to shelf")
                                     </button>
@@ -391,17 +396,14 @@
                 </div>
             }
 
-            @if (_addProblem == AddToLibraryProblem.AlreadyInLibrary)
+            @* A problem adding from a result's sheet is the sheet's to say, at its foot. *@
+            @if (_addProblemFor is null || _addProblemFor != _previewing?.Id)
             {
-                <p class="notice">You already have that book in your library.</p>
+                <AddProblemNotice Problem="_addProblem" />
             }
-            else if (_addProblem == AddToLibraryProblem.NotSignedIn)
+            @if (_addedNote is { } note)
             {
-                <p class="notice">Your session has ended. <a href="authentication/login">Sign in again</a> to add books.</p>
-            }
-            @if (_addProblem == AddToLibraryProblem.GatewayUnreachable)
-            {
-                <p class="notice">ReadingTracker could not be reached just now. Try again shortly.</p>
+                <p class="notice">@note</p>
             }
             </div>
 
@@ -423,6 +425,18 @@
                 </button>
             </div>
         </section>
+
+        @* Outside the dock: on a phone the dock is moved with a transform, and a fixed sheet
+           inside it would be placed against the dock rather than the screen. *@
+        @if (_previewing is { } previewing)
+        {
+            <BookPreview @key="previewing.Id"
+                         Book="previewing"
+                         Adding="@(_adding == previewing.Id)"
+                         Problem="@(_addProblemFor == previewing.Id ? _addProblem : null)"
+                         OnAdd="status => AddToLibraryAsync(previewing.Id, status)"
+                         OnClose="ClosePreview" />
+        }
 
         @if (!_searchOpen)
         {
@@ -527,11 +541,7 @@
     private static readonly (string? Value, string Label)[] Filters =
     [
         (null, "All"),
-        ("Reading", "Reading"),
-        ("WantToRead", "Want to read"),
-        ("Finished", "Finished"),
-        ("OnHold", "On hold"),
-        ("Dropped", "Dropped"),
+        .. ShelfOrder.Statuses.Select(status => ((string?)status, ReadingStatuses.Label(status))),
     ];
 
     [CascadingParameter]
@@ -558,8 +568,6 @@
     /// </summary>
     private bool Grouped => _filter is null && !Searching;
 
-    private static string StatusLabel(string status) =>
-        Filters.FirstOrDefault(filter => filter.Value == status).Label ?? status;
 
     /// <summary>
     /// The shelf under the current status tab (client-side, so switching tabs is instant). The
@@ -705,6 +713,9 @@
         _searched = null;
         _searchProblem = null;
         _addProblem = null;
+        _addProblemFor = null;
+        _addedNote = null;
+        _previewing = null;
         _filter = Memory.Remembers ? Memory.Tab : OpensOn;
         StopAddingByHand();
 
@@ -717,6 +728,16 @@
         }
 
         await LoadShelfAsync();
+
+        // Back from a book's page (or any other): the search as it was, and — once it has
+        // rendered — the screen where it was (OnAfterRenderAsync). Only onto a shelf that is
+        // there: one that could not be fetched has nothing to scroll down, and the place would
+        // otherwise wait to be put back on some later render, long after the reader moved on.
+        if (_entries is not null && Place.Take(reader) is { } place)
+        {
+            (_query, _searched, _results, _searchOpen) = (place.Search.Query, place.Search.Searched, place.Search.Results, place.Search.DockOpen);
+            _returning = place.Scroll;
+        }
 
         // Nothing on the go — a new reader, or one between books — and the shelf opens on
         // everything instead. An empty Reading tab is a poor first sight of a shelf with books on
@@ -852,10 +873,36 @@
             // show, and half a screen of empty sheet is not that. It grows when the library
             // answers. The stylesheet has already painted it at the peek, so this is the script
             // agreeing with what is on screen rather than changing it.
-            await _sheet.InvokeVoidAsync("attach", _dockEl, "peek");
+            await _sheet.InvokeVoidAsync("attach", _dockEl, _returning?.Size ?? "peek");
             _sheetAttached = true;
         }
+
+        // After the dock has been attached at its old height, so its results have their room.
+        if (_returning is { } scroll && _sheet is not null)
+        {
+            _returning = null;
+            await Place.PutBackAsync(scroll);
+        }
     }
+
+    /// <summary>Where the screen is to be put back to, once the shelf has rendered.</summary>
+    private ShelfScroll? _returning;
+
+    private ShelfPlaceKeeper? _place;
+
+    /// <summary>Keeps the reader's place across a visit to another page; see ShelfPlaceKeeper.</summary>
+    private ShelfPlaceKeeper Place => _place ??= new ShelfPlaceKeeper(
+        Navigation,
+        Memory,
+        JS,
+        () => _shelfBelongsTo is { } reader && _entries is not null
+            ? new ShelfSearch(reader, _query, _searched, _results, _searchOpen)
+            : null,
+        () => _dockEl);
+
+    protected override void OnInitialized() => _ = Place;
+
+    public ValueTask DisposeAsync() => _place?.DisposeAsync() ?? ValueTask.CompletedTask;
 
     private async Task ClearSearch()
     {
@@ -1022,7 +1069,7 @@
 
             if (problem is { } trouble)
             {
-                _addProblem = trouble;
+                (_addProblem, _addProblemFor) = (trouble, null);
                 return;
             }
 
@@ -1043,22 +1090,62 @@
     /// <summary>Catalog trims and null-checks its optional fields; an empty box is not a value.</summary>
     private static string? Blank(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    private async Task AddToLibraryAsync(Guid bookId)
+    /// <summary>The search result open in its sheet, if one is.</summary>
+    private BookSearchResult? _previewing;
+
+    /// <summary>The book the last add failed for: a problem is said where that book was asked for.</summary>
+    private Guid? _addProblemFor;
+
+    /// <summary>A book went on, but not as the reader chose; said under the results.</summary>
+    private string? _addedNote;
+
+    /// <summary>A book already on the shelf has its own page; any other result opens in the sheet.</summary>
+    private void OpenResult(BookSearchResult book)
+    {
+        if (_entries?.FirstOrDefault(entry => entry.BookId == book.Id) is { } entry)
+        {
+            Navigation.NavigateTo($"shelf/{entry.Id}");
+            return;
+        }
+
+        _previewing = book;
+    }
+
+    private void ClosePreview() => _previewing = null;
+
+    /// <summary>
+    /// Puts a book on the shelf as <paramref name="status"/> (GatewayLibraryClient.AddAsAsync).
+    /// Its sheet, if it is the one open, closes on success; a problem is kept against the book
+    /// it was for, so it is never said in the sheet of another.
+    /// </summary>
+    private async Task AddToLibraryAsync(Guid bookId, string status)
     {
         _addProblem = null;
+        _addProblemFor = null;
+        _addedNote = null;
         _adding = bookId;
 
         try
         {
-            var (added, problem) = await Gateway.AddAsync(bookId, CancellationToken.None);
+            var shelved = await Gateway.AddAsAsync(bookId, status, CancellationToken.None);
 
-            if (problem is { } trouble)
+            if (shelved.Problem is { } trouble)
             {
-                _addProblem = trouble;
+                (_addProblem, _addProblemFor) = (trouble, bookId);
                 return;
             }
 
-            await ShowAddedAsync(added);
+            if (shelved.StatusRefused)
+            {
+                _addedNote = $"Added as Want to read: it could not be put on {ReadingStatuses.Label(status)} just now.";
+            }
+
+            if (_previewing?.Id == bookId)
+            {
+                _previewing = null;
+            }
+
+            await ShowAddedAsync(shelved.Entry);
         }
         finally
         {
