@@ -3817,8 +3817,8 @@ body:has(.preview) .search__fab {
 .preview__close {
     display: grid;
     place-items: center;
-    width: 2.5rem;
-    height: 2.5rem;
+    width: 2.75rem;
+    height: 2.75rem;
     padding: 0;
     border-radius: 50%;
 }
@@ -3914,7 +3914,7 @@ body:has(.preview) .search__fab {
     align-items: center;
     justify-content: center;
     gap: 0.45rem;
-    min-height: 2.6rem;
+    min-height: 2.75rem;
     padding: 0 0.5rem;
     background: transparent;
     color: var(--ink-soft);

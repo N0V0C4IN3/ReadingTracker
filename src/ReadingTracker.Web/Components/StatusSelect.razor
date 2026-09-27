@@ -21,7 +21,7 @@
             disabled="@Disabled">
         <span class="visually-hidden">Reading status:</span>
         <i class="status__dot" aria-hidden="true"></i>
-        @Statuses[Entry.Status]
+        @ReadingStatuses.Label(Entry.Status)
         <svg class="status__chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6.5l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
     </button>
 
@@ -29,16 +29,16 @@
     {
         <button type="button" class="status__scrim" tabindex="-1" aria-hidden="true" @onclick="Close"></button>
         <ul class="status__menu" role="listbox" aria-label="Reading status">
-            @foreach (var status in Statuses)
+            @foreach (var status in ReadingStatuses.All)
             {
-                var on = status.Key == Entry.Status;
+                var on = status == Entry.Status;
                 <li role="option" aria-selected="@(on ? "true" : "false")">
                     <button type="button"
-                            class="status__row status__row--@status.Key.ToLowerInvariant() @(on ? "status__row--on" : null)"
-                            @ref="_rows[status.Key]"
-                            @onclick="() => PickAsync(status.Key)">
+                            class="status__row status__row--@status.ToLowerInvariant() @(on ? "status__row--on" : null)"
+                            @ref="_rows[status]"
+                            @onclick="() => PickAsync(status)">
                         <i class="status__dot" aria-hidden="true"></i>
-                        @status.Value
+                        @ReadingStatuses.Label(status)
                         @if (on)
                         {
                             <svg class="status__tick" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
@@ -51,15 +51,6 @@
 </div>
 
 @code {
-    /// <summary>The wording readers see, against the values Library actually accepts.</summary>
-    private static readonly Dictionary<string, string> Statuses = new()
-    {
-        ["WantToRead"] = "Want to read",
-        ["Reading"] = "Reading",
-        ["Finished"] = "Finished",
-        ["OnHold"] = "On hold",
-        ["Dropped"] = "Dropped",
-    };
 
     [Parameter, EditorRequired]
     public required LibraryEntry Entry { get; set; }

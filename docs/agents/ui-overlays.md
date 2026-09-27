@@ -80,5 +80,5 @@ All the values below are tokens that already exist on `:root`. Never hard-code a
 ## Behaviour
 
 - **Dialog semantics.** A sheet is `role="dialog" aria-modal="true"`, labelled by its heading. Focus goes to its Close button when it opens, and Escape closes it.
-- **Close control.** A round `2.5rem` button with the `×` path used across the app, labelled `aria-label="Close"`. On a phone it sits at the right end of the grip strip.
+- **Close control.** A round `2.75rem` button with the `×` path used across the app, labelled `aria-label="Close"`. On a phone it sits at the right end of the grip strip.
 - **Touch targets.** At least 44px on a phone.

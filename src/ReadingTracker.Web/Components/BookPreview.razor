@@ -11,13 +11,13 @@
     (just the way to add it), half the screen and nearly all of it (js/sheet.js).
 
     What the result already knew — cover, title, authors, page count — is there at once. The
-    longer details come from Catalog on their own, the same lookup the Book page makes, and open
-    into boxes that were standing empty (the .book__reveal of the Book page), so nothing jumps.
+    rest comes from Catalog on its own and is said as the Book page says it (BookCategories,
+    BookAbout). The page count stands out on its own line, since it is what the reader will be
+    counting against once the book is theirs.
 
-    The page count stands out on its own line, since it is what the reader will be counting
-    against once the book is theirs. Instead of logging, the foot adds the book, as whichever
-    status the reader picks; the adding itself is the shelf's (OnAdd), which knows what to
-    reload.
+    Instead of logging, the foot adds the book, as whichever status the reader picks; the adding
+    itself is the shelf's (OnAdd), which knows what to reload. One sheet is one result: the
+    shelf keys it by the book, so another result is another sheet.
 *@
 
 <button type="button" class="preview__scrim" tabindex="-1" aria-hidden="true" @onclick="OnClose"></button>
@@ -38,16 +38,16 @@
                 }
                 else
                 {
-                    <div class="entry__cover-placeholder" aria-hidden="true">@Initial</div>
+                    <div class="entry__cover-placeholder" aria-hidden="true">@BookText.Initial(Book.Title)</div>
                 }
             </div>
             <div class="preview__ident">
                 <h2 class="book__title" id="@($"preview-{Book.Id:N}")">@Book.Title</h2>
-                @if (Byline is { } byline)
+                @if (BookText.Byline(Book.Authors, _book?.Imprint) is { } byline)
                 {
                     <p class="book__authors">@byline</p>
                 }
-                @if (Pages is { } pages)
+                @if ((_book?.TotalPages ?? Book.TotalPages) is { } pages)
                 {
                     <p class="preview__pages"><strong>@pages</strong> pages</p>
                 }
@@ -55,85 +55,26 @@
                 {
                     <p class="preview__pages preview__pages--unknown">Page count not known — you can set it once the book is on your shelf</p>
                 }
-                <div class="book__reveal book__reveal--chips @Revealed">
-                    <div class="book__reveal-inner">
-                        @if (_book is { Categories.Count: > 0 } placed)
-                        {
-                            <ul class="book__categories" aria-label="Categories">
-                                @foreach (var category in placed.Categories)
-                                {
-                                    <li class="chip chip--tag">@category</li>
-                                }
-                            </ul>
-                        }
-                    </div>
-                </div>
+                <BookCategories Book="_book" Problem="_bookProblem" />
             </div>
         </div>
 
-        <div class="book__reveal @Revealed">
-            <div class="book__reveal-inner">
-                @if (_book is { Paragraphs.Count: > 0 } described)
-                {
-                    <div class="book__about">
-                        <div class="book__text">
-                            @foreach (var paragraph in described.Paragraphs)
-                            {
-                                <p>@paragraph</p>
-                            }
-                        </div>
-                    </div>
-                }
-                else if (_book is { DetailsUnavailable: true } || _bookProblem is BookUnavailable.GatewayUnreachable)
-                {
-                    <p class="hint book__note">The book's details could not be fetched just now.</p>
-                }
-            </div>
-        </div>
-
-        @if (_book is { } known && (known.Isbn is { Length: > 0 } || known.ProviderUrl is not null))
-        {
-            <p class="book__edition">
-                @if (known.Isbn is { Length: > 0 } isbn)
-                {
-                    <span>ISBN @isbn</span>
-                }
-                @if (known is { ProviderUrl: { } providerUrl, ProviderName: { } providerName })
-                {
-                    @if (known.Isbn is { Length: > 0 })
-                    {
-                        <span class="book__dot" aria-hidden="true">·</span>
-                    }
-                    <a href="@providerUrl" target="_blank" rel="noopener">@providerName ↗</a>
-                }
-            </p>
-        }
+        <BookAbout Book="_book" Problem="_bookProblem" Facts="Facts" />
     </div>
 
     <div class="preview__foot">
-        @if (Problem == AddToLibraryProblem.NotSignedIn)
-        {
-            <p class="notice">Your session has ended. <a href="authentication/login">Sign in again</a> to add books.</p>
-        }
-        else if (Problem == AddToLibraryProblem.GatewayUnreachable)
-        {
-            <p class="notice">ReadingTracker could not be reached just now. Try again shortly.</p>
-        }
-        else if (Problem == AddToLibraryProblem.AlreadyInLibrary)
-        {
-            <p class="notice">You already have that book in your library.</p>
-        }
+        <AddProblemNotice Problem="Problem" />
 
         @* Each status with the dot the shelf card's status list gives it (the .status colours). *@
         <div class="status preview__statuses" role="group" aria-label="Add it as">
-            @foreach (var (status, label) in Statuses)
+            @foreach (var status in ReadingStatuses.AddableAs)
             {
                 <button type="button"
                         class="preview__status preview__status--@status.ToLowerInvariant()"
                         aria-pressed="@(_status == status ? "true" : "false")"
                         @onclick="() => _status = status">
                     <i class="status__dot" aria-hidden="true"></i>
-                    @label
+                    @ReadingStatuses.Label(status)
                 </button>
             }
         </div>
@@ -162,64 +103,21 @@
     [Parameter]
     public EventCallback OnClose { get; set; }
 
-    /// <summary>The statuses a book can go onto the shelf as; the first is what adding alone gives.</summary>
-    private static readonly (string Status, string Label)[] Statuses =
-    [
-        ("WantToRead", "Want to read"),
-        ("Reading", "Reading"),
-        ("Finished", "Finished"),
-    ];
+    private string _status = ReadingStatuses.OnAdding;
 
-    private string _status = Statuses[0].Status;
-    private ElementReference _close;
-
-    private Guid? _loadedFor;
     private CatalogBook? _book;
     private BookUnavailable? _bookProblem;
 
-    private string? Revealed => _book is not null || _bookProblem is not null ? "book__reveal--open" : null;
-
-    private int? Pages => _book?.TotalPages ?? Book.TotalPages;
-
-    /// <summary>The authors, and after them who put the book out and when, as the Book page says it.</summary>
-    private string? Byline
-    {
-        get
-        {
-            var authors = Book.Authors.Count > 0 ? string.Join(", ", Book.Authors) : null;
-            var byline = string.Join(" · ", new[] { authors, _book?.Imprint }.OfType<string>());
-
-            return byline.Length == 0 ? null : byline;
-        }
-    }
-
-    private string Initial => Book.Title.Trim() is { Length: > 0 } title ? title[..1].ToUpperInvariant() : "?";
-
-    /// <summary>A different result opened in the same sheet starts over: its own details, and Want to read.</summary>
-    protected override async Task OnParametersSetAsync()
-    {
-        if (_loadedFor == Book.Id)
-        {
-            return;
-        }
-
-        _loadedFor = Book.Id;
-        _book = null;
-        _bookProblem = null;
-        _status = Statuses[0].Status;
-
-        var asked = Book.Id;
-        var (book, problem) = await Catalog.GetBookAsync(asked, CancellationToken.None);
-
-        // Only if it is still this book: the reader may have opened another while this one was fetched.
-        if (_loadedFor == asked)
-        {
-            (_book, _bookProblem) = (book, problem);
-        }
-    }
-
+    private ElementReference _close;
     private ElementReference _sheetEl;
     private IJSObjectReference? _sheet;
+    private bool _disposed;
+
+    /// <summary>The edition line: the ISBN, when there is one. The page count is said above.</summary>
+    private IReadOnlyList<string> Facts => _book?.Isbn is { Length: > 0 } isbn ? [$"ISBN {isbn}"] : [];
+
+    protected override async Task OnInitializedAsync() =>
+        (_book, _bookProblem) = await Catalog.GetBookAsync(Book.Id, CancellationToken.None);
 
     /// <summary>
     /// Focus goes to Close when the sheet opens, so Escape and Tab start from inside it. On a
@@ -227,16 +125,30 @@
     /// </summary>
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
+        if (!firstRender)
         {
-            await _close.FocusAsync();
-            _sheet = await JS.InvokeAsync<IJSObjectReference>("import", "./js/sheet.js");
-            await _sheet.InvokeVoidAsync("attach", _sheetEl, "default");
+            return;
         }
+
+        await _close.FocusAsync();
+        var sheet = await JS.InvokeAsync<IJSObjectReference>("import", "./js/sheet.js");
+
+        // Closed while the script was on its way: attaching now would leave its listeners on a
+        // sheet that is already leaving, with nobody left to take them off.
+        if (_disposed)
+        {
+            await sheet.DisposeAsync();
+            return;
+        }
+
+        _sheet = sheet;
+        await _sheet.InvokeVoidAsync("attach", _sheetEl, "default");
     }
 
     public async ValueTask DisposeAsync()
     {
+        _disposed = true;
+
         if (_sheet is null)
         {
             return;

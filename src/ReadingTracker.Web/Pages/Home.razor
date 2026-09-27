@@ -9,7 +9,7 @@
 @inject NavigationManager Navigation
 @inject ShelfMemory Memory
 @inject IJSRuntime JS
-@implements IDisposable
+@implements IAsyncDisposable
 
 <PageTitle>ReadingTracker</PageTitle>
 
@@ -110,7 +110,7 @@
                         {
                             @if (Grouped && (at == 0 || VisibleEntries[at - 1].Status != entry.Status))
                             {
-                                <p class="group group--shelf" @key="entry.Status">@StatusLabel(entry.Status) <span>· @VisibleEntries.Count(other => other.Status == entry.Status)</span></p>
+                                <p class="group group--shelf" @key="entry.Status">@ReadingStatuses.Label(entry.Status) <span>· @VisibleEntries.Count(other => other.Status == entry.Status)</span></p>
                             }
                             <ShelfEntry @key="entry.Id"
                                         Entry="entry"
@@ -222,7 +222,7 @@
                                     }
                                     else
                                     {
-                                        <div class="result__cover-placeholder" aria-hidden="true"></div>
+                                        <span class="result__cover-placeholder" aria-hidden="true"></span>
                                     }
 
                                     <span class="lib-card__body">
@@ -246,7 +246,7 @@
                                 {
                                     <button type="button"
                                             class="button--add"
-                                            @onclick="() => AddToLibraryAsync(book.Id, DefaultStatus)"
+                                            @onclick="() => AddToLibraryAsync(book.Id, ReadingStatuses.OnAdding)"
                                             disabled="@(_adding == book.Id)">
                                         @(_adding == book.Id ? "Adding…" : "Add to shelf")
                                     </button>
@@ -396,17 +396,14 @@
                 </div>
             }
 
-            @if (_addProblem == AddToLibraryProblem.AlreadyInLibrary)
+            @* A problem adding from a result's sheet is the sheet's to say, at its foot. *@
+            @if (_addProblemFor is null || _addProblemFor != _previewing?.Id)
             {
-                <p class="notice">You already have that book in your library.</p>
+                <AddProblemNotice Problem="_addProblem" />
             }
-            else if (_addProblem == AddToLibraryProblem.NotSignedIn)
+            @if (_addedNote is { } note)
             {
-                <p class="notice">Your session has ended. <a href="authentication/login">Sign in again</a> to add books.</p>
-            }
-            @if (_addProblem == AddToLibraryProblem.GatewayUnreachable)
-            {
-                <p class="notice">ReadingTracker could not be reached just now. Try again shortly.</p>
+                <p class="notice">@note</p>
             }
             </div>
 
@@ -433,9 +430,10 @@
            inside it would be placed against the dock rather than the screen. *@
         @if (_previewing is { } previewing)
         {
-            <BookPreview Book="previewing"
+            <BookPreview @key="previewing.Id"
+                         Book="previewing"
                          Adding="@(_adding == previewing.Id)"
-                         Problem="_addProblem"
+                         Problem="@(_addProblemFor == previewing.Id ? _addProblem : null)"
                          OnAdd="status => AddToLibraryAsync(previewing.Id, status)"
                          OnClose="ClosePreview" />
         }
@@ -543,11 +541,7 @@
     private static readonly (string? Value, string Label)[] Filters =
     [
         (null, "All"),
-        ("Reading", "Reading"),
-        ("WantToRead", "Want to read"),
-        ("Finished", "Finished"),
-        ("OnHold", "On hold"),
-        ("Dropped", "Dropped"),
+        .. ShelfOrder.Statuses.Select(status => ((string?)status, ReadingStatuses.Label(status))),
     ];
 
     [CascadingParameter]
@@ -574,8 +568,6 @@
     /// </summary>
     private bool Grouped => _filter is null && !Searching;
 
-    private static string StatusLabel(string status) =>
-        Filters.FirstOrDefault(filter => filter.Value == status).Label ?? status;
 
     /// <summary>
     /// The shelf under the current status tab (client-side, so switching tabs is instant). The
@@ -721,6 +713,9 @@
         _searched = null;
         _searchProblem = null;
         _addProblem = null;
+        _addProblemFor = null;
+        _addedNote = null;
+        _previewing = null;
         _filter = Memory.Remembers ? Memory.Tab : OpensOn;
         StopAddingByHand();
 
@@ -735,13 +730,12 @@
         await LoadShelfAsync();
 
         // Back from a book's page (or any other): the search as it was, and — once it has
-        // rendered — the screen where it was (OnAfterRenderAsync).
-        if (Memory.Return() is { } place)
+        // rendered — the screen where it was (OnAfterRenderAsync). Only onto a shelf that is
+        // there: one that could not be fetched has nothing to scroll down, and the place would
+        // otherwise wait to be put back on some later render, long after the reader moved on.
+        if (_entries is not null && Place.Take(reader) is { } place)
         {
-            _query = place.Query;
-            _searched = place.Searched;
-            _results = place.Results;
-            _searchOpen = place.DockOpen;
+            (_query, _searched, _results, _searchOpen) = (place.Search.Query, place.Search.Searched, place.Search.Results, place.Search.DockOpen);
             _returning = place.Scroll;
         }
 
@@ -883,38 +877,32 @@
             _sheetAttached = true;
         }
 
-        // Only once the shelf is back on screen: before then there is nothing to scroll down.
-        if (_returning is { } scroll && _entries is not null && _sheet is not null)
+        // After the dock has been attached at its old height, so its results have their room.
+        if (_returning is { } scroll && _sheet is not null)
         {
             _returning = null;
-            await _sheet.InvokeVoidAsync("returnTo", _dockEl, scroll);
+            await Place.PutBackAsync(scroll);
         }
     }
 
-    /// <summary>Where the screen is to be put back to, once the shelf has rendered; see ShelfMemory.Left.</summary>
+    /// <summary>Where the screen is to be put back to, once the shelf has rendered.</summary>
     private ShelfScroll? _returning;
 
-    private IDisposable? _leaving;
+    private ShelfPlaceKeeper? _place;
 
-    protected override void OnInitialized() =>
-        _leaving = Navigation.RegisterLocationChangingHandler(RememberPlaceAsync);
+    /// <summary>Keeps the reader's place across a visit to another page; see ShelfPlaceKeeper.</summary>
+    private ShelfPlaceKeeper Place => _place ??= new ShelfPlaceKeeper(
+        Navigation,
+        Memory,
+        JS,
+        () => _shelfBelongsTo is { } reader && _entries is not null
+            ? new ShelfSearch(reader, _query, _searched, _results, _searchOpen)
+            : null,
+        () => _dockEl);
 
-    public void Dispose() => _leaving?.Dispose();
+    protected override void OnInitialized() => _ = Place;
 
-    /// <summary>
-    /// Leaving the shelf for another page: where the reader is goes into ShelfMemory, while the
-    /// shelf is still on screen to be measured, so coming back finds them there.
-    /// </summary>
-    private async ValueTask RememberPlaceAsync(LocationChangingContext leaving)
-    {
-        if (_sheet is null || _entries is null || Navigation.ToBaseRelativePath(Navigation.ToAbsoluteUri(leaving.TargetLocation).ToString()).Length == 0)
-        {
-            return;
-        }
-
-        var scroll = await _sheet.InvokeAsync<ShelfScroll>("where", _dockEl);
-        Memory.Leave(new ShelfPlace(_query, _searched, _results, _searchOpen, scroll));
-    }
+    public ValueTask DisposeAsync() => _place?.DisposeAsync() ?? ValueTask.CompletedTask;
 
     private async Task ClearSearch()
     {
@@ -1081,7 +1069,7 @@
 
             if (problem is { } trouble)
             {
-                _addProblem = trouble;
+                (_addProblem, _addProblemFor) = (trouble, null);
                 return;
             }
 
@@ -1102,11 +1090,14 @@
     /// <summary>Catalog trims and null-checks its optional fields; an empty box is not a value.</summary>
     private static string? Blank(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    /// <summary>What adding a book alone makes it: Library puts every new entry on Want to read.</summary>
-    private const string DefaultStatus = "WantToRead";
-
     /// <summary>The search result open in its sheet, if one is.</summary>
     private BookSearchResult? _previewing;
+
+    /// <summary>The book the last add failed for: a problem is said where that book was asked for.</summary>
+    private Guid? _addProblemFor;
+
+    /// <summary>A book went on, but not as the reader chose; said under the results.</summary>
+    private string? _addedNote;
 
     /// <summary>A book already on the shelf has its own page; any other result opens in the sheet.</summary>
     private void OpenResult(BookSearchResult book)
@@ -1117,44 +1108,44 @@
             return;
         }
 
-        _addProblem = null;
         _previewing = book;
     }
 
-    private void ClosePreview()
-    {
-        _previewing = null;
-        _addProblem = null;
-    }
+    private void ClosePreview() => _previewing = null;
 
     /// <summary>
-    /// Adds the book, then moves it to <paramref name="status"/> if that is not where adding
-    /// puts it. Two calls, because Library adds only as Want to read; if the second fails the
-    /// book is still on the shelf, as Want to read, which is where the shelf then shows it.
+    /// Puts a book on the shelf as <paramref name="status"/> (GatewayLibraryClient.AddAsAsync).
+    /// Its sheet, if it is the one open, closes on success; a problem is kept against the book
+    /// it was for, so it is never said in the sheet of another.
     /// </summary>
     private async Task AddToLibraryAsync(Guid bookId, string status)
     {
         _addProblem = null;
+        _addProblemFor = null;
+        _addedNote = null;
         _adding = bookId;
 
         try
         {
-            var (added, problem) = await Gateway.AddAsync(bookId, CancellationToken.None);
+            var shelved = await Gateway.AddAsAsync(bookId, status, CancellationToken.None);
 
-            if (problem is { } trouble)
+            if (shelved.Problem is { } trouble)
             {
-                _addProblem = trouble;
+                (_addProblem, _addProblemFor) = (trouble, bookId);
                 return;
             }
 
-            if (added is { } entry && status != entry.Status)
+            if (shelved.StatusRefused)
             {
-                var moved = await Gateway.SetStatusAsync(entry.Id, status, CancellationToken.None);
-                added = moved.Value ?? entry;
+                _addedNote = $"Added as Want to read: it could not be put on {ReadingStatuses.Label(status)} just now.";
             }
 
-            _previewing = null;
-            await ShowAddedAsync(added);
+            if (_previewing?.Id == bookId)
+            {
+                _previewing = null;
+            }
+
+            await ShowAddedAsync(shelved.Entry);
         }
         finally
         {

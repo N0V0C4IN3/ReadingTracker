@@ -64,88 +64,20 @@
                             }
                             else
                             {
-                                <div class="entry__cover-placeholder" aria-hidden="true">@Initial(entry)</div>
+                                <div class="entry__cover-placeholder" aria-hidden="true">@BookText.Initial(entry.Book?.Title)</div>
                             }
                         </div>
                         <div class="book__ident">
                             <h1 class="book__title">@(entry.Book?.Title ?? "(catalog unreachable)")</h1>
-                            @if (Byline(entry) is { } byline)
+                            @if (BookText.Byline(entry.Book?.Authors, _book?.Imprint) is { } byline)
                             {
                                 <p class="book__authors">@byline</p>
                             }
-                            <div class="book__reveal book__reveal--chips @Revealed">
-                                <div class="book__reveal-inner">
-                                    @if (_book is { Categories.Count: > 0 } placed)
-                                    {
-                                        <ul class="book__categories" aria-label="Categories">
-                                            @foreach (var category in placed.Categories)
-                                            {
-                                                <li class="chip chip--tag">@category</li>
-                                            }
-                                        </ul>
-                                    }
-                                </div>
-                            </div>
+                            <BookCategories Book="_book" Problem="_bookProblem" />
                         </div>
                     </Head>
                     <ChildContent>
-                    @*
-                        Catalog's part comes in after the rest of the page is already standing, so it
-                        is given a box that is there from the start with nothing in it, and opens to
-                        whatever Catalog said: what is under it is pushed down along with the box
-                        rather than jumping the height of the description in one frame.
-                    *@
-                    <div class="book__reveal @Revealed">
-                    <div class="book__reveal-inner">
-                    @if (_book is { Paragraphs.Count: > 0 } described)
-                    {
-                        @*
-                            Folded, the description is the same height on every book: a fixed number of
-                            lines, cut with an ellipsis wherever the cut falls (the stylesheet does both).
-                            Read more unfolds the whole of it, and it folds back.
-                        *@
-                        <div class="book__about @(_readingMore ? null : "book__about--folded")">
-                            <div class="book__text">
-                                @foreach (var paragraph in described.Paragraphs)
-                                {
-                                    <p>@paragraph</p>
-                                }
-                            </div>
-                            @if (Unfolds(described))
-                            {
-                                <button type="button" class="link-button book__more" @onclick="() => _readingMore = !_readingMore">
-                                    @(_readingMore ? "Show less" : "Read more")
-                                </button>
-                            }
-                        </div>
-                    }
-                    else if (_book is { DetailsUnavailable: true } || _bookProblem is BookUnavailable.GatewayUnreachable)
-                    {
-                        <p class="hint book__note">The book's details could not be fetched just now. They will be here next time.</p>
-                    }
-                    </div>
-                    </div>
-
-                    @{ var facts = EditionFacts(entry).ToList(); }
-
-                    <p class="book__edition">
-                        @foreach (var (fact, at) in facts.Select((fact, at) => (fact, at)))
-                        {
-                            @if (at > 0)
-                            {
-                                <span class="book__dot" aria-hidden="true">·</span>
-                            }
-                            <span>@fact</span>
-                        }
-                        @if (_book is { ProviderUrl: { } providerUrl, ProviderName: { } providerName })
-                        {
-                            @if (facts.Count > 0)
-                            {
-                                <span class="book__dot" aria-hidden="true">·</span>
-                            }
-                            <a href="@providerUrl" target="_blank" rel="noopener">@providerName ↗</a>
-                        }
-                    </p>
+                    <BookAbout Book="_book" Problem="_bookProblem" Facts="EditionFacts(entry).ToList()" Foldable />
                     </ChildContent>
                 </BookReading>
             }
@@ -192,26 +124,12 @@
     [CascadingParameter]
     private Task<AuthenticationState>? AuthState { get; set; }
 
-    /// <summary>
-    /// Whether the description is long enough to be worth unfolding. The fold is a number of
-    /// lines, which is not known here, so this is the length of text that fills it on a phone —
-    /// on a wider screen a description a little over this fits and the button unfolds nothing,
-    /// which is a small thing next to a button that is missing when it is needed.
-    /// </summary>
-    private static bool Unfolds(CatalogBook described) =>
-        described.Paragraphs.Count > 1 || described.Paragraphs.Sum(paragraph => paragraph.Length) > 300;
-
     private LibraryEntry? _entry;
     private LibraryUnavailable? _problem;
     private bool _asked;
 
     private CatalogBook? _book;
     private BookUnavailable? _bookProblem;
-    private bool _readingMore;
-
-    /// <summary>Catalog's boxes open once it has answered, whatever it answered — a note that it
-    /// could not be reached comes in the same way the description would have.</summary>
-    private string? Revealed => _book is not null || _bookProblem is not null ? "book__reveal--open" : null;
 
     /// <summary>
     /// Whether Library has answered. Between asking and answering the page settles rather than
@@ -321,15 +239,6 @@
         }
     }
 
-    /// <summary>The authors, and after them who put the book out and when, the way a jacket flap says it.</summary>
-    private string? Byline(LibraryEntry entry)
-    {
-        var authors = entry.Book is { Authors.Count: > 0 } book ? string.Join(", ", book.Authors) : null;
-        var byline = string.Join(" · ", new[] { authors, _book?.Imprint }.OfType<string>());
-
-        return byline.Length == 0 ? null : byline;
-    }
-
     private void SignIn() => Navigation.NavigateToLogin("authentication/login");
 
     /// <summary>Library answered a change with the entry as it now is; that is what the page shows.</summary>
@@ -343,9 +252,6 @@
         _entry = null;
         _problem = LibraryUnavailable.NotSignedIn;
     }
-
-    private static string Initial(LibraryEntry entry) =>
-        (entry.Book?.Title ?? "?").Trim() is { Length: > 0 } title ? title[..1].ToUpperInvariant() : "?";
 
     /// <summary>The edition line: what is known of the copy, in the order a jacket flap says it.</summary>
     private static IEnumerable<string> EditionFacts(LibraryEntry entry)
