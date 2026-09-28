@@ -254,6 +254,32 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
         database.LibraryEntries
             .FirstOrDefaultAsync(entry => entry.Id == entryId && entry.ReaderId == readerId, cancellationToken);
 
+    /// <summary>
+    /// Every stretch of reading this reader did from <paramref name="from"/> up to
+    /// <paramref name="to"/>, across the whole shelf, each with the entry it was against —
+    /// oldest first. What a year of reading is drawn from.
+    /// </summary>
+    public async Task<List<(ReadingSession Session, LibraryEntry Entry)>> ReadingBetweenAsync(
+        string readerId,
+        DateTimeOffset from,
+        DateTimeOffset to,
+        CancellationToken cancellationToken)
+    {
+        var (start, end) = (from.ToUniversalTime(), to.ToUniversalTime());
+
+        var read = await database.ReadingSessions
+            .Where(session => session.OccurredAt >= start && session.OccurredAt < end)
+            .Join(
+                database.LibraryEntries.Where(entry => entry.ReaderId == readerId),
+                session => session.LibraryEntryId,
+                entry => entry.Id,
+                (session, entry) => new { session, entry })
+            .OrderBy(pair => pair.session.OccurredAt)
+            .ToListAsync(cancellationToken);
+
+        return [.. read.Select(pair => (pair.session, pair.entry))];
+    }
+
     public Task<List<ReadingSession>> ListSessionsAsync(Guid entryId, CancellationToken cancellationToken) =>
         database.ReadingSessions
             .Where(session => session.LibraryEntryId == entryId)

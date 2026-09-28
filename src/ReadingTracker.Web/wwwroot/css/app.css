@@ -4410,6 +4410,436 @@ body:has(.preview) .search__fab {
     color: var(--danger);
 }
 
+/* Your reading ------------------------------------------------------------ */
+
+/* A year is fifty-three weeks across; the page is as wide as the import's to fit them. */
+main:has(.stats) {
+    max-width: 70rem;
+}
+
+.stats {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.stats__heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.stats__heading h1 {
+    margin: 0;
+}
+
+.stats__years {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border-radius: 12px;
+    background: var(--fill);
+}
+
+.stats__year {
+    min-width: 3.5rem;
+    text-align: center;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.stats__step {
+    display: grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 9px;
+    color: var(--ink-soft);
+    transition: background-color var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.stats__step:hover {
+    background: var(--fill-hover);
+    color: var(--ink);
+}
+
+/* No next year yet: the arrow stays, faint, so the year sits in the middle. */
+.stats__step--none {
+    color: var(--line-strong);
+}
+
+.stats__step--none:hover {
+    background: none;
+    color: var(--line-strong);
+}
+
+.stats__step svg {
+    width: 1rem;
+    height: 1rem;
+}
+
+.stats__lede {
+    margin: -0.75rem 0 0;
+    color: var(--ink-soft);
+}
+
+.stats__tile,
+.stats__day,
+.stats__weekdays,
+.calendar {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--card-sheer);
+}
+
+/*
+    The calendar: a column a week, Monday at the top, each day a square. The squares are
+    buttons — picking one says what was read that day — and they size with the page, so a
+    year always spans the width.
+*/
+.calendar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1.25rem 1.25rem 1rem;
+}
+
+.calendar__bar {
+    display: none;
+}
+
+.calendar__body {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.5rem;
+}
+
+.calendar__labels,
+.calendar__week {
+    display: grid;
+    grid-template-rows: 1.1rem repeat(7, auto);
+    gap: 3px;
+}
+
+.calendar__labels span {
+    display: flex;
+    align-items: center;
+    font-size: 0.7rem;
+    color: var(--ink-faint);
+}
+
+.calendar__weeks {
+    display: flex;
+    gap: 3px;
+}
+
+.calendar__week {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.calendar__month {
+    width: 0;
+    overflow: visible;
+    white-space: nowrap;
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+}
+
+/* A day's colour is --day, so the buttons' own hover and press fills cannot repaint it. */
+.calendar__day {
+    --day: var(--fill);
+
+    display: block;
+    aspect-ratio: 1;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    background: var(--day);
+}
+
+button.calendar__day,
+button.calendar__day:hover:not(:disabled),
+button.calendar__day:active:not(:disabled) {
+    background: var(--day);
+    transform: none;
+    cursor: pointer;
+    transition: box-shadow var(--quick) var(--ease);
+}
+
+button.calendar__day:hover:not(:disabled) {
+    box-shadow: 0 0 0 1.5px var(--ink-faint);
+}
+
+.calendar__day--0 { --day: var(--fill); }
+.calendar__day--1 { --day: color-mix(in srgb, var(--status-alive) 28%, transparent); }
+.calendar__day--2 { --day: color-mix(in srgb, var(--status-alive) 50%, transparent); }
+.calendar__day--3 { --day: color-mix(in srgb, var(--status-alive) 75%, transparent); }
+.calendar__day--4 { --day: var(--status-alive); }
+
+.calendar__day--on,
+button.calendar__day--on:hover:not(:disabled) {
+    box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--ink);
+}
+
+.calendar__day--out {
+    background: none;
+}
+
+.calendar__day--ahead {
+    background: none;
+    box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.calendar__legend {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    font-size: 0.75rem;
+    color: var(--ink-faint);
+}
+
+.calendar__scale {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.calendar__scale i {
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 3px;
+    background: var(--day);
+}
+
+.calendar__scale i:first-child {
+    margin-left: 0.3rem;
+}
+
+.calendar__scale i:last-child {
+    margin-right: 0.3rem;
+}
+
+.stats__below {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+}
+
+.stats__day,
+.stats__weekdays {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1.1rem 1.25rem;
+}
+
+.stats__day {
+    border-color: color-mix(in srgb, var(--status-alive) 40%, transparent);
+    background: color-mix(in srgb, var(--status-alive) 7%, var(--card-sheer));
+}
+
+.stats__day h2,
+.stats__weekdays h2 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.stats__day p,
+.stats__weekdays p {
+    margin: 0;
+}
+
+.stats__day-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.stats__day-head span {
+    font-size: 0.85rem;
+    color: var(--status-alive);
+    font-variant-numeric: tabular-nums;
+}
+
+.stats__books {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.stats__books li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0 1rem;
+    font-size: 0.9rem;
+}
+
+.stats__book {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.stats__book-pages {
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-soft);
+}
+
+.stats__book-from {
+    grid-column: 1 / -1;
+    font-size: 0.78rem;
+    color: var(--ink-faint);
+}
+
+.stats__bars {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 0.5rem;
+    height: 6.5rem;
+}
+
+.stats__bar {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.stats__bar span {
+    width: 100%;
+    min-height: 3px;
+    border-radius: 5px 5px 2px 2px;
+    background: var(--status-alive);
+}
+
+.stats__bar em {
+    font-style: normal;
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+}
+
+.stats__weekdays p {
+    font-size: 0.85rem;
+}
+
+.stats__tiles {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.stats__tile {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 1rem 1.25rem;
+}
+
+.stats__tile h2 {
+    margin: 0;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+}
+
+.stats__tile strong {
+    font-size: 1.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.stats__tile span {
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+}
+
+@media (max-width: 900px) {
+    .stats__below {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .stats__tiles {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+/*
+    A phone shows the last seventeen weeks, big enough to tap, and the whole year on asking —
+    then at the same size, scrolling sideways, with today at the end.
+*/
+@media (max-width: 560px) {
+    .stats__heading h1 {
+        font-size: 1.6rem;
+    }
+
+    .calendar {
+        padding: 1rem;
+    }
+
+    .calendar__bar {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 1rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+
+    .calendar__toggle {
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+
+    .calendar__week--early,
+    .calendar__week--ahead {
+        display: none;
+    }
+
+    /* Opened on the latest weeks by js/calendar.js, and scrolled back from there. */
+    .calendar--whole .calendar__weeks {
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        padding-bottom: 0.25rem;
+    }
+
+    .calendar--whole .calendar__week {
+        flex: 0 0 1.05rem;
+    }
+
+    .calendar--whole .calendar__week--early {
+        display: grid;
+    }
+
+    .calendar__legend span:first-child {
+        display: none;
+    }
+
+    .stats__tile {
+        padding: 0.9rem 1rem;
+    }
+
+    .stats__tile strong {
+        font-size: 1.35rem;
+    }
+}
+
 /* Import ------------------------------------------------------------------ */
 
 /*

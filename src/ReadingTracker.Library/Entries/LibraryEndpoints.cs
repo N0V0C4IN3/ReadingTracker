@@ -665,7 +665,7 @@ public static class LibraryEndpoints
             ["status"] = [$"'{given}' is not a reading status. Use one of: {string.Join(", ", Enum.GetNames<ReadingStatus>())}."],
         });
 
-    private static IResult NotSaidWhoIsAsking() =>
+    internal static IResult NotSaidWhoIsAsking() =>
         Results.Problem(
             title: "Unknown reader",
             detail: $"The {Reader.HeaderName} header is missing. Requests reach this service through the Gateway.",

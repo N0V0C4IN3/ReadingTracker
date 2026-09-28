@@ -66,6 +66,12 @@ public sealed record ReadingSessionView(
 public sealed record DisplayedAmount(decimal Amount, string Unit);
 
 /// <summary>
+/// One stretch of reading as the stats page sees it: which book, when, and how much in pages —
+/// null when it was logged in percent of a book whose length nobody knows.
+/// </summary>
+public sealed record ReadingMoment(Guid EntryId, DateTimeOffset OccurredAt, decimal? Pages, int? DurationMinutes, string Source);
+
+/// <summary>
 /// The answer to logging or correcting a stretch of reading: what was recorded, and the entry as
 /// it now stands. The second half is the useful one — progress is worked out from the sessions,
 /// so recording one moves it — and it arrives with the first rather than costing a second trip.
@@ -329,6 +335,17 @@ public sealed class GatewayLibraryClient(HttpClient httpClient)
         CancellationToken cancellationToken) =>
         ChangeAsync<IReadOnlyList<ReadingSessionView>>(
             client => client.GetAsync($"api/library/{entryId}/sessions", cancellationToken),
+            cancellationToken);
+
+    /// <summary>Every stretch of reading across the shelf from <paramref name="from"/> up to <paramref name="to"/>, oldest first.</summary>
+    public Task<LibraryChange<IReadOnlyList<ReadingMoment>>> GetReadingAsync(
+        DateTimeOffset from,
+        DateTimeOffset to,
+        CancellationToken cancellationToken) =>
+        ChangeAsync<IReadOnlyList<ReadingMoment>>(
+            client => client.GetAsync(
+                $"api/library/reading?from={Uri.EscapeDataString(from.ToString("O"))}&to={Uri.EscapeDataString(to.ToString("O"))}",
+                cancellationToken),
             cancellationToken);
 
     public Task<LibraryChange<LoggedSession>> LogSessionAsync(

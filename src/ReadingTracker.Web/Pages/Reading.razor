@@ -1,0 +1,329 @@
+@page "/reading"
+@using ReadingTracker.Web.Services
+@implements IAsyncDisposable
+@inject GatewayLibraryClient Library
+@inject IJSRuntime JS
+
+@*
+    The reader's year of reading, a square a day: the greener, the more pages. Picking a day
+    says what was read on it; below, the runs of days, how many days had any reading, the
+    biggest one, and which day of the week is the reader's.
+
+    Two requests, side by side: the year's sessions, and the shelf for the books' titles. The
+    days are worked out here rather than by Library, because a day is midnight to midnight
+    where the reader is and only the browser knows where that is (see ReadingYear).
+
+    A phone shows the last four months, which is what fits; the whole year is one tap away and
+    scrolls sideways.
+*@
+
+<PageTitle>Your reading · ReadingTracker</PageTitle>
+
+<AuthorizeView>
+    <Authorizing>
+        <Settling />
+    </Authorizing>
+    <NotAuthorized>
+        <p class="notice">Sign in to see your reading.</p>
+    </NotAuthorized>
+    <Authorized>
+        <section class="stats">
+            <div class="stats__heading">
+                <h1>Your reading</h1>
+                <nav class="stats__years" aria-label="Year">
+                    <a class="stats__step" href="reading?year=@(Year - 1)" aria-label="@(Year - 1)">
+                        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                    </a>
+                    <span class="stats__year">@Year</span>
+                    @if (Year < ThisYear)
+                    {
+                        <a class="stats__step" href="reading?year=@(Year + 1)" aria-label="@(Year + 1)">
+                            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                        </a>
+                    }
+                    else
+                    {
+                        <span class="stats__step stats__step--none" aria-hidden="true">
+                            <svg viewBox="0 0 16 16"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                        </span>
+                    }
+                </nav>
+            </div>
+
+            @if (_year is { } year)
+            {
+                <p class="stats__lede">
+                    @(year.DaysRead switch
+                    {
+                        0 => $"Nothing logged in {year.Year}{(year.IsCurrent ? " yet" : "")}.",
+                        1 => "One day with a page read.",
+                        var days => $"{days} days with a page read.",
+                    })
+                </p>
+
+                <section class="calendar @(_wholeYear ? "calendar--whole" : null)" aria-label="Every day of @year.Year">
+                    <div class="calendar__bar">
+                        <span class="calendar__span">@(_wholeYear ? $"All of {year.Year}" : "The last four months")</span>
+                        <button type="button" class="link-button calendar__toggle" @onclick="ToggleWholeYear">
+                            @(_wholeYear ? "Just the last four months" : "The whole year")
+                        </button>
+                    </div>
+                    <div class="calendar__body">
+                        <div class="calendar__labels" aria-hidden="true">
+                            <span></span><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span><span></span>
+                        </div>
+                        <div class="calendar__weeks" @ref="_weeks">
+                            @for (var w = 0; w < year.Weeks.Count; w++)
+                            {
+                                var week = year.Weeks[w];
+                                <div class="calendar__week @WeekClass(year, w)">
+                                    <span class="calendar__month" aria-hidden="true">@MonthStarting(week, w)</span>
+                                    @foreach (var date in week)
+                                    {
+                                        if (date is not { } day)
+                                        {
+                                            <span class="calendar__day calendar__day--out"></span>
+                                        }
+                                        else if (day > year.LastDay)
+                                        {
+                                            <span class="calendar__day calendar__day--ahead"></span>
+                                        }
+                                        else
+                                        {
+                                            var read = year.Days.GetValueOrDefault(day);
+                                            <button type="button"
+                                                    class="calendar__day calendar__day--@(read?.Level ?? 0) @(day == _picked ? "calendar__day--on" : null)"
+                                                    aria-pressed="@(day == _picked ? "true" : "false")"
+                                                    aria-label="@SaidOf(day, read)"
+                                                    title="@SaidOf(day, read)"
+                                                    @onclick="() => _picked = day"></button>
+                                        }
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    <div class="calendar__legend" aria-hidden="true">
+                        <span>Each square is a day; the greener, the more pages.</span>
+                        <span class="calendar__scale">None<i class="calendar__day--0"></i><i class="calendar__day--1"></i><i class="calendar__day--2"></i><i class="calendar__day--3"></i><i class="calendar__day--4"></i>60+ pages</span>
+                    </div>
+                </section>
+
+                <div class="stats__below">
+                    @if (_picked is { } picked)
+                    {
+                        var day = year.Days.GetValueOrDefault(picked);
+                        <section class="stats__day" aria-live="polite">
+                            <div class="stats__day-head">
+                                <h2>@picked.ToString("dddd d MMMM")</h2>
+                                @if (day is not null)
+                                {
+                                    <span>@PagesSaid(day.Pages, day.Books.Any(book => book.Pages is null))@(day.Minutes > 0 ? $" · {Duration(day.Minutes)}" : "")</span>
+                                }
+                            </div>
+                            @if (day is null)
+                            {
+                                <p class="muted">Nothing read that day.</p>
+                            }
+                            else
+                            {
+                                <ul class="stats__books">
+                                    @foreach (var book in day.Books)
+                                    {
+                                        <li>
+                                            <span class="stats__book">@TitleOf(book.EntryId)</span>
+                                            <span class="stats__book-pages">@(book.Pages is { } pages ? PagesSaid(pages, false) : "read, pages unknown")</span>
+                                            <span class="stats__book-from">@(book.FromDevice ? "from your device" : "logged by hand")</span>
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                        </section>
+                    }
+
+                    <section class="stats__weekdays">
+                        <h2>When you read</h2>
+                        @{
+                            var weekdays = year.ByWeekday;
+                            var most = weekdays.Max(day => day.Pages);
+                        }
+                        <div class="stats__bars" aria-hidden="true">
+                            @foreach (var (weekday, pages) in weekdays)
+                            {
+                                <div class="stats__bar">
+                                    <span style="height: @(most == 0 ? 0 : (int)(pages * 100 / most))%"></span>
+                                    <em>@weekday.ToString()[..1]</em>
+                                </div>
+                            }
+                        </div>
+                        <p class="muted">
+                            @if (most > 0)
+                            {
+                                var top = weekdays.First(day => day.Pages == most);
+                                <text>@(top.Day)s are your day: @PagesSaid(most, false) on average.</text>
+                            }
+                            else
+                            {
+                                <text>Nothing to go on yet.</text>
+                            }
+                        </p>
+                    </section>
+                </div>
+
+                <div class="stats__tiles">
+                    <section class="stats__tile">
+                        <h2>Now</h2>
+                        <strong>@(year.Current is { } now ? DaysSaid(now.Days) : "—")</strong>
+                        <span>@(year.Current is { } run ? $"in a row, since {run.From:d MMM}" : year.IsCurrent ? "Read today to start a run." : $"{year.Year} is over.")</span>
+                    </section>
+                    <section class="stats__tile">
+                        <h2>Longest run</h2>
+                        <strong>@(year.Longest is { } longest ? DaysSaid(longest.Days) : "—")</strong>
+                        <span>@(year.Longest is { } best ? RangeSaid(best) : "No run yet.")</span>
+                    </section>
+                    <section class="stats__tile">
+                        <h2>Days read</h2>
+                        <strong>@year.DaysRead of @year.DaysSoFar</strong>
+                        <span>@(year.DaysRead * 100 / year.DaysSoFar)% of @(year.IsCurrent ? "the year so far" : "the year")</span>
+                    </section>
+                    <section class="stats__tile">
+                        <h2>Biggest day</h2>
+                        <strong>@(year.BiggestDay is { } biggest ? PagesSaid(biggest.Pages, false) : "—")</strong>
+                        <span>@(year.BiggestDay is { } big ? $"{big.Date:ddd d MMM} · {TitleOf(big.Books[0].EntryId)}" : "No pages counted yet.")</span>
+                    </section>
+                </div>
+            }
+            else if (_problem is not null)
+            {
+                <p class="notice">Your reading could not be fetched just now. Try again shortly.</p>
+            }
+            else
+            {
+                <Settling />
+            }
+        </section>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    [SupplyParameterFromQuery(Name = "year")]
+    public int? AskedYear { get; set; }
+
+    private static int ThisYear => DateTime.Now.Year;
+
+    private int Year => AskedYear is { } asked && asked <= ThisYear && asked > 1900 ? asked : ThisYear;
+
+    private ReadingYear? _year;
+    private IReadOnlyDictionary<Guid, string> _titles = new Dictionary<Guid, string>();
+    private object? _problem;
+    private DateOnly? _picked;
+    private bool _wholeYear;
+    private bool _toLatest;
+    private ElementReference _weeks;
+    private IJSObjectReference? _calendar;
+    private int? _shown;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_shown == Year)
+        {
+            return;
+        }
+
+        _shown = Year;
+        _year = null;
+        _problem = null;
+
+        var zone = TimeZoneInfo.Local;
+        var (from, to) = ReadingYear.Span(Year, zone);
+        var readingTask = Library.GetReadingAsync(from, to, CancellationToken.None);
+        var shelfTask = Library.GetEntriesAsync(null, CancellationToken.None);
+        await Task.WhenAll(readingTask, shelfTask);
+
+        var (reading, (entries, _)) = (await readingTask, await shelfTask);
+        if (reading.Value is not { } moments)
+        {
+            _problem = reading.Problem;
+            return;
+        }
+
+        _titles = (entries ?? []).ToDictionary(entry => entry.Id, entry => entry.Book?.Title ?? "A book");
+        _year = ReadingYear.From(Year, moments, DateOnly.FromDateTime(DateTime.Now), zone);
+        // Today when it has been read on, else the last day that was.
+        _picked = _year.Days.ContainsKey(_year.LastDay) || _year.Days.Count == 0 ? _year.LastDay : _year.Days.Keys.Max();
+    }
+
+    /// <summary>
+    /// The whole year on a phone is wider than the screen; it opens on the latest weeks, where
+    /// the reader just was, and scrolls back from there.
+    /// </summary>
+    private void ToggleWholeYear()
+    {
+        _wholeYear = !_wholeYear;
+        _toLatest = _wholeYear;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_toLatest)
+        {
+            return;
+        }
+
+        _toLatest = false;
+        _calendar ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/calendar.js");
+        await _calendar.InvokeVoidAsync("showLatest", _weeks);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_calendar is not null)
+        {
+            try
+            {
+                await _calendar.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+    }
+
+    /// <summary>
+    /// A phone shows the seventeen weeks up to the last day and hides the rest until asked; a
+    /// wide screen shows every week, the ones still to come drawn empty.
+    /// </summary>
+    private static string? WeekClass(ReadingYear year, int week)
+    {
+        var lastWeek = year.Weeks.ToList().FindIndex(days => days.Contains(year.LastDay));
+        return week < lastWeek - 16 ? "calendar__week--early" : week > lastWeek ? "calendar__week--ahead" : null;
+    }
+
+    /// <summary>The month's name over the week it starts in, and over the first week.</summary>
+    private static string? MonthStarting(IReadOnlyList<DateOnly?> week, int index) =>
+        week.FirstOrDefault(day => day is { Day: 1 } || (index == 0 && day is not null)) is { } first ? first.ToString("MMM") : null;
+
+    private string TitleOf(Guid entryId) => _titles.GetValueOrDefault(entryId) ?? "A book no longer on your shelf";
+
+    private static string SaidOf(DateOnly day, ReadingDay? read) =>
+        $"{day:ddd d MMM}: {(read is null ? "nothing read" : PagesSaid(read.Pages, read.Books.Any(book => book.Pages is null)))}";
+
+    private static string PagesSaid(decimal pages, bool someUnknown) =>
+        (pages, someUnknown) switch
+        {
+            (0m, true) => "read, pages unknown",
+            (1m, false) => "1 page",
+            (_, true) => $"{pages:0} pages and more",
+            _ => $"{pages:0} pages",
+        };
+
+    private static string DaysSaid(int days) => days == 1 ? "1 day" : $"{days} days";
+
+    private static string RangeSaid(Streak run) =>
+        run.From == run.To ? $"{run.From:d MMM}"
+        : run.From.Month == run.To.Month ? $"{run.From.Day} – {run.To:d MMM}"
+        : $"{run.From:d MMM} – {run.To:d MMM}";
+
+    private static string Duration(int minutes) =>
+        minutes < 60 ? $"{minutes} min" : minutes % 60 == 0 ? $"{minutes / 60} h" : $"{minutes / 60} h {minutes % 60} min";
+}
