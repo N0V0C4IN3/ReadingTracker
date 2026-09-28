@@ -29,7 +29,7 @@
             <div class="shelf__heading">
                 <h1>Your shelf</h1>
 
-                @* A phone on its side has the shelves on the cover flow's drum instead (ShelfDeck). *@
+                @* A phone on its side has the cover flow alone (ShelfDeck): the tabs are for upright. *@
                 @if (!Orientation.Sideways && (_entries is { Count: > 0 } || _filter is not null))
                 {
                     @* Dimmed and out of reach while a search is on: the search spans every status,

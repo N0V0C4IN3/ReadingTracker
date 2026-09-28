@@ -150,7 +150,7 @@
             // answered, so the transition waits a moment for it; a page slower than that simply
             // fades in, the jacket fading out on its way.
             openBook: url => {
-                const jacket = document.querySelector(".deck .flow__slot--front > .cover:not(.cover--mirror)");
+                const jacket = document.querySelector(".flow--shelf .flow__slot--front > .cover:not(.cover--mirror)");
                 if (jacket) {
                     jacket.style.viewTransitionName = "book-cover";
                 }

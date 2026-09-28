@@ -2682,19 +2682,14 @@ button.danger:hover:not(:disabled) {
 .preview__status--wanttoread,
 .preview__status--reading,
 .import__tone--wanttoread,
-.import__tone--reading,
-.deck__word--wanttoread,
-.deck__word--reading { --dot: var(--status-alive); }
+.import__tone--reading { --dot: var(--status-alive); }
 .status__row--finished,
 .preview__status--finished,
-.import__tone--finished,
-.deck__word--finished { --dot: var(--status-done); }
+.import__tone--finished { --dot: var(--status-done); }
 .status__row--onhold,
 .status__row--dropped,
 .import__tone--onhold,
-.import__tone--dropped,
-.deck__word--onhold,
-.deck__word--dropped { --dot: var(--ink-faint); }
+.import__tone--dropped { --dot: var(--ink-faint); }
 
 /* Not yet begun, and given up: rings rather than dots. */
 .status__trigger--wanttoread .status__dot,
@@ -2703,9 +2698,7 @@ button.danger:hover:not(:disabled) {
 .import__tone--wanttoread .status__dot,
 .status__trigger--dropped .status__dot,
 .status__row--dropped .status__dot,
-.import__tone--dropped .status__dot,
-.deck__word--wanttoread .status__dot,
-.deck__word--dropped .status__dot {
+.import__tone--dropped .status__dot {
     background: transparent;
     box-shadow: inset 0 0 0 1.5px var(--dot);
 }
@@ -6505,30 +6498,58 @@ main:has(.stats) {
 
 /*
     The shelf on a phone held on its side (Components/ShelfDeck.razor): the welcome screen's cover
-    flow (FlowStage, and the .flow rules above) with the shelf's jackets in it, smaller, sized by
-    the little height a phone on its side has, and the shelves on a drum under it. Only a phone on
-    its side is given one (readingTracker.sideways), so none of this is behind a media query.
+    flow (FlowStage, and the .flow rules above) with the shelf's jackets in it and nothing else on
+    the screen, so the jackets can be as big as its little height allows. Only a phone on its side
+    is given one (readingTracker.sideways), so none of this is behind a media query.
 */
 
-/* The page to itself under the header: no heading and no search. Turned upright, the phone has
-   both again, as they were left. */
-main:has(.shelf > .deck) {
-    padding-block: 0.5rem 0;
-}
-
-.shelf:has(> .deck) .shelf__heading,
-main:has(.shelf > .deck) :is(.search, .search__fab, .search__scrim) {
+/* The screen to itself: no header, no heading and no search. Turned upright, the phone has them
+   all again, as they were left. */
+body:has(.flow--shelf) header,
+.shelf:has(> .flow--shelf) .shelf__heading,
+main:has(.flow--shelf) :is(.search, .search__fab, .search__scrim) {
     display: none;
 }
 
+main:has(.flow--shelf) {
+    padding-block: 0.75rem 0;
+}
+
 .flow--shelf {
-    /* As big as the height allows once the header, the caption and the drum have theirs. */
-    --cover-w: clamp(4.5rem, (100dvh - 10rem) / 2.3, 10rem);
+    /* The stage is twice a jacket's width tall (below); the caption under it and the page's
+       padding take the rest of the height. */
+    --cover-w: clamp(4.5rem, (100dvh - 3.5rem) / 2.1, 15rem);
     /* A finger, not a cursor: nothing is picked up, so no room is kept above for it. */
     --pickup: 1;
 
     margin-top: 0;
     padding-bottom: 1.9rem;
+}
+
+/* Less floor than the welcome's: its reflection has faded well before then, and the height is
+   better spent on the jackets. What is left of the reflection is clipped rather than hanging
+   below the stage, where it would make the page scroll. */
+.flow--shelf .flow__stage {
+    height: calc(var(--cover-w) * 2 + var(--headroom));
+    overflow: clip;
+}
+
+/*
+    The book's thickness, down its open side: the colour of its own cover rather than the
+    welcome's page block, as the back of a real book is, and a little thicker. It is the cover's
+    last sliver drawn out across the edge (--art, from FlowStage), or a drawn jacket's own board,
+    shaded as a side turned from the light.
+*/
+.flow--shelf .cover::after {
+    top: 0;
+    bottom: 0;
+    width: calc(var(--cover-w) * 0.06);
+    background-color: inherit;
+    background-image:
+        linear-gradient(to right, rgb(0 0 0 / 38%), rgb(0 0 0 / 12%) 45%, rgb(255 255 255 / 10%)),
+        var(--art, none);
+    background-size: 100% 100%, 4000% 100%;
+    background-position: 0 0, right center;
 }
 
 .flow--shelf .flow__caption {
@@ -6545,7 +6566,7 @@ main:has(.shelf > .deck) :is(.search, .search__fab, .search__scrim) {
 }
 
 .flow--shelf .flow__caption strong {
-    font-size: 1rem;
+    font-size: 1.05rem;
 }
 
 /*
@@ -6584,85 +6605,6 @@ main:has(.shelf > .deck) :is(.search, .search__fab, .search__scrim) {
 .flow--shelf > .empty {
     margin: 2.5rem 1rem 1rem;
     text-align: center;
-}
-
-/*
-    The drum: the shelves in a row turned like the flow, the one the front book is on face-on in
-    the middle. Each shelf's place is its distance from that one (--off, from the component), and
-    how far a finger on the drum has moved it (--drag, from js/shelfDrum.js, which takes the
-    transition off while it does).
-*/
-.deck__drum {
-    --pitch: 9.5rem;
-
-    position: relative;
-    height: 2.75rem;
-    perspective: 600px;
-    touch-action: none;
-    -webkit-mask-image: linear-gradient(to right, transparent, #000 25%, #000 75%, transparent);
-    mask-image: linear-gradient(to right, transparent, #000 25%, #000 75%, transparent);
-    animation: rise 420ms var(--ease-out) 240ms backwards;
-}
-
-/* Repeated for :active and :disabled because the app's buttons set transform and opacity there
-   outright, which would throw a shelf's place on the drum away while it was pressed or empty. */
-.deck__word,
-.deck__word:active:not(:disabled),
-.deck__word:disabled {
-    --o: calc(var(--off) + var(--drag, 0));
-    --a: max(var(--o), -1 * var(--o));
-
-    transform:
-        translateX(-50%)
-        translateX(calc(var(--o) * var(--pitch)))
-        translateZ(calc(var(--a) * -4rem))
-        rotateY(calc(var(--o) * -38deg))
-        scale(calc(1 - min(var(--a), 1) * 0.25));
-    opacity: clamp(0.2, 1 - var(--a) * 0.4, 1);
-}
-
-.deck__word {
-    position: absolute;
-    top: 0;
-    left: 50%;
-    height: 2.75rem;
-    padding: 0 0.6rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    white-space: nowrap;
-    border-radius: 10px;
-    background: none;
-    font-size: 1.05rem;
-    font-weight: 700;
-    transition: transform 520ms var(--ease-out), opacity 520ms var(--ease-out);
-}
-
-/* A word on a drum, not a button with a fill. */
-.deck__word:hover:not(:disabled) {
-    background: none;
-}
-
-.deck__drum.is-turning .deck__word {
-    transition: none;
-}
-
-/* A shelf with nothing on it: on the drum, to be counted, but not to be turned to. */
-.deck__word:disabled {
-    color: var(--ink-faint);
-}
-
-.deck__word span {
-    min-width: 1.4rem;
-    height: 1.4rem;
-    padding: 0 0.35rem;
-    box-sizing: border-box;
-    border-radius: 0.7rem;
-    background: var(--fill);
-    font-size: 0.75rem;
-    line-height: 1.4rem;
-    text-align: center;
-    color: var(--ink-soft);
 }
 
 /* The book at the front leaving for its own page: its jacket grows into the page's cover
