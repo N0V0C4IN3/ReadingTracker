@@ -6558,7 +6558,11 @@ main:has(.flow--shelf) {
     (object-fit: cover), so on a cover of another shape it is a little way past the edge seen.
 */
 .flow--shelf .cover {
+    --spine-w: calc(var(--cover-w) * 0.06);
+
     border-left-width: 0;
+    /* A drawn jacket's title and author clear the spine by as much as they cleared the strip. */
+    padding-left: calc(var(--spine-w) + 0.85rem);
 }
 
 .flow--shelf .cover::before {
@@ -6568,8 +6572,7 @@ main:has(.flow--shelf) {
     bottom: 0;
     left: 0;
     z-index: 1;
-    width: calc(var(--cover-w) * 0.06);
-    border-radius: 2px 0 0 2px;
+    width: var(--spine-w);
     background-color: inherit;
     background-image:
         linear-gradient(to right, rgb(0 0 0 / 34%), rgb(255 255 255 / 12%) 35%, rgb(0 0 0 / 8%) 70%, rgb(0 0 0 / 40%)),
