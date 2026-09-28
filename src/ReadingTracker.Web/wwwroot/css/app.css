@@ -5370,6 +5370,327 @@ main:has(.stats) {
     border-top: 1px solid var(--danger);
 }
 
+/* Shelf deck -------------------------------------------------------------- */
+
+/*
+    On a phone the shelf is a deck, the welcome screen's cover flow with the shelf's own cards in it
+    (js/shelfDeck.js sets each card's place on it as --deck-*), and the status tabs are a drum of
+    shelves under it, turned the same way. Wider, none of this applies and the shelf is the list.
+*/
+
+.deck__drum {
+    display: none;
+}
+
+/*
+    Each card's place, set on it by shelfDeck.js. Registered as not inherited: an ordinary custom
+    property is, so changing one on a card restyles everything inside the card too, and a turn
+    that moves seven cards was restyling hundreds of elements — most of what made it stutter.
+*/
+@property --deck-x { syntax: "*"; inherits: false; }
+@property --deck-z { syntax: "*"; inherits: false; }
+@property --deck-r { syntax: "*"; inherits: false; }
+@property --deck-s { syntax: "*"; inherits: false; }
+@property --deck-o { syntax: "*"; inherits: false; }
+@property --deck-layer { syntax: "*"; inherits: false; }
+@property --deal-delay { syntax: "*"; inherits: false; }
+@property --leave-to { syntax: "*"; inherits: false; }
+
+@keyframes deal {
+    from {
+        opacity: 0;
+        transform: perspective(1100px) translateX(90%) translateZ(-20rem) rotateY(-64deg) scale(0.9);
+    }
+}
+
+@keyframes landed {
+    40% {
+        transform: scale(1.35);
+    }
+}
+
+@media (max-width: 40rem) {
+    .shelf--deck .filters,
+    .shelf--deck .group--shelf {
+        display: none;
+    }
+
+    .shelf--deck .entries {
+        --deck-min: max(22rem, 100dvh - 22.5rem);
+    }
+
+    .shelf--deck .entries:not(.entries--pending) {
+        position: relative;
+        display: block;
+        /* The front card, and room under it for its reflection. */
+        height: calc(var(--deck-h, 20rem) + 4.5rem);
+        margin: 1rem -1rem 0;
+        touch-action: pan-y;
+    }
+
+    /* Run out: the deck keeps its room, with the line saying so standing where the cards were,
+       and is still there for the last card to leave from. */
+    .shelf--deck .entries:not(.entries--pending):not(:has(> .entry)) {
+        height: calc(var(--deck-min) + 4.5rem);
+    }
+
+    /*
+        While the shelf loads, its ghosts stand as the deck will: one face-on, one turned away to
+        either side, placed as shelfDeck.js places a card one off the front. The cards that follow
+        deal in over them.
+    */
+    .shelf--deck .entries--pending {
+        position: relative;
+        height: calc(var(--deck-min) + 4.5rem);
+        margin: 1rem -1rem 0;
+    }
+
+    .shelf--deck .entries--pending > .entry--pending {
+        height: var(--deck-min);
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 1.25rem;
+        animation: fade 360ms var(--ease-out) 140ms backwards;
+    }
+
+    .shelf--deck .entries--pending > .entry--pending:nth-child(1) {
+        --deck-x: -56%;
+        --deck-z: -7rem;
+        --deck-r: 60deg;
+        --deck-s: 0.95;
+        --deck-layer: -2;
+    }
+
+    .shelf--deck .entries--pending > .entry--pending:nth-child(3) {
+        --deck-x: 56%;
+        --deck-z: -7rem;
+        --deck-r: -60deg;
+        --deck-s: 0.95;
+        --deck-layer: -2;
+    }
+
+    .shelf--deck .entries--pending .entry__cover {
+        width: 8.5rem;
+        margin: 0;
+    }
+
+    .shelf--deck .entries--pending .entry__body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
+        margin-top: 1.25rem;
+    }
+
+    .shelf--deck .entries--pending .bone--title { width: 70%; }
+    .shelf--deck .entries--pending .bone--authors { width: 44%; }
+    .shelf--deck .entries--pending .bone--status { width: 7rem; }
+    .shelf--deck .entries--pending .bone--actions { width: 85%; }
+
+    .shelf--deck .entries > .empty {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        width: min(19.5rem, 100% - 5rem);
+        height: var(--deck-min);
+        margin: 0 auto;
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: rise 420ms var(--ease-out) 200ms backwards;
+    }
+
+    .shelf--deck .entries > .entry {
+        /* Taller than in the list, the jacket large and in the middle with the title under it, the
+           way the welcome deck shows a book: the deck has the screen to itself, down to the drum.
+           Whatever height the card has over its content goes around the jacket. */
+        --band: 15rem;
+
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        width: min(19.5rem, 100% - 5rem);
+        min-height: var(--deck-min);
+        margin: 0 auto;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+            "cover"
+            "head"
+            "status"
+            "fig"
+            "track"
+            "device"
+            "acts";
+        grid-template-rows: 1fr auto auto auto auto auto auto;
+        /* Opaque: in a deck the cards stand over one another. */
+        background: var(--card);
+        transform:
+            perspective(1100px)
+            translateX(var(--deck-x, 0))
+            translateZ(var(--deck-z, 0))
+            rotateY(var(--deck-r, 0deg))
+            scale(var(--deck-s, 1));
+        opacity: var(--deck-o, 1);
+        z-index: var(--deck-layer, auto);
+        animation: none;
+        /* Quicker than the welcome deck's 620ms: a deck the reader turns by hand, card after card,
+           has to keep up with the hand. */
+        transition:
+            transform 460ms var(--ease-out),
+            opacity 460ms var(--ease-out),
+            box-shadow 220ms var(--ease-out);
+    }
+
+    .shelf--deck .entries > .entry .entry__cover {
+        justify-self: center;
+        align-self: center;
+        width: 8.5rem;
+        margin-top: 0.3rem;
+    }
+
+    .shelf--deck .entries > .entry .entry__status {
+        justify-self: center;
+        margin-top: 0.5rem;
+    }
+
+    .shelf--deck .entries > .entry .entry__head {
+        align-self: start;
+        margin-top: 0.75rem;
+        text-align: center;
+    }
+
+    /*
+        The front card is not transformed at all, and has no reflection while anything is open on
+        it, so the sheets it opens (History, Settings, the log form) stay fixed to the screen: a
+        transformed or reflected ancestor would become their frame, under the header.
+    */
+    .shelf--deck .entries > .entry.is-front {
+        transform: none;
+        /*
+            The floor, under the front card only. Not the welcome deck's flipped copy: a card is a
+            whole panel of controls, and drawing it twice would be drawing every one of them twice.
+            And not under the cards that turn: a reflection is painted again on every frame of a
+            3D move, which on its own took the deck from the welcome screen's smooth 60 frames a
+            second to half that. Browsers without it (Firefox) get the card standing on nothing.
+        */
+        -webkit-box-reflect: below 0.4rem linear-gradient(transparent 84%, rgb(255 255 255 / 14%));
+    }
+
+    /* The cards either side of the front are each their own layer, so turning moves them rather
+       than painting them again, blurred band and all. Not the front one: will-change: transform
+       would make it the frame of the sheets it opens, as a transform would. */
+    .shelf--deck .entries > .entry:not(.is-front, .is-far) {
+        will-change: transform, opacity;
+    }
+
+    /* Too far back to see: not drawn at all. */
+    .shelf--deck .entries > .entry.is-far {
+        visibility: hidden;
+        transition: none;
+    }
+
+    .shelf--deck .entries > .entry:has(.sheet, .panel, .status__menu) {
+        -webkit-box-reflect: initial;
+    }
+
+    .shelf--deck .entries > .entry.is-dealt {
+        animation: deal 480ms var(--ease-out) var(--deal-delay, 0ms) backwards;
+    }
+
+    /* A card that has changed status leaves: down into its new shelf on the drum. */
+    .shelf--deck .entries > .entry.is-leaving {
+        z-index: 5;
+        pointer-events: none;
+    }
+
+    .shelf--deck .entries > .entry.is-flying :is(.status__menu, .status__scrim) {
+        display: none;
+    }
+
+    .shelf--deck .entries > .entry.is-flying {
+        transform: var(--leave-to);
+        opacity: 0;
+        transition:
+            transform 520ms cubic-bezier(0.5, 0, 0.2, 1),
+            opacity 520ms cubic-bezier(0.6, 0, 1, 1);
+        -webkit-box-reflect: initial;
+    }
+
+    /*
+        The drum: the shelves in a row turned like the deck, the one chosen face-on in the middle.
+        Blazor places each word by --off (and --away, its distance); while a finger turns the drum
+        shelfDeck.js writes fractional --o and --a over them, and takes the transition off.
+    */
+    .deck__drum {
+        --pitch: 9.5rem;
+
+        display: block;
+        position: relative;
+        height: 3.5rem;
+        margin: -1rem -1rem 0;
+        perspective: 600px;
+        touch-action: none;
+        -webkit-mask-image: linear-gradient(to right, transparent, #000 18%, #000 82%, transparent);
+        mask-image: linear-gradient(to right, transparent, #000 18%, #000 82%, transparent);
+    }
+
+    .deck__word,
+    .deck__word:hover:not(:disabled) {
+        position: absolute;
+        top: 0.25rem;
+        left: 50%;
+        height: 3rem;
+        padding: 0 0.6rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        white-space: nowrap;
+        border-radius: 10px;
+        background: none;
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: var(--ink);
+    }
+
+    .deck__word {
+        transform:
+            translateX(-50%)
+            translateX(calc(var(--o, var(--off)) * var(--pitch)))
+            translateZ(calc(var(--a, var(--away)) * -4rem))
+            rotateY(calc(var(--o, var(--off)) * -38deg))
+            scale(calc(1 - min(var(--a, var(--away)), 1) * 0.25));
+        opacity: clamp(0.2, 1 - var(--a, var(--away)) * 0.4, 1);
+        transition: transform 520ms var(--ease-out), opacity 520ms var(--ease-out);
+    }
+
+    .deck__drum.is-turning .deck__word {
+        transition: none;
+    }
+
+    .deck__word span {
+        min-width: 1.4rem;
+        height: 1.4rem;
+        padding: 0 0.35rem;
+        box-sizing: border-box;
+        border-radius: 0.7rem;
+        background: var(--fill);
+        font-size: 0.75rem;
+        line-height: 1.4rem;
+        text-align: center;
+        color: var(--ink-soft);
+    }
+
+    .deck__word.is-landed span {
+        animation: landed 520ms var(--ease-out);
+    }
+}
+
 /* Translucency ------------------------------------------------------------ */
 
 /*
@@ -6045,6 +6366,25 @@ main:has(.stats) {
         border-radius: 0;
         background: transparent;
         cursor: default;
+    }
+
+    /*
+        Over the shelf's deck it lets the finger through: the books the search has narrowed the
+        shelf to are a deck to turn like any other, and a clear pane over them made them a picture
+        of a deck. The ✕ in the box still closes the dock.
+    */
+    body:has(.shelf--deck) .search__scrim {
+        pointer-events: none;
+    }
+
+    /* The dock's own Search button (and Enter) already ask the library; a second, larger button
+       saying so took the room above the field that the results come up into. */
+    .library-offer .button--large {
+        display: none;
+    }
+
+    .library-offer:not(:has(p)) {
+        display: none;
     }
 
     .search__fab {

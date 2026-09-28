@@ -24,7 +24,7 @@
         <Settling />
     </Authorizing>
     <Authorized>
-        <section class="shelf @(Searching ? "shelf--searching" : null)">
+        <section class="shelf @(Searching ? "shelf--searching" : null) @DeckClass">
             <div class="shelf__heading">
                 <h1>Your shelf</h1>
 
@@ -81,26 +81,23 @@
                     <p class="group">On your shelf <span>· @VisibleEntries.Count</span></p>
                 }
 
-                @if (VisibleEntries.Count == 0)
+                @if (VisibleEntries.Count == 0 && !(_phone && !Searching))
                 {
-                    <p class="empty">
-                        @if (Searching)
-                        {
-                            <text>Nothing on your shelf matches “@_query.Trim()”.</text>
-                        }
-                        else if (_filter is null)
-                        {
-                            <text>Your shelf is empty. Search below to add your first book.</text>
-                        }
-                        else
-                        {
-                            <text>Nothing here with that status.</text>
-                        }
-                    </p>
+                    <p class="empty">@EmptyLine</p>
                 }
-                else
+
+                @* A deck stays in the page when it runs out, so its last card can still leave the way
+                   the others did, and the shelves under it stay to be turned to. *@
+                @if (VisibleEntries.Count > 0 || (_phone && !Searching))
                 {
                     <div class="entries">
+                        @* On a phone a shelf with nothing on it keeps its deck's room, so the shelves
+                           under it stay where they were; the line saying so stands in the deck. *@
+                        @if (VisibleEntries.Count == 0)
+                        {
+                            <p class="empty">@EmptyLine</p>
+                        }
+
                         @*
                             The index rides along as At so the cards can arrive a beat apart, the
                             way search results do. Keyed by the entry, so a card that merely changes
@@ -121,6 +118,7 @@
                         }
                     </div>
                 }
+
             }
             else if (_problem == LibraryUnavailable.NotSignedIn)
             {
@@ -156,6 +154,13 @@
                     }
                 </div>
                 <p class="visually-hidden" role="status">Loading your shelf</p>
+            }
+
+            @* Outside the shelf's branches, so it is already there under the ghosts while the shelf
+               loads and the same drum stays put when the cards arrive. *@
+            @if (_phone && !Searching && _problem is null)
+            {
+                @Drum
             }
         </section>
 
@@ -566,7 +571,7 @@
     /// Whether the shelf shows its status groups under their own headings: on the All tab, at
     /// rest. A tab is one status already, and a search cuts across them all.
     /// </summary>
-    private bool Grouped => _filter is null && !Searching;
+    private bool Grouped => _filter is null && !Searching && !_phone;
 
 
     /// <summary>
@@ -771,8 +776,15 @@
     /// card's change. The status filter is applied where the cards are read, so a card that changed
     /// status simply falls under a different tab on the next render — nothing to reload.
     /// </summary>
-    private void Replace(LibraryEntry updated) =>
+    private void Replace(LibraryEntry updated)
+    {
+        if (_phone && _entries?.FirstOrDefault(entry => entry.Id == updated.Id) is { } was && was.Status != updated.Status)
+        {
+            _movedTo = (updated.Id, updated.Status);
+        }
+
         _entries = _entries?.Select(entry => entry.Id == updated.Id ? updated : entry).ToArray();
+    }
 
     private void RemoveAsync(Guid entryId) =>
         _entries = _entries?.Where(entry => entry.Id != entryId).ToArray();
@@ -842,6 +854,19 @@
             // On a phone a sideways swipe across the shelf moves between the status tabs.
             await using var swipe = await JS.InvokeAsync<IJSObjectReference>("import", "./js/shelfSwipe.js");
             await swipe.InvokeVoidAsync("attach");
+
+            _deckJs = await JS.InvokeAsync<IJSObjectReference>("import", "./js/shelfDeck.js");
+        }
+
+        if (_deckJs is not null)
+        {
+            await _deckJs.InvokeVoidAsync("sync", _phone);
+
+            if (_movedTo is { } move)
+            {
+                _movedTo = null;
+                await _deckJs.InvokeVoidAsync("moved", move.Id.ToString(), move.Status);
+            }
         }
 
         if (_focusQuery)
@@ -900,9 +925,90 @@
             : null,
         () => _dockEl);
 
-    protected override void OnInitialized() => _ = Place;
+    protected override void OnInitialized()
+    {
+        _ = Place;
 
-    public ValueTask DisposeAsync() => _place?.DisposeAsync() ?? ValueTask.CompletedTask;
+        // Asked before the first render, not after it: asked after, a phone would draw the list
+        // (its tabs, its ghosts, then its cards) for a beat before the deck took its place.
+        _phone = JS is IJSInProcessRuntime browser && browser.Invoke<bool>("readingTracker.isPhone");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_place is not null)
+        {
+            await _place.DisposeAsync();
+        }
+
+        if (_deckJs is not null)
+        {
+            try
+            {
+                await _deckJs.InvokeVoidAsync("sync", false);
+                await _deckJs.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+    }
+
+    // On a phone the shelf is a deck, the welcome screen's cover flow with the shelf's cards in it,
+    // and its tabs are a drum of shelves under it (shelfDeck.js lays both out and turns them).
+
+    private IJSObjectReference? _deckJs;
+
+    /// <summary>Whether the shelf is drawn as a deck: asked of the browser once, before the first render.</summary>
+    private bool _phone;
+
+    /// <summary>A card whose status has just changed, for its flight into the shelf it went to.</summary>
+    private (Guid Id, string Status)? _movedTo;
+
+    private string? DeckClass => _phone ? "shelf--deck" : null;
+
+    private RenderFragment EmptyLine => __builder =>
+    {
+        if (Searching)
+        {
+            <text>Nothing on your shelf matches “@_query.Trim()”.</text>
+        }
+        else if (_filter is null)
+        {
+            <text>Your shelf is empty. Search below to add your first book.</text>
+        }
+        else
+        {
+            <text>Nothing here with that status.</text>
+        }
+    };
+
+    // While the shelf loads the drum is drawn without its counts, which are not known yet.
+    private RenderFragment Drum => __builder =>
+    {
+        var on = Array.FindIndex(Filters, filter => filter.Value == _filter);
+        <div class="deck__drum" role="group" aria-label="Filter by reading status">
+            @foreach (var ((value, label), at) in Filters.Select((filter, at) => (filter, at)))
+            {
+                <button type="button"
+                        class="deck__word @(value == _filter ? "is-on" : null) @(value is null ? null : $"import__tone--{value.ToLowerInvariant()}")"
+                        style="--off: @(at - on); --away: @Math.Abs(at - on)"
+                        data-status="@(value ?? "All")"
+                        aria-pressed="@(value == _filter)"
+                        @onclick="() => FilterAsync(value)">
+                    @if (value is not null)
+                    {
+                        <i class="status__dot" aria-hidden="true"></i>
+                    }
+                    @label
+                    @if (_entries is { } shelf)
+                    {
+                        <span>@(value is null ? shelf.Count : shelf.Count(entry => entry.Status == value))</span>
+                    }
+                </button>
+            }
+        </div>
+    };
 
     private async Task ClearSearch()
     {

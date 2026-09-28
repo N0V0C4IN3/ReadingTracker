@@ -52,7 +52,8 @@ function began(e) {
     }
 
     const target = e.target instanceof Element ? e.target : null;
-    if (!target?.closest('.shelf') || target.closest(theirs)) {
+    // The shelf as a deck (shelfDeck.js) turns its cards with a sideways swipe instead.
+    if (!target?.closest('.shelf') || target.closest('.shelf--deck') || target.closest(theirs)) {
         return;
     }
 

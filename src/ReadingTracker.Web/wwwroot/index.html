@@ -120,6 +120,10 @@
         window.readingTracker = {
             prefersStillness: () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
 
+            // Whether the shelf is a deck (see js/shelfDeck.js). Here rather than in that module so
+            // the shelf can ask before it first draws, and never draws the list on a phone.
+            isPhone: () => window.matchMedia("(max-width: 40rem)").matches,
+
             // Whether the page is dark, and the switch for it.
             isDark: () => document.documentElement.getAttribute("data-theme") !== "light",
             setDark: dark => {
