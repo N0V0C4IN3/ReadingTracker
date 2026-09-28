@@ -120,9 +120,16 @@
         window.readingTracker = {
             prefersStillness: () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
 
-            // Whether the shelf is a deck (see js/shelfDeck.js). Here rather than in that module so
-            // the shelf can ask before it first draws, and never draws the list on a phone.
+            // Whether the screen is a phone's, where the shelf is a deck (Home.razor). Asked here,
+            // synchronously, so the shelf knows before it first draws; watched, so it hears when a
+            // phone is turned on its side. The stylesheet's phone width is the same 40rem.
             isPhone: () => window.matchMedia("(max-width: 40rem)").matches,
+            watchPhone: dotnet => {
+                const phone = window.matchMedia("(max-width: 40rem)");
+                const told = e => dotnet.invokeMethodAsync("PhoneChanged", e.matches);
+                phone.addEventListener("change", told);
+                return { stop: () => phone.removeEventListener("change", told) };
+            },
 
             // Whether the page is dark, and the switch for it.
             isDark: () => document.documentElement.getAttribute("data-theme") !== "light",

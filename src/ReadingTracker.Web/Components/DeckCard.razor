@@ -1,0 +1,44 @@
+@using ReadingTracker.Web.Services
+
+@*
+    A card in the phone's deck: the shelf's own card, drawn again only when its book has changed.
+
+    Every turn of the deck re-renders ShelfDeck, to move each card's slot; without this, every card
+    on the shelf was drawn again with it, and on a long shelf that was most of every turn's frame.
+    The callbacks are left as they were first given: they are the shelf's, and do the same thing
+    from one render to the next.
+*@
+<ShelfEntry Entry="Entry"
+            At="At"
+            OnChanged="OnChanged"
+            OnRemoved="OnRemoved"
+            OnSignedOut="OnSignedOut" />
+
+@code {
+    [Parameter, EditorRequired]
+    public required LibraryEntry Entry { get; set; }
+
+    [Parameter]
+    public int At { get; set; }
+
+    [Parameter]
+    public EventCallback<LibraryEntry> OnChanged { get; set; }
+
+    [Parameter]
+    public EventCallback OnRemoved { get; set; }
+
+    [Parameter]
+    public EventCallback OnSignedOut { get; set; }
+
+    private LibraryEntry? _drawn;
+    private int _drawnAt;
+    private bool _changed;
+
+    protected override void OnParametersSet()
+    {
+        _changed = !ReferenceEquals(Entry, _drawn) || At != _drawnAt;
+        (_drawn, _drawnAt) = (Entry, At);
+    }
+
+    protected override bool ShouldRender() => _changed;
+}

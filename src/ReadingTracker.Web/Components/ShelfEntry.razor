@@ -18,7 +18,7 @@
     jacket desaturated, the accent turned to grey — so on a shelf of everything the books actually
     in hand are the ones in colour.
 *@
-<article class="entry @(Working ? "entry--working" : null) @(Parked ? "entry--parked" : null) @(Finished ? "entry--finished" : null)" style="--at:@At; @CoverVar" data-entry="@Entry.Id">
+<article class="entry @(Working ? "entry--working" : null) @(Parked ? "entry--parked" : null) @(Finished ? "entry--finished" : null)" style="--at:@At; @CoverVar">
     @* The cover and the title are the way to the book's own page; the rest of the card stays
        what it was, controls and all, so the link never gets in the way of a tap on them. *@
     <a class="entry__cover" href="@PageHref" tabindex="-1" aria-hidden="true">
