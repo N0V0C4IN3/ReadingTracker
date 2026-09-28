@@ -9,6 +9,7 @@
 @inject NavigationManager Navigation
 @inject ShelfMemory Memory
 @inject IJSRuntime JS
+@inject Orientation Orientation
 @implements IAsyncDisposable
 
 <PageTitle>ReadingTracker</PageTitle>
@@ -29,7 +30,7 @@
                 <h1>Your shelf</h1>
 
                 @* A phone on its side has the shelves on the cover flow's drum instead (ShelfDeck). *@
-                @if (!_sideways && (_entries is { Count: > 0 } || _filter is not null))
+                @if (!Orientation.Sideways && (_entries is { Count: > 0 } || _filter is not null))
                 {
                     @* Dimmed and out of reach while a search is on: the search spans every status,
                        so a status filter would only fight it. Clearing the search brings them back. *@
@@ -55,36 +56,38 @@
                 a phone the field lives in the dock at the foot of the screen instead, and this is
                 hidden — see the .search section below.
             *@
-            <div class="search-row">
-                <label class="search__field">
-                    <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
-                    <input value="@_query" @oninput="OnQueryInput" maxlength="@MaxQueryLength" placeholder="Find a book — on your shelf, or in the library" aria-label="Find a book" @onkeydown="SearchOnEnterAsync" />
-                    @if (_query.Length > 0)
-                    {
-                        <button type="button" class="search__clear" aria-label="Clear search" @onclick="ClearSearch">
-                            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
-                        </button>
-                    }
-                </label>
-                <button type="button" class="button--primary" @onclick="SearchAsync" disabled="@_searching">
-                    @(_searching ? "Searching…" : "Search")
-                </button>
-            </div>
-            @if (Searching)
+            @if (!Orientation.Sideways)
             {
-                <p class="hint-line">@Hint</p>
+                <div class="search-row">
+                    <label class="search__field">
+                        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+                        <input value="@_query" @oninput="OnQueryInput" maxlength="@MaxQueryLength" placeholder="Find a book — on your shelf, or in the library" aria-label="Find a book" @onkeydown="SearchOnEnterAsync" />
+                        @if (_query.Length > 0)
+                        {
+                            <button type="button" class="search__clear" aria-label="Clear search" @onclick="ClearSearch">
+                                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
+                            </button>
+                        }
+                    </label>
+                    <button type="button" class="button--primary" @onclick="SearchAsync" disabled="@_searching">
+                        @(_searching ? "Searching…" : "Search")
+                    </button>
+                </div>
+                @if (Searching)
+                {
+                    <p class="hint-line">@Hint</p>
+                }
             }
 
-            @if (_sideways && (_entries is not null || _problem is null))
+            @if (Orientation.Sideways && (_entries is not null || _problem is null))
             {
                 @*
-                    A phone on its side: the whole shelf as a cover flow (ShelfDeck), from the tab
-                    last left. Drawn while the shelf loads too, as ghosts. It has no search: the
-                    phone turned upright has.
+                    A phone on its side: the whole shelf as a cover flow (ShelfDeck), from the book
+                    or the tab last left. Drawn while the shelf loads too, as ghosts. It has no
+                    search, and a search already on is let be: the phone turned upright has it.
+                    One per reader, so the next reader's flow starts from their own shelf.
                 *@
-                <ShelfDeck Entries="@(_entries is null ? null : ShelfOrder.ByStatus(_entries))"
-                           Start="@_filter"
-                           OnShelf="FilterAsync">
+                <ShelfDeck @key="_shelfBelongsTo" Shelf="_entries" Start="@_filter">
                     <Empty>Your shelf is empty. Turn your phone upright to search for your first book.</Empty>
                 </ShelfDeck>
                 @if (_entries is null)
@@ -861,8 +864,7 @@
             await using var swipe = await JS.InvokeAsync<IJSObjectReference>("import", "./js/shelfSwipe.js");
             await swipe.InvokeVoidAsync("attach");
 
-            _self = DotNetObjectReference.Create(this);
-            _sidewaysWatch = await JS.InvokeAsync<IJSObjectReference>("readingTracker.watchSideways", _self);
+            await Orientation.WatchAsync();
         }
 
         if (_focusQuery)
@@ -924,11 +926,21 @@
     protected override void OnInitialized()
     {
         _ = Place;
+        Orientation.Changed += Turned;
+    }
 
-        // Asked before the first render, not after it: asked after, a phone on its side would
-        // draw the list for a beat before the cover flow took its place. This app runs in the
-        // browser, so the answer is there to be had at once.
-        _sideways = ((IJSInProcessRuntime)JS).Invoke<bool>("readingTracker.isSideways");
+    /// <summary>
+    /// The phone has been turned. Upright again, the list opens on the shelf the cover flow was
+    /// left on, which it has remembered (ShelfMemory) as it turned.
+    /// </summary>
+    private void Turned()
+    {
+        if (!Orientation.Sideways && Memory.Remembers)
+        {
+            _filter = Memory.Tab;
+        }
+
+        StateHasChanged();
     }
 
     public async ValueTask DisposeAsync()
@@ -938,36 +950,7 @@
             await _place.DisposeAsync();
         }
 
-        if (_sidewaysWatch is not null)
-        {
-            try
-            {
-                await _sidewaysWatch.InvokeVoidAsync("stop");
-                await _sidewaysWatch.DisposeAsync();
-            }
-            catch (JSDisconnectedException)
-            {
-            }
-        }
-
-        _self?.Dispose();
-    }
-
-    /// <summary>
-    /// Whether this is a phone held on its side, where the shelf is a cover flow (ShelfDeck)
-    /// rather than the list: asked before the first render, and told again whenever the phone is
-    /// turned, so the page and the stylesheet never disagree for long.
-    /// </summary>
-    private bool _sideways;
-
-    private IJSObjectReference? _sidewaysWatch;
-    private DotNetObjectReference<Home>? _self;
-
-    [JSInvokable]
-    public void SidewaysChanged(bool sideways)
-    {
-        _sideways = sideways;
-        StateHasChanged();
+        Orientation.Changed -= Turned;
     }
 
     private async Task ClearSearch()

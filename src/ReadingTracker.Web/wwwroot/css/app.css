@@ -2682,14 +2682,19 @@ button.danger:hover:not(:disabled) {
 .preview__status--wanttoread,
 .preview__status--reading,
 .import__tone--wanttoread,
-.import__tone--reading { --dot: var(--status-alive); }
+.import__tone--reading,
+.deck__word--wanttoread,
+.deck__word--reading { --dot: var(--status-alive); }
 .status__row--finished,
 .preview__status--finished,
-.import__tone--finished { --dot: var(--status-done); }
+.import__tone--finished,
+.deck__word--finished { --dot: var(--status-done); }
 .status__row--onhold,
 .status__row--dropped,
 .import__tone--onhold,
-.import__tone--dropped { --dot: var(--ink-faint); }
+.import__tone--dropped,
+.deck__word--onhold,
+.deck__word--dropped { --dot: var(--ink-faint); }
 
 /* Not yet begun, and given up: rings rather than dots. */
 .status__trigger--wanttoread .status__dot,
@@ -2698,7 +2703,9 @@ button.danger:hover:not(:disabled) {
 .import__tone--wanttoread .status__dot,
 .status__trigger--dropped .status__dot,
 .status__row--dropped .status__dot,
-.import__tone--dropped .status__dot {
+.import__tone--dropped .status__dot,
+.deck__word--wanttoread .status__dot,
+.deck__word--dropped .status__dot {
     background: transparent;
     box-shadow: inset 0 0 0 1.5px var(--dot);
 }
@@ -6497,232 +6504,124 @@ main:has(.stats) {
 /* Shelf cover flow -------------------------------------------------------- */
 
 /*
-    The shelf on a phone held on its side (Components/ShelfDeck.razor): the jackets as an iPod
-    showed albums, one face-on in the middle and three turned away either side, standing on a
-    glossy floor, the front one's title under them, and the shelves on a drum at the foot. Only a
-    phone on its side is given one (readingTracker.sideways), so none of this is behind a media
-    query; the page's heading gives it the room.
-
-    Each jacket is in a slot, and the component gives the slot one number, --deck-off, its
-    distance from the front; everything about where it stands is worked out here from that.
-    Registered as not inherited, as is everything worked out from it, so a turn restyles the slots
-    and nothing inside them.
+    The shelf on a phone held on its side (Components/ShelfDeck.razor): the welcome screen's cover
+    flow (FlowStage, and the .flow rules above) with the shelf's jackets in it, smaller, sized by
+    the little height a phone on its side has, and the shelves on a drum under it. Only a phone on
+    its side is given one (readingTracker.sideways), so none of this is behind a media query.
 */
-@property --deck-off { syntax: "*"; inherits: false; }
-@property --deck-away { syntax: "*"; inherits: false; }
-@property --deck-lean { syntax: "*"; inherits: false; }
 
-@keyframes deal {
-    from {
-        opacity: 0;
-        transform: perspective(900px) translateX(160%) translateZ(-12rem) rotateY(-64deg) scale(0.9);
-    }
-}
-
-/* On its side a phone has little height and nothing to spare: the flow has the page to itself,
-   under the header, without the heading or the search (turned upright, the phone has both). */
+/* The page to itself under the header: no heading and no search. Turned upright, the phone has
+   both again, as they were left. */
 main:has(.shelf > .deck) {
     padding-block: 0.5rem 0;
 }
 
-.shelf:has(> .deck) :is(.shelf__heading, .search-row),
-main:has(.shelf > .deck) :is(.search, .search__fab) {
+.shelf:has(> .deck) .shelf__heading,
+main:has(.shelf > .deck) :is(.search, .search__fab, .search__scrim) {
     display: none;
 }
 
-.deck {
-    /* As tall as the screen allows once the header, the title and the drum have theirs, with a
-       fifth as much again under the jackets for the floor. */
-    --jacket-h: clamp(6rem, (100dvh - 10.5rem) / 1.22, 15rem);
+.flow--shelf {
+    /* As big as the height allows once the header, the caption and the drum have theirs. */
+    --cover-w: clamp(4.5rem, (100dvh - 10rem) / 2.3, 10rem);
+    /* A finger, not a cursor: nothing is picked up, so no room is kept above for it. */
+    --pickup: 1;
 
-    position: relative;
-    margin-inline: -1.25rem;
+    margin-top: 0;
+    padding-bottom: 1.9rem;
 }
 
-/* Every slot stands in the one grid cell, a jacket wide; the room under them is for the floor. */
-.deck__cards {
-    display: grid;
-    grid-template-areas: "jacket";
-    justify-content: center;
-    padding: 0.5rem 0 calc(var(--jacket-h) * 0.22);
-    overflow: hidden;
-    touch-action: pan-y;
-    user-select: none;
-    -webkit-user-select: none;
+.flow--shelf .flow__caption {
+    bottom: 0;
+    padding-inline: 3rem;
 }
 
-.deck__slot,
-.deck__cards > .empty {
-    grid-area: jacket;
-}
-
-/*
-    Where a jacket stands, from how far it is from the front: the first either side steps well
-    clear of the front one and each after it only a little further, all turned away at the one
-    angle and sinking back. Three either side are in sight; the fourth is in the page, not drawn.
-*/
-.deck__slot {
-    --deck-away: min(max(var(--deck-off), -1 * var(--deck-off)), 4);
-    --deck-lean: clamp(-1, var(--deck-off), 1);
-
-    height: var(--jacket-h);
-    aspect-ratio: 2 / 3;
-    z-index: calc(10 - var(--deck-away));
-    transform:
-        perspective(900px)
-        translateX(calc(var(--deck-lean) * (72% + var(--deck-away) * 40%)))
-        translateZ(calc(var(--deck-away) * -3.5rem))
-        rotateY(calc(var(--deck-lean) * -62deg))
-        scale(calc(1 - var(--deck-away) * 0.03));
-    opacity: clamp(0, 4 - var(--deck-away), 1);
-    transition:
-        transform 460ms var(--ease-out),
-        opacity 460ms var(--ease-out);
-    will-change: transform;
-}
-
-.deck__slot.is-front {
-    transform: none;
-}
-
-/* Too far back to see: not drawn at all. */
-.deck__slot.is-far {
-    visibility: hidden;
-    transition: none;
-}
-
-/* Dealt in, the further from the front the later: the whole flow when it arrives, and the jackets
-   around a shelf the drum has turned it to. The rest turn into sight with the flow. */
-.deck__slot.is-arriving {
-    animation: deal 480ms var(--ease-out) calc(var(--deck-away) * 50ms) backwards;
-}
-
-/* The loading ghosts only fade in, a beat late: on a warm shelf the jackets are back first. */
-.deck__cards--pending .deck__slot {
-    animation: fade 360ms var(--ease-out) 140ms backwards;
-}
-
-/*
-    The jacket, and its reflection in the floor. Only a jacket, so drawing it twice is cheap: not
-    the reflection the full cards had, which was a whole panel of controls drawn again.
-*/
-.deck__jacket {
-    display: block;
-    width: 100%;
-    height: 100%;
-    border-radius: 4px;
-    overflow: hidden;
-    background: var(--fill);
-    box-shadow: 0 10px 24px rgb(0 0 0 / 35%);
-    -webkit-box-reflect: below 3px linear-gradient(transparent 70%, rgb(255 255 255 / 22%));
-    -webkit-touch-callout: none;
-    -webkit-user-drag: none;
-}
-
-.deck__jacket img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    -webkit-user-drag: none;
-}
-
-.deck__placeholder {
-    display: grid;
-    place-items: center;
-    height: 100%;
-    font-size: calc(var(--jacket-h) * 0.3);
-    font-weight: 700;
-    color: var(--ink-faint);
-}
-
-.deck__cards > .empty {
-    align-self: center;
-    margin: 0 1rem;
-    animation: rise 420ms var(--ease-out) 200ms backwards;
-}
-
-/* The front book's title and author, one line each. */
-.deck__caption {
-    display: grid;
-    justify-items: center;
-    gap: 0.1rem;
-    margin: 0;
-    padding: 0 3rem;
-    text-align: center;
-}
-
-.deck__caption strong,
-.deck__caption span {
+.flow--shelf .flow__caption strong,
+.flow--shelf .flow__caption span {
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.deck__caption strong {
+.flow--shelf .flow__caption strong {
     font-size: 1rem;
 }
 
-.deck__caption span {
-    font-size: 0.85rem;
-    color: var(--ink-soft);
+/*
+    Dealt out from the middle as the flow arrives — the phone turned on its side, the shelf come
+    back to from a book, the ghosts giving way to the shelf — the nearest first. Only while the
+    component says it is dealing: a jacket that comes into the window later, as the flow turns,
+    turns in from the side with the rest.
+
+    Done with the translate and scale properties, which sit on top of each jacket's own transform
+    rather than replacing it: every jacket starts where the front one stands and slides out to its
+    own place, already turned.
+*/
+@keyframes deal {
+    from {
+        opacity: 0;
+        translate: calc(-1 * var(--x) * var(--cover-w)) 0.75rem;
+        scale: 0.82;
+    }
 }
 
-/* The flow turned without a finger. Out of sight until a keyboard reaches them, then either side
-   of the front jacket, level with its middle. */
-.deck__steps {
-    position: absolute;
-    top: calc(0.5rem + var(--jacket-h) / 2);
-    left: 1rem;
-    right: 1rem;
-    display: flex;
-    align-items: center;
-    height: 0;
+.flow--dealing .flow__slot {
+    animation: deal 560ms var(--ease-out) backwards;
+    animation-delay: calc(var(--depth) * 18ms);
 }
 
-.deck__step--on {
-    margin-left: auto;
+/* The loading ghosts: the flow's shape in blank jackets, quieter than a shelf. */
+.flow--pending .flow__stage {
+    pointer-events: none;
 }
 
-.deck__step:not(:focus-visible) {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
+.flow--pending .cover {
+    filter: saturate(0.4);
+    opacity: 0.5;
 }
 
-.deck__step:focus-visible {
-    z-index: 20;
-    flex: none;
-    padding: 0.45rem 0.8rem;
-    border-radius: 999px;
-    background: var(--card);
-    font-size: 0.85rem;
+.flow--shelf > .empty {
+    margin: 2.5rem 1rem 1rem;
+    text-align: center;
 }
 
 /*
     The drum: the shelves in a row turned like the flow, the one the front book is on face-on in
     the middle. Each shelf's place is its distance from that one (--off, from the component), and
-    how far a finger on the drum has moved it (--drag, from shelfDeck.js, which takes the
-    transition off).
+    how far a finger on the drum has moved it (--drag, from js/shelfDrum.js, which takes the
+    transition off while it does).
 */
 .deck__drum {
     --pitch: 9.5rem;
 
     position: relative;
     height: 2.75rem;
-    margin-top: 0.25rem;
     perspective: 600px;
     touch-action: none;
     -webkit-mask-image: linear-gradient(to right, transparent, #000 25%, #000 75%, transparent);
     mask-image: linear-gradient(to right, transparent, #000 25%, #000 75%, transparent);
+    animation: rise 420ms var(--ease-out) 240ms backwards;
 }
 
+/* Repeated for :active and :disabled because the app's buttons set transform and opacity there
+   outright, which would throw a shelf's place on the drum away while it was pressed or empty. */
 .deck__word,
-.deck__word:hover:not(:disabled) {
+.deck__word:active:not(:disabled),
+.deck__word:disabled {
+    --o: calc(var(--off) + var(--drag, 0));
+    --a: max(var(--o), -1 * var(--o));
+
+    transform:
+        translateX(-50%)
+        translateX(calc(var(--o) * var(--pitch)))
+        translateZ(calc(var(--a) * -4rem))
+        rotateY(calc(var(--o) * -38deg))
+        scale(calc(1 - min(var(--a), 1) * 0.25));
+    opacity: clamp(0.2, 1 - var(--a) * 0.4, 1);
+}
+
+.deck__word {
     position: absolute;
     top: 0;
     left: 50%;
@@ -6736,21 +6635,12 @@ main:has(.shelf > .deck) :is(.search, .search__fab) {
     background: none;
     font-size: 1.05rem;
     font-weight: 700;
-    color: var(--ink);
+    transition: transform 520ms var(--ease-out), opacity 520ms var(--ease-out);
 }
 
-.deck__word {
-    --o: calc(var(--off) + var(--drag, 0));
-    --a: max(var(--o), -1 * var(--o));
-
-    transform:
-        translateX(-50%)
-        translateX(calc(var(--o) * var(--pitch)))
-        translateZ(calc(var(--a) * -4rem))
-        rotateY(calc(var(--o) * -38deg))
-        scale(calc(1 - min(var(--a), 1) * 0.25));
-    opacity: clamp(0.2, 1 - var(--a) * 0.4, 1);
-    transition: transform 520ms var(--ease-out), opacity 520ms var(--ease-out);
+/* A word on a drum, not a button with a fill. */
+.deck__word:hover:not(:disabled) {
+    background: none;
 }
 
 .deck__drum.is-turning .deck__word {
@@ -6773,4 +6663,11 @@ main:has(.shelf > .deck) :is(.search, .search__fab) {
     line-height: 1.4rem;
     text-align: center;
     color: var(--ink-soft);
+}
+
+/* The book at the front leaving for its own page: its jacket grows into the page's cover
+   (readingTracker.openBook), a little slower than the page fades so the eye follows it. */
+::view-transition-group(book-cover) {
+    animation-duration: 420ms;
+    animation-timing-function: var(--ease-out);
 }

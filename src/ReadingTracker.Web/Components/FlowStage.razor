@@ -1,0 +1,261 @@
+@using System.Globalization
+
+@*
+    Jackets seen at an angle, one held face-on at the front and the rest leaning away to either side,
+    each standing on a floor over its own reflection, with the front one's title and author under
+    them: the shape iTunes used for album art. The welcome screen's deck (CoverFlow) and the shelf's
+    cover flow on a phone held on its side (ShelfDeck) are both this, with different books in it.
+
+    It can be steered: any jacket in sight can be tapped to bring it to the front, a finger can drag
+    it sideways, and the arrow keys turn it. Where the front is belongs to whoever uses it (@bind-At);
+    this only works out where every jacket stands, and says when a reader has moved it.
+*@
+
+@*
+    Dragged with a finger through Blazor's touch events. The stylesheet sets touch-action: pan-y on
+    the stage, which is what lets it answer a sideways drag while the page keeps taking a vertical one:
+    without it, either the deck never sees the gesture or the page stops scrolling over it.
+*@
+<div class="flow__stage"
+     @ontouchstart="DragStart"
+     @ontouchmove="DragMove"
+     @ontouchend="DragEnd"
+     @ontouchcancel="DragEnd"
+     @onkeydown="Keyed">
+    @foreach (var position in InSight())
+    {
+        var jacket = Jackets[position];
+        var place = Place(position);
+
+        @*
+            A button, because it does something when you click it — and one that is genuinely
+            disabled once it is too far round to see, so the far side of the deck is neither a tab
+            stop nor something a screen reader offers.
+        *@
+        <button @key="jacket.Key"
+                type="button"
+                class="flow__slot @(place.Lit ? "flow__slot--lit" : null) @(position == At ? "flow__slot--front" : null)"
+                style="@place.Style"
+                disabled="@(!place.Lit)"
+                aria-label="@(position == At && OnOpen.HasDelegate ? $"Open {jacket.Title}" : $"Show {jacket.Title} by {jacket.Author}")"
+                @onclick="() => PickAsync(position)">
+            <span class="cover cover--@jacket.Tone">
+                <span class="cover__title">@jacket.Title</span>
+                <span class="cover__rule"></span>
+                <span class="cover__author">@jacket.Author</span>
+
+                @*
+                    Laid over the drawn jacket, never instead of it: a cover that is slow, throttled
+                    or gone leaves the drawn one showing rather than a hole. Deliberately not lazy —
+                    a jacket that only loads once the deck has turned it to the front arrives
+                    visibly late, in front of the reader.
+                *@
+                @if (jacket.Cover is { } cover)
+                {
+                    <img class="cover__art" src="@cover" alt="" />
+                }
+            </span>
+
+            @*
+                The jacket again, upside down, as the floor sees it.
+
+                This used to be -webkit-box-reflect, which drew the reflection without a second
+                element — but it is a non-standard property Firefox has never implemented, and
+                mobile browsers drop it often enough that the deck arrived on a phone standing on
+                nothing. A flipped copy under a mask is plain CSS and works everywhere. The second
+                <img> is the same file, already in the browser's cache: a decode, not a request.
+
+                aria-hidden, and no text worth reading: a screen reader announcing every title
+                twice is the accessible version of a smudge on the floor.
+            *@
+            <span class="cover cover--@jacket.Tone cover--mirror" aria-hidden="true">
+                <span class="cover__title">@jacket.Title</span>
+                <span class="cover__rule"></span>
+                <span class="cover__author">@jacket.Author</span>
+                @if (jacket.Cover is { } mirrored)
+                {
+                    <img class="cover__art" src="@mirrored" alt="" />
+                }
+            </span>
+        </button>
+    }
+</div>
+
+@if (Jackets.Count > 0)
+{
+    var front = Jackets[At];
+    <p class="flow__caption" @key="front.Key">
+        <strong>@front.Title</strong>
+        <span>@front.Author</span>
+    </p>
+}
+
+@code {
+    /// <summary>The jackets, in order.</summary>
+    [Parameter, EditorRequired]
+    public required IReadOnlyList<FlowJacket> Jackets { get; set; }
+
+    /// <summary>Which jacket is at the front.</summary>
+    [Parameter]
+    public int At { get; set; }
+
+    [Parameter]
+    public EventCallback<int> AtChanged { get; set; }
+
+    /// <summary>
+    /// Whether the deck goes round: the last jacket is followed by the first again, and every one
+    /// is always in the page. Otherwise it stops at either end, and only the jackets near enough
+    /// the front to be seen are in the page, so a long deck costs no more than a short one.
+    /// </summary>
+    [Parameter]
+    public bool Wrap { get; set; }
+
+    /// <summary>A tap on the jacket at the front; without it, that tap does nothing.</summary>
+    [Parameter]
+    public EventCallback<int> OnOpen { get; set; }
+
+    /// <summary>A finger has landed on the deck.</summary>
+    [Parameter]
+    public EventCallback OnGrabbed { get; set; }
+
+    /// <summary>A reader has just moved the deck: a finger lifted, a jacket picked, a key pressed.</summary>
+    [Parameter]
+    public EventCallback OnSteered { get; set; }
+
+    /// <summary>
+    /// How far a finger travels before the deck turns one place. A little under half a jacket:
+    /// far enough that a tap with a wobble in it is still a tap, close enough that a flick moves
+    /// several books rather than politely turning one.
+    /// </summary>
+    private const double SwipeStepPx = 48;
+
+    /// <summary>How far round a jacket is still drawn; one further is in the page, at nothing, waiting to turn into sight.</summary>
+    private const int Seen = 4;
+
+    /// <summary>Where the finger currently dragging the deck was last accounted for, if any.</summary>
+    private double? _dragFrom;
+
+    private IEnumerable<int> InSight() => Wrap
+        ? Enumerable.Range(0, Jackets.Count)
+        : Enumerable.Range(Math.Max(0, At - Seen - 1), Math.Min(Jackets.Count - 1, At + Seen + 1) - Math.Max(0, At - Seen - 1) + 1);
+
+    private async Task DragStart(TouchEventArgs touch)
+    {
+        if (touch.Touches.Length == 0)
+        {
+            return;
+        }
+
+        _dragFrom = touch.Touches[0].ClientX;
+        await OnGrabbed.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Turns as the finger travels rather than waiting for it to lift, so the deck comes with the
+    /// hand instead of catching up with it afterwards. Each whole step consumed moves the origin
+    /// along with it, which is what lets one long drag walk through several books.
+    /// </summary>
+    private async Task DragMove(TouchEventArgs touch)
+    {
+        if (_dragFrom is not { } from || touch.Touches.Length == 0)
+        {
+            return;
+        }
+
+        var steps = (int)((touch.Touches[0].ClientX - from) / SwipeStepPx);
+        if (steps == 0)
+        {
+            return;
+        }
+
+        // Dragging right brings the book on the left to the front, the way dragging a physical
+        // stack of records would — the deck follows the hand, it is not pushed away by it.
+        _dragFrom = from + steps * SwipeStepPx;
+        await TurnAsync(-steps);
+    }
+
+    private async Task DragEnd(TouchEventArgs touch)
+    {
+        _dragFrom = null;
+        await OnSteered.InvokeAsync();
+    }
+
+    private async Task Keyed(KeyboardEventArgs key)
+    {
+        if (key.Key is "ArrowLeft" or "ArrowRight")
+        {
+            await TurnAsync(key.Key == "ArrowLeft" ? -1 : 1);
+            await OnSteered.InvokeAsync();
+        }
+    }
+
+    /// <summary>A jacket tapped: brought to the front, or, at the front already, opened.</summary>
+    private async Task PickAsync(int position)
+    {
+        if (position == At)
+        {
+            await OnOpen.InvokeAsync(position);
+            return;
+        }
+
+        await AtChanged.InvokeAsync(position);
+        await OnSteered.InvokeAsync();
+    }
+
+    private Task TurnAsync(int places)
+    {
+        var count = Jackets.Count;
+        var to = Wrap ? ((At + places) % count + count) % count : Math.Clamp(At + places, 0, count - 1);
+        return to == At ? Task.CompletedTask : AtChanged.InvokeAsync(to);
+    }
+
+    /// <summary>
+    /// Where a jacket stands in the deck, worked out from how far round it is from the front.
+    ///
+    /// In a deck that goes round, the distance is counted the short way, so the deck turns by one
+    /// place rather than every book stampeding back past the front when the front wraps to the start.
+    /// </summary>
+    private Slot Place(int position)
+    {
+        var offset = position - At;
+        if (Wrap)
+        {
+            var raw = (offset + Jackets.Count) % Jackets.Count;
+            offset = raw > Jackets.Count / 2 ? raw - Jackets.Count : raw;
+        }
+
+        var away = Math.Abs(offset);
+        var lean = Math.Sign(offset);
+
+        return new Slot(
+            // The deck bunches as it recedes: the first neighbour steps a long way clear of the
+            // book at the front, each one after it only a little further.
+            X: lean * (0.72 + (away - 1) * 0.38),
+            Depth: away * 2.8,
+            // One angle for everyone behind the front, not one that grows: multiplying it would
+            // turn the third book past the edge and show its back.
+            Turn: lean * -64,
+            Scale: 1 - Math.Min(away, 5) * 0.04,
+            Fade: away <= 3 ? 1 : Math.Max(0, 1 - (away - 3) * 0.5),
+            Layer: Math.Max(1, Jackets.Count - away),
+            // Anything still on screen is something a reader can aim at, and nothing else is: the
+            // far side of the deck is drawn at zero opacity, and an invisible button is a trap.
+            Lit: away <= Seen);
+    }
+
+    /// <summary>
+    /// A jacket's place in the deck, handed to the stylesheet as plain numbers so the CSS keeps the
+    /// units and this keeps the arithmetic.
+    /// </summary>
+    private readonly record struct Slot(
+        double X, double Depth, int Turn, double Scale, double Fade, int Layer, bool Lit)
+    {
+        /// <remarks>
+        /// Formatted invariantly on purpose. This runs in the reader's browser under the reader's
+        /// culture, and half of Europe writes 0,58 — which CSS reads as two values, or as nothing.
+        /// </remarks>
+        public string Style => string.Create(
+            CultureInfo.InvariantCulture,
+            $"--x:{X:0.###};--depth:{Depth:0.##};--turn:{Turn};--scale:{Scale:0.###};--fade:{Fade:0.##};--layer:{Layer}");
+    }
+}

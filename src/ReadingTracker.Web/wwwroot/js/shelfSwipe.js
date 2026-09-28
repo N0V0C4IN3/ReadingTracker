@@ -15,7 +15,7 @@ const still = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 // Things a sideways drag already means something to, or that sit over the shelf: a touch that
 // starts in one of these is theirs, not the shelf's.
-const theirs = 'input, textarea, select, .filters, .sheet, .sheet__scrim, .status__menu, .status__scrim';
+const theirs = 'input, textarea, select, .filters, .sheet, .sheet__scrim, .status__menu, .status__scrim, .deck';
 
 // The list that moves: the cards, or the line saying there are none.
 const listSelector = '.shelf > .entries, .shelf > .empty';
