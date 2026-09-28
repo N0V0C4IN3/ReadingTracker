@@ -35,4 +35,18 @@ public static class UnitConversion
             _ => Math.Round(position * totalPages.Value / 100m, MidpointRounding.AwayFromZero),
         };
     }
+
+    /// <summary>
+    /// How many pages a stretch of reading came to, unrounded: these are added up — a day's
+    /// sittings, a year's days — and rounding each one first would lose the small ones a device
+    /// reports, a tenth of a percent at a time, to nothing. Null for percent of a book whose
+    /// length nobody knows.
+    /// </summary>
+    public static decimal? PagesRead(decimal amount, TrackingMethod unit, int? totalPages) =>
+        unit switch
+        {
+            TrackingMethod.Pages => amount,
+            _ when totalPages is > 0 => amount * totalPages.Value / 100m,
+            _ => null,
+        };
 }

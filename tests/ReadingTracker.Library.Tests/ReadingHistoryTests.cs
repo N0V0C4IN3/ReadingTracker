@@ -22,12 +22,39 @@ public sealed class ReadingHistoryTests(LibraryApiFixture fixture)
         await LogAsync(client, piranesi, 12, Now.AddDays(-1));
         await LogAsync(client, dune, 50, Now.AddDays(-40));
 
-        var read = await ReadingAsync(client, Now.AddDays(-7), Now.AddMinutes(1));
+        var span = await ReadingAsync(client, Now.AddDays(-7), Now.AddMinutes(1));
 
-        Assert.Equal([dune, piranesi], read.Select(moment => moment.EntryId));
-        Assert.Equal([30m, 12m], read.Select(moment => moment.Pages));
-        Assert.Equal(40, read[0].DurationMinutes);
-        Assert.All(read, moment => Assert.Equal("Reader", moment.Source));
+        Assert.Equal([dune, piranesi], span.Sessions.Select(session => session.EntryId));
+        Assert.Equal([30m, 12m], span.Sessions.Select(session => session.Pages));
+        Assert.Equal(40, span.Sessions[0].DurationMinutes);
+        Assert.All(span.Sessions, session => Assert.False(session.FromDevice));
+    }
+
+    [Fact]
+    public async Task Names_each_book_read_once()
+    {
+        var client = fixture.ClientFor("reading-span-titles");
+        var entry = await fixture.AddBookAsync(client);
+        await LogAsync(client, entry, 10, Now.AddHours(-3));
+        await LogAsync(client, entry, 10, Now.AddHours(-2));
+
+        var book = Assert.Single((await ReadingAsync(client, Now.AddDays(-1), Now.AddMinutes(1))).Books);
+
+        Assert.Equal(entry, book.EntryId);
+        Assert.Equal("A Book", book.Title);
+    }
+
+    [Fact]
+    public async Task Keeps_the_fraction_of_a_page_a_small_percent_comes_to()
+    {
+        var client = fixture.ClientFor("reading-span-fraction");
+        var entry = await fixture.AddBookAsync(client, 300);
+        await TrackInPercentAsync(client, entry);
+        await LogAsync(client, entry, 0.1m, Now.AddHours(-1));
+
+        // Rounded, a device's tenth of a percent would be no reading at all; added up over a day
+        // of them it is a page or two.
+        Assert.Equal(0.3m, Assert.Single((await ReadingAsync(client, Now.AddDays(-1), Now.AddMinutes(1))).Sessions).Pages);
     }
 
     [Fact]
@@ -37,7 +64,7 @@ public sealed class ReadingHistoryTests(LibraryApiFixture fixture)
         var theirs = fixture.ClientFor("reading-span-theirs");
         await LogAsync(theirs, await fixture.AddBookAsync(theirs), 20, Now.AddHours(-3));
 
-        Assert.Empty(await ReadingAsync(mine, Now.AddDays(-1), Now.AddMinutes(1)));
+        Assert.Empty((await ReadingAsync(mine, Now.AddDays(-1), Now.AddMinutes(1))).Sessions);
     }
 
     [Fact]
@@ -48,7 +75,7 @@ public sealed class ReadingHistoryTests(LibraryApiFixture fixture)
         await TrackInPercentAsync(client, entry);
         await LogAsync(client, entry, 10, Now.AddHours(-1));
 
-        Assert.Equal(30m, Assert.Single(await ReadingAsync(client, Now.AddDays(-1), Now.AddMinutes(1))).Pages);
+        Assert.Equal(30m, Assert.Single((await ReadingAsync(client, Now.AddDays(-1), Now.AddMinutes(1))).Sessions).Pages);
     }
 
     [Fact]
@@ -59,7 +86,7 @@ public sealed class ReadingHistoryTests(LibraryApiFixture fixture)
         await TrackInPercentAsync(client, entry);
         await LogAsync(client, entry, 10, Now.AddHours(-1));
 
-        Assert.Null(Assert.Single(await ReadingAsync(client, Now.AddDays(-1), Now.AddMinutes(1))).Pages);
+        Assert.Null(Assert.Single((await ReadingAsync(client, Now.AddDays(-1), Now.AddMinutes(1))).Sessions).Pages);
     }
 
     [Theory]
@@ -76,8 +103,8 @@ public sealed class ReadingHistoryTests(LibraryApiFixture fixture)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    private static async Task<IReadOnlyList<Moment>> ReadingAsync(HttpClient client, DateTimeOffset from, DateTimeOffset to) =>
-        (await client.GetFromJsonAsync<IReadOnlyList<Moment>>(
+    private static async Task<Span> ReadingAsync(HttpClient client, DateTimeOffset from, DateTimeOffset to) =>
+        (await client.GetFromJsonAsync<Span>(
             $"/api/library/reading?from={Uri.EscapeDataString(from.ToString("O"))}&to={Uri.EscapeDataString(to.ToString("O"))}"))!;
 
     private static async Task LogAsync(HttpClient client, Guid entryId, decimal amount, DateTimeOffset occurredAt, int? minutes = null) =>
@@ -90,5 +117,9 @@ public sealed class ReadingHistoryTests(LibraryApiFixture fixture)
             HttpStatusCode.OK,
             (await client.PutAsJsonAsync($"/api/library/{entryId}/tracking-method", new { trackingMethod = "Percentage" })).StatusCode);
 
-    private sealed record Moment(Guid EntryId, DateTimeOffset OccurredAt, decimal? Pages, int? DurationMinutes, string Source);
+    private sealed record Span(IReadOnlyList<Book> Books, IReadOnlyList<Session> Sessions);
+
+    private sealed record Book(Guid EntryId, string? Title);
+
+    private sealed record Session(Guid EntryId, DateTimeOffset OccurredAt, decimal? Pages, int? DurationMinutes, bool FromDevice);
 }

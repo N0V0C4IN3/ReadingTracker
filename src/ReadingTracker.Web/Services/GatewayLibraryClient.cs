@@ -65,11 +65,17 @@ public sealed record ReadingSessionView(
 
 public sealed record DisplayedAmount(decimal Amount, string Unit);
 
+/// <summary>A stretch of time's reading across the shelf: the books read in it and every sitting.</summary>
+public sealed record ReadingSpan(IReadOnlyList<ReadBook> Books, IReadOnlyList<SessionInPages> Sessions);
+
+/// <summary>A book read in the stretch. No title when Catalog could not be asked.</summary>
+public sealed record ReadBook(Guid EntryId, string? Title);
+
 /// <summary>
-/// One stretch of reading as the stats page sees it: which book, when, and how much in pages —
+/// One sitting as the stats page sees it: which book, when, and how much in pages, unrounded —
 /// null when it was logged in percent of a book whose length nobody knows.
 /// </summary>
-public sealed record ReadingMoment(Guid EntryId, DateTimeOffset OccurredAt, decimal? Pages, int? DurationMinutes, string Source);
+public sealed record SessionInPages(Guid EntryId, DateTimeOffset OccurredAt, decimal? Pages, int? DurationMinutes, bool FromDevice);
 
 /// <summary>
 /// The answer to logging or correcting a stretch of reading: what was recorded, and the entry as
@@ -337,12 +343,12 @@ public sealed class GatewayLibraryClient(HttpClient httpClient)
             client => client.GetAsync($"api/library/{entryId}/sessions", cancellationToken),
             cancellationToken);
 
-    /// <summary>Every stretch of reading across the shelf from <paramref name="from"/> up to <paramref name="to"/>, oldest first.</summary>
-    public Task<LibraryChange<IReadOnlyList<ReadingMoment>>> GetReadingAsync(
+    /// <summary>Every sitting across the shelf from <paramref name="from"/> up to <paramref name="to"/>, oldest first, and the books they were in.</summary>
+    public Task<LibraryChange<ReadingSpan>> GetReadingAsync(
         DateTimeOffset from,
         DateTimeOffset to,
         CancellationToken cancellationToken) =>
-        ChangeAsync<IReadOnlyList<ReadingMoment>>(
+        ChangeAsync<ReadingSpan>(
             client => client.GetAsync(
                 $"api/library/reading?from={Uri.EscapeDataString(from.ToString("O"))}&to={Uri.EscapeDataString(to.ToString("O"))}",
                 cancellationToken),

@@ -59,3 +59,7 @@ _Avoid_: About (reads as "about the application"), Book details (that is the Boo
 **ReadingGoal**:
 How many Books a Reader means to finish in a calendar year. Set by the Reader, one per year, and only ever the target: how many they have finished is counted from their LibraryEntries' Finished on, never stored, so the two cannot disagree. A year with no ReadingGoal still has a count.
 _Avoid_: Challenge (Goodreads' word), Target, Quota
+
+**Streak**:
+A run of days one after another on each of which the Reader has a ReadingSession, the days being the Reader's own, midnight to midnight where they are. The one going now counts from today, or from yesterday while today has not been read yet, so a Reader who has not read by breakfast has not lost it. Counted from the ReadingSessions every time, never stored.
+_Avoid_: Run (fine in prose, as the page says it), Chain, Habit

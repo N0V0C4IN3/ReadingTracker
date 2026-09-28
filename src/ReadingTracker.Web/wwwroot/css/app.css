@@ -4412,11 +4412,6 @@ body:has(.preview) .search__fab {
 
 /* Your reading ------------------------------------------------------------ */
 
-/* A year is fifty-three weeks across; the page is as wide as the import's to fit them. */
-main:has(.stats) {
-    max-width: 70rem;
-}
-
 .stats {
     display: flex;
     flex-direction: column;
@@ -4899,8 +4894,10 @@ button.calendar__day--on:hover:not(:disabled) {
 /*
     Two panes. On the left, a glass card holding everything to do, kept in view; on the right,
     the books, in a list that scrolls on its own. The page is wider than the others to fit both.
+    Your reading is as wide, to fit a year's fifty-three weeks across.
 */
-main:has(.import) {
+main:has(.import),
+main:has(.stats) {
     max-width: 70rem;
 }
 

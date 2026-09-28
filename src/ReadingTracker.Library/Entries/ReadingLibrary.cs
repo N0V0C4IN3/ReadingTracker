@@ -256,10 +256,10 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
 
     /// <summary>
     /// Every stretch of reading this reader did from <paramref name="from"/> up to
-    /// <paramref name="to"/>, across the whole shelf, each with the entry it was against —
-    /// oldest first. What a year of reading is drawn from.
+    /// <paramref name="to"/>, across the whole shelf, each with what is needed of the entry it
+    /// was against — oldest first. What a year of reading is drawn from.
     /// </summary>
-    public async Task<List<(ReadingSession Session, LibraryEntry Entry)>> ReadingBetweenAsync(
+    public Task<List<SessionOnEntry>> ReadingBetweenAsync(
         string readerId,
         DateTimeOffset from,
         DateTimeOffset to,
@@ -267,17 +267,16 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
     {
         var (start, end) = (from.ToUniversalTime(), to.ToUniversalTime());
 
-        var read = await database.ReadingSessions
+        return database.ReadingSessions
             .Where(session => session.OccurredAt >= start && session.OccurredAt < end)
             .Join(
                 database.LibraryEntries.Where(entry => entry.ReaderId == readerId),
                 session => session.LibraryEntryId,
                 entry => entry.Id,
-                (session, entry) => new { session, entry })
-            .OrderBy(pair => pair.session.OccurredAt)
+                (session, entry) => new { session, entry.Id, entry.BookId, entry.PageCountOverride })
+            .OrderBy(read => read.session.OccurredAt)
+            .Select(read => new SessionOnEntry(read.session, read.Id, read.BookId, read.PageCountOverride))
             .ToListAsync(cancellationToken);
-
-        return [.. read.Select(pair => (pair.session, pair.entry))];
     }
 
     public Task<List<ReadingSession>> ListSessionsAsync(Guid entryId, CancellationToken cancellationToken) =>

@@ -100,3 +100,6 @@ public sealed record ReadingTotals(decimal Pages, decimal Percent)
 /// A whole percent, for display. Null when the book's length is unknown, rather than zero.
 /// </param>
 public sealed record ReadingProgress(decimal? AmountRead, TrackingMethod? Unit, int? PercentComplete);
+
+/// <summary>A ReadingSession with the part of its LibraryEntry that says which Book, and how long the reader's edition is.</summary>
+public sealed record SessionOnEntry(ReadingSession Session, Guid EntryId, Guid BookId, int? PageCountOverride);
