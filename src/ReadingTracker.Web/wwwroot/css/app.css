@@ -6547,25 +6547,35 @@ main:has(.flow--shelf) {
 }
 
 /*
-    The book's thickness, down its open side: the colour of its own cover rather than the
-    welcome's page block, as the back of a real book is, and a little thicker. It is the cover's
-    last sliver drawn out across the edge (--art, from ShelfDeck), or a drawn jacket's own board,
-    shaded as a side turned from the light.
+    The book's spine, down its left side, where the back cover wraps round to meet the front: the
+    colour of the cover, as a real book's is, and thicker than the welcome's dark strip, which it
+    takes the place of. The open side keeps the welcome's page block. It is the cover's first
+    sliver drawn out across the spine (--art, from ShelfDeck), or a drawn jacket's own board,
+    shaded round, as a spine is: lit along its middle and darker where it turns into each cover.
 
-    The photograph is drawn forty times the edge's width and anchored right, so the edge shows
-    its last fortieth. That is the file's own edge: the jacket shows the cover cropped to fit
+    The photograph is drawn forty times the spine's width and anchored left, so the spine shows
+    its first fortieth. That is the file's own edge: the jacket shows the cover cropped to fit
     (object-fit: cover), so on a cover of another shape it is a little way past the edge seen.
 */
-.flow--shelf .cover::after {
+.flow--shelf .cover {
+    border-left-width: 0;
+}
+
+.flow--shelf .cover::before {
+    content: "";
+    position: absolute;
     top: 0;
     bottom: 0;
+    left: 0;
+    z-index: 1;
     width: calc(var(--cover-w) * 0.06);
+    border-radius: 2px 0 0 2px;
     background-color: inherit;
     background-image:
-        linear-gradient(to right, rgb(0 0 0 / 38%), rgb(0 0 0 / 12%) 45%, rgb(255 255 255 / 10%)),
+        linear-gradient(to right, rgb(0 0 0 / 34%), rgb(255 255 255 / 12%) 35%, rgb(0 0 0 / 8%) 70%, rgb(0 0 0 / 40%)),
         var(--art, none);
     background-size: 100% 100%, 4000% 100%;
-    background-position: 0 0, right center;
+    background-position: 0 0, left center;
 }
 
 .flow--shelf .flow__caption {
