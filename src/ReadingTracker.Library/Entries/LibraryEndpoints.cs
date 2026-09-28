@@ -15,7 +15,7 @@ public static class LibraryEndpoints
         {
             if (Reader.From(request) is not { } readerId)
             {
-                return NotSaidWhoIsAsking();
+                return LibraryProblems.NotSaidWhoIsAsking();
             }
 
             ReadingStatus? filter = null;
@@ -69,7 +69,7 @@ public static class LibraryEndpoints
         {
             if (Reader.From(request) is not { } readerId)
             {
-                return NotSaidWhoIsAsking();
+                return LibraryProblems.NotSaidWhoIsAsking();
             }
 
             // Confirm the Book exists before recording a relationship to it, so an entry can
@@ -121,7 +121,7 @@ public static class LibraryEndpoints
         {
             if (Reader.From(request) is not { } readerId)
             {
-                return NotSaidWhoIsAsking();
+                return LibraryProblems.NotSaidWhoIsAsking();
             }
 
             return await library.RemoveAsync(readerId, entryId, cancellationToken)
@@ -141,7 +141,7 @@ public static class LibraryEndpoints
         {
             if (Reader.From(request) is not { } readerId)
             {
-                return NotSaidWhoIsAsking();
+                return LibraryProblems.NotSaidWhoIsAsking();
             }
 
             if (!Enum.TryParse<ReadingStatus>(body.Status, ignoreCase: true, out var status))
@@ -188,7 +188,7 @@ public static class LibraryEndpoints
         {
             if (Reader.From(request) is not { } readerId)
             {
-                return NotSaidWhoIsAsking();
+                return LibraryProblems.NotSaidWhoIsAsking();
             }
 
             var (books, finished) = await library.GoalAsync(readerId, year, cancellationToken);
@@ -206,7 +206,7 @@ public static class LibraryEndpoints
         {
             if (Reader.From(request) is not { } readerId)
             {
-                return NotSaidWhoIsAsking();
+                return LibraryProblems.NotSaidWhoIsAsking();
             }
 
             if (body.Books is not (>= 1 and <= 1000))
@@ -231,7 +231,7 @@ public static class LibraryEndpoints
         {
             if (Reader.From(request) is not { } readerId)
             {
-                return NotSaidWhoIsAsking();
+                return LibraryProblems.NotSaidWhoIsAsking();
             }
 
             await library.ClearGoalAsync(readerId, year, cancellationToken);
@@ -250,7 +250,7 @@ public static class LibraryEndpoints
         {
             if (Reader.From(request) is not { } readerId)
             {
-                return NotSaidWhoIsAsking();
+                return LibraryProblems.NotSaidWhoIsAsking();
             }
 
             if (!Enum.TryParse<TrackingMethod>(body.TrackingMethod, ignoreCase: true, out var method))
@@ -283,7 +283,7 @@ public static class LibraryEndpoints
         {
             if (Reader.From(request) is not { } readerId)
             {
-                return NotSaidWhoIsAsking();
+                return LibraryProblems.NotSaidWhoIsAsking();
             }
 
             if (body.TotalPages is <= 0)
@@ -319,7 +319,7 @@ public static class LibraryEndpoints
         {
             if (Reader.From(request) is not { } readerId)
             {
-                return NotSaidWhoIsAsking();
+                return LibraryProblems.NotSaidWhoIsAsking();
             }
 
             // As when adding: an entry must never point at nothing, so the Book is confirmed
@@ -375,7 +375,7 @@ public static class LibraryEndpoints
         {
             if (Reader.From(request) is not { } readerId)
             {
-                return NotSaidWhoIsAsking();
+                return LibraryProblems.NotSaidWhoIsAsking();
             }
 
             if (await library.FindAsync(readerId, entryId, cancellationToken) is not { } entry)
@@ -422,7 +422,7 @@ public static class LibraryEndpoints
         {
             if (Reader.From(request) is not { } readerId)
             {
-                return NotSaidWhoIsAsking();
+                return LibraryProblems.NotSaidWhoIsAsking();
             }
 
             if (await library.FindAsync(readerId, entryId, cancellationToken) is not { } entry)
@@ -464,7 +464,7 @@ public static class LibraryEndpoints
         {
             if (Reader.From(request) is not { } readerId)
             {
-                return NotSaidWhoIsAsking();
+                return LibraryProblems.NotSaidWhoIsAsking();
             }
 
             return await library.DeleteSessionAsync(readerId, entryId, sessionId, cancellationToken)
@@ -485,7 +485,7 @@ public static class LibraryEndpoints
         {
             if (Reader.From(request) is not { } readerId)
             {
-                return NotSaidWhoIsAsking();
+                return LibraryProblems.NotSaidWhoIsAsking();
             }
 
             if (await library.FindAsync(readerId, entryId, cancellationToken) is not { } entry)
@@ -560,7 +560,7 @@ public static class LibraryEndpoints
         {
             if (Reader.From(request) is not { } readerId)
             {
-                return NotSaidWhoIsAsking();
+                return LibraryProblems.NotSaidWhoIsAsking();
             }
 
             if (await library.FindAsync(readerId, entryId, cancellationToken) is not { } entry)
@@ -664,12 +664,6 @@ public static class LibraryEndpoints
         {
             ["status"] = [$"'{given}' is not a reading status. Use one of: {string.Join(", ", Enum.GetNames<ReadingStatus>())}."],
         });
-
-    private static IResult NotSaidWhoIsAsking() =>
-        Results.Problem(
-            title: "Unknown reader",
-            detail: $"The {Reader.HeaderName} header is missing. Requests reach this service through the Gateway.",
-            statusCode: StatusCodes.Status401Unauthorized);
 
     private sealed record AddToLibraryRequest(Guid BookId);
 

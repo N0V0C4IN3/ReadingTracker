@@ -1,0 +1,309 @@
+@page "/reading"
+@using ReadingTracker.Web.Services
+@inject GatewayLibraryClient Library
+@inject IJSRuntime JS
+
+@*
+    The reader's year of reading, a square a day: the greener, the more pages. Picking a day
+    says what was read on it; below, the runs of days, how many days had any reading, the
+    biggest one, and which day of the week is the reader's.
+
+    One request: the year's sessions and the titles of the books they were in. The days are
+    worked out here rather than by Library, because a day is midnight to midnight where the
+    reader is and only the browser knows where that is (see ReadingYear).
+
+    A phone shows the last four months, which is what fits; the whole year is one tap away and
+    scrolls sideways.
+*@
+
+<PageTitle>Your reading · ReadingTracker</PageTitle>
+
+<AuthorizeView>
+    <Authorizing>
+        <Settling />
+    </Authorizing>
+    <NotAuthorized>
+        <p class="notice">Sign in to see your reading.</p>
+    </NotAuthorized>
+    <Authorized>
+        <section class="stats">
+            <div class="stats__heading">
+                <h1>Your reading</h1>
+                <nav class="stats__years" aria-label="Year">
+                    <a class="stats__step" href="reading?year=@(Year - 1)" aria-label="@(Year - 1)">
+                        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                    </a>
+                    <span class="stats__year">@Year</span>
+                    @if (Year < ThisYear)
+                    {
+                        <a class="stats__step" href="reading?year=@(Year + 1)" aria-label="@(Year + 1)">
+                            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                        </a>
+                    }
+                    else
+                    {
+                        <span class="stats__step stats__step--none" aria-hidden="true">
+                            <svg viewBox="0 0 16 16"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                        </span>
+                    }
+                </nav>
+            </div>
+
+            @if (_year is { } year)
+            {
+                <p class="stats__lede">
+                    @(year.DaysRead switch
+                    {
+                        0 => $"Nothing logged in {year.Year}{(year.IsCurrent ? " yet" : "")}.",
+                        1 => "One day with a page read.",
+                        var days => $"{days} days with a page read.",
+                    })
+                </p>
+
+                <section class="calendar @(_wholeYear ? "calendar--whole" : null)" aria-label="Every day of @year.Year">
+                    <div class="calendar__bar">
+                        <span class="calendar__span">@(_wholeYear ? $"All of {year.Year}" : "The last four months")</span>
+                        <button type="button" class="link-button calendar__toggle" @onclick="ToggleWholeYear">
+                            @(_wholeYear ? "Just the last four months" : "The whole year")
+                        </button>
+                    </div>
+                    <div class="calendar__body">
+                        <div class="calendar__labels" aria-hidden="true">
+                            <span></span><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span><span></span>
+                        </div>
+                        <div class="calendar__weeks" @ref="_weeks">
+                            @* A phone shows the recent weeks and hides the rest until asked; a wide screen shows every week, the ones still to come drawn empty. *@
+                            @foreach (var week in year.Weeks)
+                            {
+                                <div class="calendar__week @(week.Ahead ? "calendar__week--ahead" : week.Recent ? null : "calendar__week--early")">
+                                    <span class="calendar__month" aria-hidden="true">@week.Month</span>
+                                    @foreach (var square in week.Days)
+                                    {
+                                        if (square is null)
+                                        {
+                                            <span class="calendar__day calendar__day--out"></span>
+                                        }
+                                        else if (square.Ahead)
+                                        {
+                                            <span class="calendar__day calendar__day--ahead"></span>
+                                        }
+                                        else
+                                        {
+                                            var day = square.Date;
+                                            <button type="button"
+                                                    class="calendar__day calendar__day--@(square.Read?.Level ?? 0) @(day == _picked ? "calendar__day--on" : null)"
+                                                    aria-pressed="@(day == _picked ? "true" : "false")"
+                                                    aria-label="@SaidOf(square)"
+                                                    title="@SaidOf(square)"
+                                                    @onclick="() => _picked = day"></button>
+                                        }
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    <div class="calendar__legend" aria-hidden="true">
+                        <span>Each square is a day; the greener, the more pages.</span>
+                        <span class="calendar__scale">None<i class="calendar__day--0"></i><i class="calendar__day--1"></i><i class="calendar__day--2"></i><i class="calendar__day--3"></i><i class="calendar__day--4"></i>@ReadingDay.LevelsFrom[^1]+ pages</span>
+                    </div>
+                </section>
+
+                <div class="stats__below">
+                    @if (_picked is { } picked)
+                    {
+                        var day = year.Days.GetValueOrDefault(picked);
+                        <section class="stats__day" aria-live="polite">
+                            <div class="stats__day-head">
+                                <h2>@picked.ToString("dddd d MMMM")</h2>
+                                @if (day is not null)
+                                {
+                                    <span>@PagesSaid(day)@(day.Minutes > 0 ? $" · {Figures.Duration(day.Minutes)}" : "")</span>
+                                }
+                            </div>
+                            @if (day is null)
+                            {
+                                <p class="muted">Nothing read that day.</p>
+                            }
+                            else
+                            {
+                                <ul class="stats__books">
+                                    @foreach (var book in day.Books)
+                                    {
+                                        <li>
+                                            <span class="stats__book">@year.TitleOf(book.EntryId)</span>
+                                            <span class="stats__book-pages">@(book.Pages is { } pages ? Figures.Pages(pages) : "read, pages unknown")</span>
+                                            <span class="stats__book-from">@(book.FromDevice ? "from your device" : "logged by hand")</span>
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                        </section>
+                    }
+
+                    <section class="stats__weekdays">
+                        <h2>When you read</h2>
+                        @{
+                            var weekdays = year.ByWeekday;
+                            var most = weekdays.MaxBy(day => day.Pages)!;
+                        }
+                        <div class="stats__bars" aria-hidden="true">
+                            @foreach (var weekday in weekdays)
+                            {
+                                <div class="stats__bar">
+                                    <span style="height: @(most.Pages == 0 ? 0 : (int)(weekday.Pages * 100 / most.Pages))%"></span>
+                                    <em>@weekday.Day.ToString()[..1]</em>
+                                </div>
+                            }
+                        </div>
+                        <p class="muted">
+                            @if (most.Pages > 0)
+                            {
+                                <text>@(most.Day)s are your day: @Figures.Pages(most.Pages) on average.</text>
+                            }
+                            else
+                            {
+                                <text>Nothing to go on yet.</text>
+                            }
+                        </p>
+                    </section>
+                </div>
+
+                <div class="stats__tiles">
+                    <section class="stats__tile">
+                        <h2>Now</h2>
+                        <strong>@(year.Current is { } now ? Figures.Days(now.Days) : "—")</strong>
+                        <span>@(year.Current is { } run ? $"in a row, since {run.From:d MMM}" : year.IsCurrent ? "Read today to start a run." : $"{year.Year} is over.")</span>
+                    </section>
+                    <section class="stats__tile">
+                        <h2>Longest run</h2>
+                        <strong>@(year.Longest is { } longest ? Figures.Days(longest.Days) : "—")</strong>
+                        <span>@(year.Longest is { } best ? RangeSaid(best) : "No run yet.")</span>
+                    </section>
+                    <section class="stats__tile">
+                        <h2>Days read</h2>
+                        <strong>@year.DaysRead of @year.DaysSoFar</strong>
+                        <span>@(year.DaysRead * 100 / year.DaysSoFar)% of @(year.IsCurrent ? "the year so far" : "the year")</span>
+                    </section>
+                    <section class="stats__tile">
+                        <h2>Biggest day</h2>
+                        <strong>@(year.BiggestDay is { } biggest ? Figures.Pages(biggest.Pages) : "—")</strong>
+                        <span>@(year.BiggestDay is { } big ? $"{big.Date:ddd d MMM} · {year.TitleOf(big.Books[0].EntryId)}" : "No pages counted yet.")</span>
+                    </section>
+                </div>
+            }
+            else if (_failed)
+            {
+                <p class="notice">Your reading could not be fetched just now. Try again shortly.</p>
+            }
+            else
+            {
+                <Settling />
+            }
+        </section>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    [SupplyParameterFromQuery(Name = "year")]
+    public int? AskedYear { get; set; }
+
+    private static int ThisYear => DateTime.Now.Year;
+
+    private int Year => AskedYear is { } asked && asked <= ThisYear && asked > 1900 ? asked : ThisYear;
+
+    private ReadingYear? _year;
+    private bool _failed;
+    private DateOnly? _picked;
+    private bool _wholeYear;
+    private bool _toLatest;
+    private ElementReference _weeks;
+    private int? _asked;
+
+    /// <summary>
+    /// Asked for once somebody is signed in, and again whenever the year in the address changes.
+    /// Stepping through years quickly can bring an older year's answer in after a newer one's;
+    /// only the answer for the year asked for last is shown.
+    /// </summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        var year = Year;
+        if (_asked == year || AuthState is not { } pending || (await pending).User.Identity?.IsAuthenticated is not true)
+        {
+            return;
+        }
+
+        _asked = year;
+        _year = null;
+        _failed = false;
+
+        var zone = TimeZoneInfo.Local;
+        var (from, to) = ReadingYear.Span(year, zone);
+        ReadingSpan? span;
+        try
+        {
+            span = (await Library.GetReadingAsync(from, to, CancellationToken.None)).Value;
+        }
+        catch (HttpRequestException)
+        {
+            // Library or the Gateway down: a 5xx, or no answer at all.
+            span = null;
+        }
+
+        if (_asked != year)
+        {
+            return;
+        }
+
+        if (span is null)
+        {
+            _failed = true;
+            return;
+        }
+
+        _year = ReadingYear.From(year, span, DateOnly.FromDateTime(DateTime.Now), zone);
+        _picked = _year.FirstPicked;
+        // The whole year left open while stepping to another: that one opens on its latest weeks too.
+        _toLatest = _wholeYear;
+    }
+
+    /// <summary>
+    /// The whole year on a phone is wider than the screen; it opens on the latest weeks, where
+    /// the reader just was, and scrolls back from there.
+    /// </summary>
+    private void ToggleWholeYear()
+    {
+        _wholeYear = !_wholeYear;
+        _toLatest = _wholeYear;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_toLatest || _year is null)
+        {
+            return;
+        }
+
+        _toLatest = false;
+        await using var calendar = await JS.InvokeAsync<IJSObjectReference>("import", "./js/calendar.js");
+        await calendar.InvokeVoidAsync("showLatest", _weeks);
+    }
+
+    private static string SaidOf(CalendarDay square) =>
+        $"{square.Date:ddd d MMM}: {(square.Read is { } read ? PagesSaid(read) : "nothing read")}";
+
+    private static string PagesSaid(ReadingDay day) =>
+        (day.Pages, day.SomePagesUnknown) switch
+        {
+            (0m, true) => "read, pages unknown",
+            (var pages, true) => $"{Figures.Pages(pages)} and some unknown",
+            (var pages, false) => Figures.Pages(pages),
+        };
+
+    private static string RangeSaid(Streak run) =>
+        run.From == run.To ? $"{run.From:d MMM}"
+        : run.From.Month == run.To.Month ? $"{run.From.Day} – {run.To:d MMM}"
+        : $"{run.From:d MMM} – {run.To:d MMM}";
+}
