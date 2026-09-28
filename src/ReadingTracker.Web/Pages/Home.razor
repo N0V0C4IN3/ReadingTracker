@@ -26,29 +26,32 @@
     </Authorizing>
     <Authorized>
         <section class="shelf @(Searching ? "shelf--searching" : null)">
-            <div class="shelf__heading">
-                <h1>Your shelf</h1>
+            @* A phone on its side has the cover flow alone (ShelfDeck): the heading and the tabs are for upright. *@
+            @if (!Orientation.Sideways)
+            {
+                <div class="shelf__heading">
+                    <h1>Your shelf</h1>
 
-                @* A phone on its side has the cover flow alone (ShelfDeck): the tabs are for upright. *@
-                @if (!Orientation.Sideways && (_entries is { Count: > 0 } || _filter is not null))
-                {
-                    @* Dimmed and out of reach while a search is on: the search spans every status,
-                       so a status filter would only fight it. Clearing the search brings them back. *@
-                    <div class="filters @(Searching ? "filters--muted" : null)" role="group" aria-label="Filter by reading status">
-                        @foreach (var (value, label) in Filters)
-                        {
-                            <button type="button"
-                                    class="chip @(value == _filter ? "chip--on" : null)"
-                                    data-status="@(value ?? "All")"
-                                    aria-pressed="@(value == _filter)"
-                                    disabled="@Searching"
-                                    @onclick="() => FilterAsync(value)">
-                                @label
-                            </button>
-                        }
-                    </div>
-                }
-            </div>
+                    @if (_entries is { Count: > 0 } || _filter is not null)
+                    {
+                        @* Dimmed and out of reach while a search is on: the search spans every status,
+                           so a status filter would only fight it. Clearing the search brings them back. *@
+                        <div class="filters @(Searching ? "filters--muted" : null)" role="group" aria-label="Filter by reading status">
+                            @foreach (var (value, label) in Filters)
+                            {
+                                <button type="button"
+                                        class="chip @(value == _filter ? "chip--on" : null)"
+                                        data-status="@(value ?? "All")"
+                                        aria-pressed="@(value == _filter)"
+                                        disabled="@Searching"
+                                        @onclick="() => FilterAsync(value)">
+                                    @label
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            }
 
             @*
                 The quiet search row, under the tabs on a wide screen. One box does two jobs in

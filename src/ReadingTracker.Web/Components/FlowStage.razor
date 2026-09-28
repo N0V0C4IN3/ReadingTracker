@@ -1,5 +1,4 @@
 @using System.Globalization
-@inject NavigationManager Navigation
 
 @*
     Jackets seen at an angle, one held face-on at the front and the rest leaning away to either side,
@@ -40,7 +39,7 @@
                 disabled="@(!place.Lit)"
                 aria-label="@(position == At && OnOpen.HasDelegate ? $"Open {jacket.Title}" : $"Show {jacket.Title} by {jacket.Author}")"
                 @onclick="() => PickAsync(position)">
-            <span class="cover cover--@jacket.Tone" style="@Art(jacket)">
+            <span class="cover cover--@jacket.Tone" style="@jacket.CoverStyle">
                 <span class="cover__title">@jacket.Title</span>
                 <span class="cover__rule"></span>
                 <span class="cover__author">@jacket.Author</span>
@@ -69,7 +68,7 @@
                 aria-hidden, and no text worth reading: a screen reader announcing every title
                 twice is the accessible version of a smudge on the floor.
             *@
-            <span class="cover cover--@jacket.Tone cover--mirror" style="@Art(jacket)" aria-hidden="true">
+            <span class="cover cover--@jacket.Tone cover--mirror" style="@jacket.CoverStyle" aria-hidden="true">
                 <span class="cover__title">@jacket.Title</span>
                 <span class="cover__rule"></span>
                 <span class="cover__author">@jacket.Author</span>
@@ -135,15 +134,6 @@
 
     /// <summary>Where the finger currently dragging the deck was last accounted for, if any.</summary>
     private double? _dragFrom;
-
-    /// <summary>
-    /// The photograph, for the stylesheet as well as the img: the shelf's flow colours the edge of
-    /// each book from its own cover. Made absolute, because a relative url() in a custom property
-    /// is read against the stylesheet that uses it, not the page.
-    /// </summary>
-    private string? Art(FlowJacket jacket) => jacket.Cover is { } cover
-        ? $"--art:url(\"{Navigation.ToAbsoluteUri(cover).AbsoluteUri}\")"
-        : null;
 
     private IEnumerable<int> InSight() => Wrap
         ? Enumerable.Range(0, Jackets.Count)

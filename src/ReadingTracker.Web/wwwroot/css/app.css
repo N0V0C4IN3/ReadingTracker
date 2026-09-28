@@ -1932,6 +1932,9 @@ button.danger:hover:not(:disabled) {
     */
     --headroom: calc(var(--cover-w) * (1.5 * (var(--pickup) - 1) + 0.03));
 
+    /* The floor under the jackets, for their reflections, in jacket widths. */
+    --floor: 0.72;
+
     position: relative;
     /* A breath between the card and the tops of the jackets, over and above the headroom the
        pickup needs: with only that, the deck sat on the card's shadow. */
@@ -1950,7 +1953,7 @@ button.danger:hover:not(:disabled) {
         The room above is --headroom rather than a number of its own, so that the two places the
         stage has to be tall enough for cannot drift apart.
     */
-    height: calc(var(--cover-w) * 2.22 + var(--headroom));
+    height: calc(var(--cover-w) * (1.5 + var(--floor)) + var(--headroom));
     perspective: 1400px;
     perspective-origin: 50% 38%;
     /*
@@ -6503,42 +6506,55 @@ main:has(.stats) {
     is given one (readingTracker.sideways), so none of this is behind a media query.
 */
 
-/* The screen to itself: no header, no heading and no search. Turned upright, the phone has them
-   all again, as they were left. */
-body:has(.flow--shelf) header,
-.shelf:has(> .flow--shelf) .shelf__heading,
+/* The screen to itself. The header and the heading are not drawn at all (MainLayout, Home); the
+   search dock is kept, out of sight, so that turned upright the phone has it as it was left. */
 main:has(.flow--shelf) :is(.search, .search__fab, .search__scrim) {
     display: none;
 }
 
 main:has(.flow--shelf) {
-    padding-block: 0.75rem 0;
+    --page-top: 0.75rem;
+
+    padding-block: var(--page-top) 0;
 }
 
 .flow--shelf {
-    /* The stage is twice a jacket's width tall (below); the caption under it and the page's
-       padding take the rest of the height. */
-    --cover-w: clamp(4.5rem, (100dvh - 3.5rem) / 2.1, 15rem);
     /* A finger, not a cursor: nothing is picked up, so no room is kept above for it. */
     --pickup: 1;
+    /* Less floor than the welcome's: its reflection has faded well before then, and the height is
+       better spent on the jackets. */
+    --floor: 0.5;
+    /* Under the stage, for the caption's last line. */
+    --caption-room: 1.9rem;
+    /*
+        As big as the height allows: the screen, less the page's padding above, the caption's room
+        and a breath at the foot, is the stage, which is this many jacket widths tall (see
+        .flow__stage and --headroom above).
+    */
+    --cover-w: clamp(
+        4.5rem,
+        (100dvh - var(--page-top) - var(--caption-room) - 0.75rem) / (1.5 + var(--floor) + 1.5 * (var(--pickup) - 1) + 0.03),
+        15rem);
 
     margin-top: 0;
-    padding-bottom: 1.9rem;
+    padding-bottom: var(--caption-room);
 }
 
-/* Less floor than the welcome's: its reflection has faded well before then, and the height is
-   better spent on the jackets. What is left of the reflection is clipped rather than hanging
-   below the stage, where it would make the page scroll. */
+/* What is left of the reflection is clipped rather than hanging below the stage, where it would
+   make the page scroll. */
 .flow--shelf .flow__stage {
-    height: calc(var(--cover-w) * 2 + var(--headroom));
     overflow: clip;
 }
 
 /*
     The book's thickness, down its open side: the colour of its own cover rather than the
     welcome's page block, as the back of a real book is, and a little thicker. It is the cover's
-    last sliver drawn out across the edge (--art, from FlowStage), or a drawn jacket's own board,
+    last sliver drawn out across the edge (--art, from ShelfDeck), or a drawn jacket's own board,
     shaded as a side turned from the light.
+
+    The photograph is drawn forty times the edge's width and anchored right, so the edge shows
+    its last fortieth. That is the file's own edge: the jacket shows the cover cropped to fit
+    (object-fit: cover), so on a cover of another shape it is a little way past the edge seen.
 */
 .flow--shelf .cover::after {
     top: 0;

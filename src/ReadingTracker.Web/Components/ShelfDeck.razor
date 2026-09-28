@@ -104,7 +104,9 @@
             entry.Book?.Title ?? "A book",
             entry.Book is { Authors.Count: > 0 } book ? string.Join(", ", book.Authors) : "",
             entry.Book?.CoverUrl,
-            (int)((uint)entry.Id.GetHashCode() % FlowJacket.Tones)))];
+            (int)((uint)entry.Id.GetHashCode() % FlowJacket.Tones),
+            // The photograph again, for the stylesheet: each book's edge is coloured from it.
+            entry.Book?.CoverUrl is { } cover ? $"--art:{CoverCss.Url(cover)}" : null))];
 
         if (!had)
         {

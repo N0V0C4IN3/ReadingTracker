@@ -1,6 +1,8 @@
 @inherits LayoutComponentBase
 @implements IDisposable
+@using ReadingTracker.Web.Services
 @inject NavigationManager Navigation
+@inject Orientation Orientation
 
 @*
     The welcome screen goes without the bar across the top. It already says the application's name
@@ -11,6 +13,9 @@
     the loading screen and nothing else, and a bar across the top of a loading screen is a header
     over nothing: it flashed up as the trip began and again as it ended, with a Sign in button on
     it, on a page that was in the middle of signing in.
+
+    And so does the shelf on a phone held on its side, which is a cover flow with the screen to
+    itself: turned upright, the phone has the bar again.
 
     Every other page keeps it, signed in or not — including the one you land on after mistyping a
     URL, where the way home is the only thing on offer.
@@ -40,14 +45,16 @@
     /// <summary>
     /// The welcome screen — the root of the site with nobody signed in — and the sign-in round
     /// trip. While the answer to "is anyone signed in" is still coming, this is true — the boot
-    /// screen has no more use for a header than the welcome screen it becomes.
+    /// screen has no more use for a header than the welcome screen it becomes. And the shelf on a
+    /// phone on its side.
     /// </summary>
-    private bool Bare => (_atRoot && !_signedIn) || _signingIn;
+    private bool Bare => (_atRoot && (!_signedIn || Orientation.Sideways)) || _signingIn;
 
     protected override void OnInitialized()
     {
         Locate();
         Navigation.LocationChanged += Moved;
+        Orientation.Changed += StateHasChanged;
     }
 
     protected override async Task OnParametersSetAsync()
@@ -83,5 +90,9 @@
         }
     }
 
-    public void Dispose() => Navigation.LocationChanged -= Moved;
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= Moved;
+        Orientation.Changed -= StateHasChanged;
+    }
 }
