@@ -28,9 +28,24 @@ public sealed class ShelfMemory
 
     public void Remember(string? tab)
     {
+        // A book at the front of the cover flow belongs to the tab it was on: another tab chosen
+        // is somewhere else to open.
+        if (tab != Tab)
+        {
+            Front = null;
+        }
+
         Tab = tab;
         Remembers = true;
     }
+
+    /// <summary>
+    /// The book at the front of the cover flow (a phone on its side), so coming back from its page,
+    /// or turning the phone back, finds the flow on the same book rather than its shelf's first.
+    /// </summary>
+    public Guid? Front { get; private set; }
+
+    public void RememberFront(Guid entryId) => Front = entryId;
 
     /// <summary>
     /// Where the reader was when they left the shelf for another page — how far down it, and the
@@ -53,6 +68,7 @@ public sealed class ShelfMemory
     {
         Tab = null;
         Remembers = false;
+        Front = null;
         Entries = [];
         _left = null;
     }

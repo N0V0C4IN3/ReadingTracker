@@ -80,6 +80,7 @@ else
 // application is allowed to know — never at Catalog or Library directly.
 builder.Services.AddScoped<ShelfChanges>();
 builder.Services.AddScoped<ShelfMemory>();
+builder.Services.AddScoped<Orientation>();
 builder.Services.AddScoped<ImportJob>();
 
 AddGatewayClient<GatewayLibraryClient>();

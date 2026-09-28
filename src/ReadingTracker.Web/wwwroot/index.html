@@ -120,16 +120,72 @@
         window.readingTracker = {
             prefersStillness: () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
 
-            // Whether the screen is a phone's, where the shelf is a deck (Home.razor). Asked here,
-            // synchronously, so the shelf knows before it first draws; watched, so it hears when a
-            // phone is turned on its side. The stylesheet's phone width is the same 40rem.
-            isPhone: () => window.matchMedia("(max-width: 40rem)").matches,
-            watchPhone: dotnet => {
-                const phone = window.matchMedia("(max-width: 40rem)");
-                const told = e => dotnet.invokeMethodAsync("PhoneChanged", e.matches);
-                phone.addEventListener("change", told);
-                return { stop: () => phone.removeEventListener("change", told) };
+            // Whether this is a phone held on its side, where the shelf is a cover flow (Home.razor):
+            // a short landscape screen whose main pointer is a finger. A desktop window of any shape
+            // has a mouse, and a tablet on its side is too tall. Asked here, synchronously, so the
+            // shelf knows before it first draws; watched, so it hears when the phone is turned.
+            sideways: "(orientation: landscape) and (hover: none) and (pointer: coarse) and (max-height: 32rem)",
+            isSideways: () => window.matchMedia(window.readingTracker.sideways).matches,
+            watchSideways: dotnet => {
+                const query = window.matchMedia(window.readingTracker.sideways);
+                // Told inside a view transition, and synchronously, so the page it re-draws is the
+                // transition's new picture: the list and the flow cross-fade rather than swap.
+                const told = e => window.readingTracker.transition(() => dotnet.invokeMethod("Turned", e.matches));
+                query.addEventListener("change", told);
+                return { stop: () => query.removeEventListener("change", told) };
             },
+
+            // Runs an update inside a view transition where the browser has them and the reader
+            // has not asked for less motion; otherwise just runs it.
+            transition: update => {
+                if (!document.startViewTransition || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+                    update();
+                    return null;
+                }
+                return document.startViewTransition(update);
+            },
+
+            // Opens a book from the shelf's cover flow, its jacket at the front growing into the
+            // cover at the head of the book's page. The page draws its head once Library has
+            // answered, so the transition waits a moment for it; a page slower than that simply
+            // fades in, the jacket fading out on its way.
+            openBook: url => {
+                const jacket = document.querySelector(".deck .flow__slot--front > .cover:not(.cover--mirror)");
+                if (jacket) {
+                    jacket.style.viewTransitionName = "book-cover";
+                }
+                const moving = window.readingTracker.transition(async () => {
+                    jacket?.style.removeProperty("view-transition-name");
+                    Blazor.navigateTo(url);
+                    const cover = await window.readingTracker.arrival(".book__cover", 450);
+                    cover?.style.setProperty("view-transition-name", "book-cover");
+                });
+                moving?.finished.finally(() =>
+                    document.querySelector(".book__cover")?.style.removeProperty("view-transition-name"));
+            },
+
+            // The first element matching a selector, once the page has drawn it, or null if it has
+            // not within so many milliseconds.
+            arrival: (selector, ms) => new Promise(resolve => {
+                const found = document.querySelector(selector);
+                if (found) {
+                    resolve(found);
+                    return;
+                }
+                const watch = new MutationObserver(() => {
+                    const now = document.querySelector(selector);
+                    if (now) {
+                        done(now);
+                    }
+                });
+                const timer = setTimeout(() => done(null), ms);
+                function done(element) {
+                    watch.disconnect();
+                    clearTimeout(timer);
+                    resolve(element);
+                }
+                watch.observe(document.body, { childList: true, subtree: true });
+            }),
 
             // Whether the page is dark, and the switch for it.
             isDark: () => document.documentElement.getAttribute("data-theme") !== "light",

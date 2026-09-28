@@ -1,317 +1,208 @@
-@using System.Globalization
 @using ReadingTracker.Web.Services
 @implements IAsyncDisposable
 @inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject ShelfMemory Memory
 
 @*
-    The shelf on a phone: a deck, the welcome screen's cover flow with the shelf's own cards in it,
-    and under it the shelves themselves on a drum, turned the same way.
+    The shelf on a phone held on its side: the welcome screen's cover flow (FlowStage) with the
+    shelf's own jackets in it, the way an iPod showed albums. A tap on the jacket at the front opens
+    the book. Under it, the shelves on a drum, turned the same way.
 
-    This decides everything about the deck: which card is at the front of each shelf, which card is
-    on its way out, and each card's distance from the front (--deck-off), from which the stylesheet
-    works out where it stands. js/shelfDeck.js only reads the finger and asks for a turn (Turn), and
-    measures the one flight a card makes down into the drum (aim).
+    The flow is the whole shelf in one run, shelf after shelf in the shelf's own order, so turning
+    past the last book on one shelf brings up the first on the next, and the drum turns with it to
+    say where it has got to. The drum is also a way there: a shelf chosen on it turns the flow to
+    that shelf's first book. The book at the front, and so its shelf, is remembered (ShelfMemory):
+    coming back from its page, or turning the phone upright, finds the shelf where it was left.
 *@
 
-<div class="deck" @ref="_root">
-    <div class="deck__cards @(Entries is null ? "deck__cards--pending" : null) @(_turned ? "is-turned" : null)">
-        @if (Entries is null)
+<div class="deck">
+    <div class="flow flow--dressed flow--shelf @(Shelf is null ? "flow--pending" : null) @(_dealing ? "flow--dealing" : null)">
+        @if (Shelf is null)
         {
-            @* The loading ghosts stand as the deck will: one face-on, one turned away either side. *@
-            @for (var off = -1; off <= 1; off++)
-            {
-                <div class="deck__slot @(off == 0 ? "is-front" : null)" style="--deck-off:@off">
-                    <EntryGhost At="off + 1" />
-                </div>
-            }
+            @* While the shelf loads: the flow's shape, in blank jackets. *@
+            <FlowStage Jackets="Ghosts" At="Ghosts.Count / 2" />
         }
-        else if (Entries.Count == 0 && _leaving is null)
+        else if (_jackets.Count == 0)
         {
-            @* A shelf with nothing on it keeps the deck's room, so the drum under it stays put. *@
             <p class="empty">@Empty</p>
         }
         else
         {
-            @foreach (var card in Cards())
-            {
-                <div @key="card.Entry.Id"
-                     class="@SlotClass(card)"
-                     style="@SlotStyle(card)"
-                     data-slot="@card.Entry.Id"
-                     inert="@((card.Off != 0 && card.Entry.Id != _wasFront) || card.Leaving is not null)">
-                    <DeckCard Entry="card.Entry"
-                              At="card.At"
-                              OnChanged="OnChanged"
-                              OnRemoved="@(() => OnRemoved.InvokeAsync(card.Entry.Id))"
-                              OnSignedOut="OnSignedOut" />
-                </div>
-            }
+            <FlowStage Jackets="_jackets" @bind-At="Front" OnOpen="Open" />
         }
     </div>
 
-    @if (Entries is { Count: > 1 })
-    {
-        @* The deck turned without a finger: by these, and by the arrow keys (shelfDeck.js). *@
-        <div class="deck__steps">
-            <button type="button" class="deck__step deck__step--back" disabled="@(_front == 0)" @onclick="() => Turn(-1)">Previous book</button>
-            <button type="button" class="deck__step deck__step--on" disabled="@(_front == Entries.Count - 1)" @onclick="() => Turn(1)">Next book</button>
-        </div>
-    }
-    <p class="visually-hidden" aria-live="polite">
-        @if (Entries is { Count: > 0 } shown)
+    @*
+        Each shelf is placed by --off, its distance from the front book's. While a finger is on the
+        drum js/shelfDrum.js adds how far it has moved (--drag, on the drum) and takes the
+        transition off; let go, the drum runs on and comes to rest on a shelf (TurnTo). A shelf with
+        nothing on it cannot be chosen, and the drum goes on past it.
+    *@
+    <div class="deck__drum" role="group" aria-label="Go to a reading status" @ref="_drum">
+        @{ var on = ShelfOrder.Rank(Showing); }
+        @foreach (var (status, at) in ShelfOrder.Statuses.Select((status, at) => (status, at)))
         {
-            @($"Book {_front + 1} of {shown.Count}: {shown[_front].Book?.Title}")
+            var count = Shelf?.Count(entry => entry.Status == status);
+            <button type="button"
+                    class="deck__word @($"deck__word--{status.ToLowerInvariant()}") @(at == on ? "is-on" : null)"
+                    style="--off:@(at - on)"
+                    data-status="@status"
+                    aria-pressed="@(at == on)"
+                    disabled="@(count == 0)"
+                    @onclick="() => TurnTo(status)">
+                <i class="status__dot" aria-hidden="true"></i>
+                @ReadingStatuses.Label(status)
+                @* Without a count while the shelf loads: it is not known yet. *@
+                @if (count is { } known)
+                {
+                    <span>@known</span>
+                }
+            </button>
         }
-    </p>
-
-    @if (Drum)
-    {
-        @*
-            Blazor places each shelf by --off, its distance from the one chosen. While a finger is
-            on the drum shelfDeck.js adds how far it has moved (--drag, on the drum) and takes the
-            transition off; let go, the drum runs on and comes to rest on a shelf, whose button it
-            presses.
-        *@
-        var on = Filters.TakeWhile(filter => filter.Value != Filter).Count();
-        <div class="deck__drum" role="group" aria-label="Filter by reading status">
-            @foreach (var ((value, label), at) in Filters.Select((filter, at) => (filter, at)))
-            {
-                <button type="button"
-                        class="deck__word @(value == Filter ? "is-on" : null) @(value is not null && value == _landed ? "is-landed" : null) @(value is null ? null : $"import__tone--{value.ToLowerInvariant()}")"
-                        style="--off:@(at - on)"
-                        data-status="@(value ?? "All")"
-                        aria-pressed="@(value == Filter)"
-                        @onclick="() => OnFilter.InvokeAsync(value)">
-                    @if (value is not null)
-                    {
-                        <i class="status__dot" aria-hidden="true"></i>
-                    }
-                    @label
-                    @* Without a count while the shelf loads: it is not known yet. *@
-                    @if (Shelf is { } shelf)
-                    {
-                        <span>@(value is null ? shelf.Count : shelf.Count(entry => entry.Status == value))</span>
-                    }
-                </button>
-            }
-        </div>
-    }
+    </div>
 </div>
 
 @code {
-    /// <summary>The books in the deck, in order; null while the shelf is still loading.</summary>
-    [Parameter]
-    public IReadOnlyList<LibraryEntry>? Entries { get; set; }
-
-    /// <summary>The whole shelf, for the drum's counts and for telling where a card went.</summary>
+    /// <summary>The reader's shelf, as Library listed it; null while it is still loading.</summary>
     [Parameter]
     public IReadOnlyList<LibraryEntry>? Shelf { get; set; }
 
-    /// <summary>Which pile the deck is showing (a tab, or a search), each with its own front card.</summary>
-    [Parameter, EditorRequired]
-    public required string Pile { get; set; }
-
-    /// <summary>Whether the drum of shelves is under the deck: not while searching, which spans them all.</summary>
+    /// <summary>The shelf to open on if no book at the front is remembered; null is the first book.</summary>
     [Parameter]
-    public bool Drum { get; set; }
+    public string? Start { get; set; }
 
-    [Parameter, EditorRequired]
-    public required IReadOnlyList<(string? Value, string Label)> Filters { get; set; }
-
-    [Parameter]
-    public string? Filter { get; set; }
-
-    [Parameter]
-    public EventCallback<string?> OnFilter { get; set; }
-
-    /// <summary>What an empty deck says.</summary>
+    /// <summary>What an empty shelf says.</summary>
     [Parameter]
     public RenderFragment? Empty { get; set; }
 
-    [Parameter]
-    public EventCallback<LibraryEntry> OnChanged { get; set; }
+    private static readonly IReadOnlyList<FlowJacket> Ghosts =
+        [.. Enumerable.Range(0, 7).Select(at => new FlowJacket($"ghost-{at}", "", "", null, at % FlowJacket.Tones))];
 
-    [Parameter]
-    public EventCallback<Guid> OnRemoved { get; set; }
-
-    [Parameter]
-    public EventCallback OnSignedOut { get; set; }
-
-    /// <summary>
-    /// How far from the front a card can be seen. One further out is in the page but not drawn
-    /// (is-far), waiting to turn into sight; the rest of the shelf is not in the page at all, so a
-    /// turn costs the same on a shelf of fifty books as on one of five.
-    /// </summary>
-    private const int Drawn = 3;
-
-    /// <summary>
-    /// Whether the reader has turned this pile since it was dealt. Cards dealt in when the pile
-    /// arrives; once it is being turned, the cards coming into the deck at its far ends only turn
-    /// into sight with the rest.
-    /// </summary>
-    private bool _turned;
-
-    /// <summary>
-    /// Which of the pile's cards are in the page (see Drawn), by place: a little behind a turn, so
-    /// a turn only moves cards that are already there, and the one that has come into range is
-    /// made while they move (Settle), when the work costs nothing a reader can see.
-    /// </summary>
-    private (int Lo, int Hi) _window;
-
-    /// <summary>
-    /// The card that was at the front before a turn, still reachable until the turn has played out.
-    /// Putting a card out of reach restyles everything in it, which at the start of a turn is a
-    /// dropped frame; once the cards have stopped, nobody sees it.
-    /// </summary>
-    private Guid? _wasFront;
-
-    private int _turns;
-
-    /// <summary>How long after a turn the cards coming into range are made, and the old front put out of reach.</summary>
-    private const int WidenMs = 60;
-    private const int SettledMs = 500;
-
-    /// <summary>How long a card takes to fly into the drum (app.css .is-flying), and the count it lands on to pulse.</summary>
-    private const int FlightMs = 520;
-    private const int LandingMs = 600;
-
-    private ElementReference _root;
-    private IJSObjectReference? _js;
+    private ElementReference _drum;
     private IJSObjectReference? _gestures;
     private DotNetObjectReference<ShelfDeck>? _self;
-    private bool _disposed;
 
-    /// <summary>The front card of each pile, by id, and where it stood in case it goes.</summary>
-    private readonly Dictionary<string, (Guid Id, int At)> _fronts = [];
+    /// <summary>The shelf the jackets were made from, so they are made again only when it changes.</summary>
+    private IReadOnlyList<LibraryEntry>? _made;
+    private IReadOnlyList<LibraryEntry> _ordered = [];
+    private IReadOnlyList<FlowJacket> _jackets = [];
 
-    /// <summary>Where the front card of the pile on show stands now.</summary>
     private int _front;
 
-    /// <summary>What the last render showed, and of which pile: how a card that has moved is told from one that is simply not in this pile.</summary>
-    private IReadOnlyList<(Guid Id, string Status)> _shown = [];
-    private string? _shownPile;
+    /// <summary>
+    /// Whether the jackets are being dealt out from the middle: for a moment when the flow arrives,
+    /// on a phone turned on its side or on the shelf coming back, and again when the loading
+    /// ghosts give way to the shelf. Only for that moment, because a jacket that comes into the
+    /// window later, as the flow turns, turns in from the side rather than being dealt.
+    /// </summary>
+    private bool _dealing;
+    private int _deals;
 
-    /// <summary>A card on its way out of the pile, having changed status; Aim is its flight, once measured.</summary>
-    private Leaving? _leaving;
+    /// <summary>How long a deal takes, the last jacket's delay included; see .flow--dealing.</summary>
+    private const int DealMs = 900;
 
-    private sealed record Leaving(LibraryEntry Entry, int At, string? Aim = null);
+    /// <summary>The book at the front: where it is, and what the flow is on.</summary>
+    private int Front
+    {
+        get => _front;
+        set
+        {
+            _front = value;
+            var entry = _ordered[value];
 
-    /// <summary>The shelf a card has just landed in, whose count pulses.</summary>
-    private string? _landed;
+            // Its shelf is the tab the list opens on when the phone is turned upright, as long as
+            // it is a shelf the list has a tab for.
+            if (ShelfOrder.Rank(entry.Status) < ShelfOrder.Statuses.Count)
+            {
+                Memory.Remember(entry.Status);
+            }
 
-    private readonly record struct Card(LibraryEntry Entry, int At, int Off, Leaving? Leaving);
+            Memory.RememberFront(entry.Id);
+        }
+    }
+
+    /// <summary>The shelf the front book is on: what the drum shows.</summary>
+    private string Showing => _ordered.Count > 0 ? _ordered[_front].Status : Start ?? ShelfOrder.Statuses[0];
 
     protected override void OnParametersSet()
     {
-        if (Entries is not { } now)
+        if (Shelf is not { } shelf || ReferenceEquals(shelf, _made))
         {
             return;
         }
 
-        if (_leaving is { } flying && now.Any(entry => entry.Id == flying.Entry.Id))
+        // The book at the front before, or, the first time, the one remembered from last time.
+        var had = _ordered.Count > 0;
+        var was = had ? _ordered[_front].Id : Memory.Front;
+
+        _made = shelf;
+        _ordered = ShelfOrder.ByStatus(shelf);
+        _jackets = [.. _ordered.Select(entry => new FlowJacket(
+            entry.Id.ToString(),
+            entry.Book?.Title ?? "A book",
+            entry.Book is { Authors.Count: > 0 } book ? string.Join(", ", book.Authors) : "",
+            entry.Book?.CoverUrl,
+            (int)((uint)entry.Id.GetHashCode() % FlowJacket.Tones)))];
+
+        if (!had)
         {
-            _leaving = null;
+            _ = DealAsync();
         }
 
-        // A card that was here a moment ago, in this same pile, and is gone because its status
-        // changed has moved to another shelf: it stays for its flight there. Anything else that
-        // goes (a book taken off the shelf, a search narrowed) simply goes.
-        if (_leaving is null && _shownPile == Pile && Shelf is { } shelf)
+        if (_ordered.Count == 0)
         {
-            for (var at = 0; at < _shown.Count; at++)
-            {
-                var (id, status) = _shown[at];
-                if (!now.Any(entry => entry.Id == id)
-                    && shelf.FirstOrDefault(entry => entry.Id == id) is { } moved
-                    && moved.Status != status)
-                {
-                    _leaving = new Leaving(moved, at);
-                    break;
-                }
-            }
+            _front = 0;
+            return;
         }
 
-        if (_shownPile != Pile)
-        {
-            _turned = false;
-        }
-
-        _shown = [.. now.Select(entry => (entry.Id, entry.Status))];
-        _shownPile = Pile;
-
-        // The front card stays the front card wherever the list puts it. If it has gone, the one
-        // that takes its place does, rather than the deck going back to its first card.
-        _front = 0;
-        if (_fronts.TryGetValue(Pile, out var front) && now.Count > 0)
-        {
-            var still = IndexOf(now, front.Id);
-            _front = still >= 0 ? still : Math.Min(front.At, now.Count - 1);
-        }
-
-        Remember();
-        _window = Around(_front);
-        _wasFront = null;
+        // That book stays at the front wherever the list puts it. If it has gone, the one that
+        // took its place does, rather than the flow going back to its first book.
+        var still = was is { } id ? IndexOf(id) : -1;
+        _front = still >= 0 ? still
+            : had ? Math.Min(_front, _ordered.Count - 1)
+            : Start is { } start ? Math.Max(0, FirstOn(start))
+            : 0;
     }
 
-    /// <summary>Turns the deck by this many cards (JS: a drag, or a tap either side of the front card).</summary>
-    [JSInvokable]
-    public void Turn(int by)
-    {
-        if (Entries is not { Count: > 0 } now)
-        {
-            return;
-        }
+    protected override void OnInitialized() => _ = DealAsync();
 
-        var to = Math.Clamp(_front + by, 0, now.Count - 1);
-        if (to != _front)
+    private async Task DealAsync()
+    {
+        var deal = ++_deals;
+        _dealing = true;
+        await Task.Delay(DealMs);
+        if (deal == _deals)
         {
-            _wasFront ??= now[_front].Id;
-            _front = to;
-            _turned = true;
-            _window = (Math.Min(_window.Lo, _front - 1), Math.Max(_window.Hi, _front + 1));
-            Remember();
+            _dealing = false;
             StateHasChanged();
-            _ = SettleAsync();
         }
     }
 
-    private async Task SettleAsync()
+    /// <summary>Turns the flow to the first book on a shelf: the drum, tapped or come to rest.</summary>
+    [JSInvokable]
+    public void TurnTo(string status)
     {
-        var turn = ++_turns;
-        await Task.Delay(WidenMs);
-        if (_disposed || turn != _turns)
+        if (FirstOn(status) is var to && to >= 0 && to != _front)
         {
-            return;
-        }
-
-        _window = Around(_front);
-        StateHasChanged();
-
-        await Task.Delay(SettledMs - WidenMs);
-        if (_disposed || turn != _turns)
-        {
-            return;
-        }
-
-        _wasFront = null;
-        StateHasChanged();
-    }
-
-    private static (int Lo, int Hi) Around(int front) => (front - Drawn - 1, front + Drawn + 1);
-
-    private void Remember()
-    {
-        if (Entries is { Count: > 0 } now)
-        {
-            _fronts[Pile] = (now[_front].Id, _front);
+            Front = to;
+            StateHasChanged();
         }
     }
 
-    private static int IndexOf(IReadOnlyList<LibraryEntry> entries, Guid id)
+    /// <summary>Opens the book at the front, its jacket growing into the book page's cover.</summary>
+    private async Task Open(int position) =>
+        await JS.InvokeVoidAsync("readingTracker.openBook", Navigation.ToAbsoluteUri($"shelf/{_ordered[position].Id}").ToString());
+
+    private int FirstOn(string status) => IndexWhere(entry => entry.Status == status);
+
+    private int IndexOf(Guid id) => IndexWhere(entry => entry.Id == id);
+
+    private int IndexWhere(Func<LibraryEntry, bool> match)
     {
-        for (var at = 0; at < entries.Count; at++)
+        for (var at = 0; at < _ordered.Count; at++)
         {
-            if (entries[at].Id == id)
+            if (match(_ordered[at]))
             {
                 return at;
             }
@@ -320,102 +211,27 @@
         return -1;
     }
 
-    /// <summary>
-    /// The cards near enough the front to be in the page, in order, with the one leaving back where
-    /// it was in front of the rest: in the same place among them, so it is not moved in the page,
-    /// which would deal it in all over again.
-    /// </summary>
-    private IEnumerable<Card> Cards()
-    {
-        var entries = Entries ?? [];
-        var leaving = _leaving;
-        for (var at = Math.Max(0, _window.Lo); at <= Math.Min(entries.Count - 1, _window.Hi); at++)
-        {
-            if (leaving is not null && leaving.At <= at)
-            {
-                yield return new Card(leaving.Entry, leaving.At, 0, leaving);
-                leaving = null;
-            }
-
-            yield return new Card(entries[at], at, at - _front, null);
-        }
-
-        if (leaving is not null)
-        {
-            yield return new Card(leaving.Entry, leaving.At, 0, leaving);
-        }
-    }
-
-    private static string SlotClass(Card card) => string.Join(' ', new[]
-    {
-        "deck__slot",
-        card.Off == 0 ? "is-front" : null,
-        Math.Abs(card.Off) > Drawn ? "is-far" : null,
-        card.Leaving is null ? null : "is-leaving",
-        card.Leaving?.Aim is null ? null : "is-flying",
-    }.OfType<string>());
-
-    /// <remarks>Formatted invariantly: CSS reads a decimal comma as two values, or as nothing.</remarks>
-    private static string SlotStyle(Card card) =>
-        card.Leaving?.Aim is { } aim
-            ? string.Create(CultureInfo.InvariantCulture, $"--deck-off:0; --leave-to:{aim}")
-            : $"--deck-off:{card.Off}";
-
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            _js = await JS.InvokeAsync<IJSObjectReference>("import", "./js/shelfDeck.js");
             _self = DotNetObjectReference.Create(this);
-            _gestures = await _js.InvokeAsync<IJSObjectReference>("attach", _root, _self);
-        }
-
-        if (_leaving is { Aim: null } leaving && _js is not null)
-        {
-            await FlyAsync(leaving);
-        }
-    }
-
-    /// <summary>Down into the shelf it went to on the drum, or, with no drum, away.</summary>
-    private async Task FlyAsync(Leaving leaving)
-    {
-        var to = Drum ? leaving.Entry.Status : null;
-        var aim = await _js!.InvokeAsync<string>("aim", _root, leaving.Entry.Id.ToString(), to);
-        _leaving = leaving with { Aim = aim };
-        StateHasChanged();
-
-        await Task.Delay(FlightMs);
-        if (_disposed || _leaving?.Entry.Id != leaving.Entry.Id)
-        {
-            return;
-        }
-
-        _leaving = null;
-        _landed = to;
-        StateHasChanged();
-
-        await Task.Delay(LandingMs);
-        if (!_disposed && _landed == to)
-        {
-            _landed = null;
-            StateHasChanged();
+            await using var js = await JS.InvokeAsync<IJSObjectReference>("import", "./js/shelfDrum.js");
+            _gestures = await js.InvokeAsync<IJSObjectReference>("attach", _drum, _self);
         }
     }
 
     public async ValueTask DisposeAsync()
     {
-        _disposed = true;
+        // A deal still under way has nothing left to finish.
+        _deals++;
+
         try
         {
             if (_gestures is not null)
             {
                 await _gestures.InvokeVoidAsync("detach");
                 await _gestures.DisposeAsync();
-            }
-
-            if (_js is not null)
-            {
-                await _js.DisposeAsync();
             }
         }
         catch (JSDisconnectedException)

@@ -9,6 +9,7 @@
 @inject NavigationManager Navigation
 @inject ShelfMemory Memory
 @inject IJSRuntime JS
+@inject Orientation Orientation
 @implements IAsyncDisposable
 
 <PageTitle>ReadingTracker</PageTitle>
@@ -28,8 +29,8 @@
             <div class="shelf__heading">
                 <h1>Your shelf</h1>
 
-                @* On a phone the shelves are the deck's drum instead (ShelfDeck). *@
-                @if (!_phone && (_entries is { Count: > 0 } || _filter is not null))
+                @* A phone on its side has the shelves on the cover flow's drum instead (ShelfDeck). *@
+                @if (!Orientation.Sideways && (_entries is { Count: > 0 } || _filter is not null))
                 {
                     @* Dimmed and out of reach while a search is on: the search spans every status,
                        so a status filter would only fight it. Clearing the search brings them back. *@
@@ -55,45 +56,40 @@
                 a phone the field lives in the dock at the foot of the screen instead, and this is
                 hidden — see the .search section below.
             *@
-            <div class="search-row">
-                <label class="search__field">
-                    <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
-                    <input value="@_query" @oninput="OnQueryInput" maxlength="@MaxQueryLength" placeholder="Find a book — on your shelf, or in the library" aria-label="Find a book" @onkeydown="SearchOnEnterAsync" />
-                    @if (_query.Length > 0)
-                    {
-                        <button type="button" class="search__clear" aria-label="Clear search" @onclick="ClearSearch">
-                            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
-                        </button>
-                    }
-                </label>
-                <button type="button" class="button--primary" @onclick="SearchAsync" disabled="@_searching">
-                    @(_searching ? "Searching…" : "Search")
-                </button>
-            </div>
-            @if (Searching)
+            @if (!Orientation.Sideways)
             {
-                <p class="hint-line">@Hint</p>
+                <div class="search-row">
+                    <label class="search__field">
+                        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+                        <input value="@_query" @oninput="OnQueryInput" maxlength="@MaxQueryLength" placeholder="Find a book — on your shelf, or in the library" aria-label="Find a book" @onkeydown="SearchOnEnterAsync" />
+                        @if (_query.Length > 0)
+                        {
+                            <button type="button" class="search__clear" aria-label="Clear search" @onclick="ClearSearch">
+                                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
+                            </button>
+                        }
+                    </label>
+                    <button type="button" class="button--primary" @onclick="SearchAsync" disabled="@_searching">
+                        @(_searching ? "Searching…" : "Search")
+                    </button>
+                </div>
+                @if (Searching)
+                {
+                    <p class="hint-line">@Hint</p>
+                }
             }
 
-            @if (_phone && (_entries is not null || _problem is null))
+            @if (Orientation.Sideways && (_entries is not null || _problem is null))
             {
-                @if (Searching && _entries is not null)
-                {
-                    <p class="group">On your shelf <span>· @VisibleEntries.Count</span></p>
-                }
-
-                @* A phone's shelf: see ShelfDeck. Drawn while the shelf loads too, as ghosts. *@
-                <ShelfDeck Entries="@(_entries is null ? null : VisibleEntries)"
-                           Shelf="_entries"
-                           Pile="@(Searching ? "search" : _filter ?? "All")"
-                           Drum="!Searching"
-                           Filters="Filters"
-                           Filter="@_filter"
-                           OnFilter="FilterAsync"
-                           Empty="EmptyLine"
-                           OnChanged="Replace"
-                           OnRemoved="RemoveAsync"
-                           OnSignedOut="SignedOut" />
+                @*
+                    A phone on its side: the whole shelf as a cover flow (ShelfDeck), from the book
+                    or the tab last left. Drawn while the shelf loads too, as ghosts. It has no
+                    search, and a search already on is let be: the phone turned upright has it.
+                    One per reader, so the next reader's flow starts from their own shelf.
+                *@
+                <ShelfDeck @key="_shelfBelongsTo" Shelf="_entries" Start="@_filter">
+                    <Empty>Your shelf is empty. Turn your phone upright to search for your first book.</Empty>
+                </ShelfDeck>
                 @if (_entries is null)
                 {
                     <p class="visually-hidden" role="status">Loading your shelf</p>
@@ -108,7 +104,20 @@
 
                 @if (VisibleEntries.Count == 0)
                 {
-                    <p class="empty">@EmptyLine</p>
+                    <p class="empty">
+                        @if (Searching)
+                        {
+                            <text>Nothing on your shelf matches “@_query.Trim()”.</text>
+                        }
+                        else if (_filter is null)
+                        {
+                            <text>Your shelf is empty. Search below to add your first book.</text>
+                        }
+                        else
+                        {
+                            <text>Nothing here with that status.</text>
+                        }
+                    </p>
                 }
                 else
                 {
@@ -154,7 +163,17 @@
                 <div class="entries entries--pending" aria-hidden="true">
                     @for (var at = 0; at < 3; at++)
                     {
-                        <EntryGhost At="at" />
+                        <div class="entry entry--pending" style="--at:@at">
+                            <div class="entry__cover">
+                                <div class="bone bone--cover"></div>
+                            </div>
+                            <div class="entry__body">
+                                <div class="bone bone--title"></div>
+                                <div class="bone bone--authors"></div>
+                                <div class="bone bone--status"></div>
+                                <div class="bone bone--actions"></div>
+                            </div>
+                        </div>
                     }
                 </div>
                 <p class="visually-hidden" role="status">Loading your shelf</p>
@@ -841,8 +860,11 @@
             _sheet = await JS.InvokeAsync<IJSObjectReference>("import", "./js/sheet.js");
             _exit = await JS.InvokeAsync<IJSObjectReference>("import", "./js/motion.js");
 
-            _self = DotNetObjectReference.Create(this);
-            _phoneWatch = await JS.InvokeAsync<IJSObjectReference>("readingTracker.watchPhone", _self);
+            // On a phone a sideways swipe across the shelf moves between the status tabs.
+            await using var swipe = await JS.InvokeAsync<IJSObjectReference>("import", "./js/shelfSwipe.js");
+            await swipe.InvokeVoidAsync("attach");
+
+            await Orientation.WatchAsync();
         }
 
         if (_focusQuery)
@@ -904,11 +926,21 @@
     protected override void OnInitialized()
     {
         _ = Place;
+        Orientation.Changed += Turned;
+    }
 
-        // Asked before the first render, not after it: asked after, a phone would draw the list
-        // (its tabs, its ghosts, then its cards) for a beat before the deck took its place. This
-        // app runs in the browser, so the answer is there to be had at once.
-        _phone = ((IJSInProcessRuntime)JS).Invoke<bool>("readingTracker.isPhone");
+    /// <summary>
+    /// The phone has been turned. Upright again, the list opens on the shelf the cover flow was
+    /// left on, which it has remembered (ShelfMemory) as it turned.
+    /// </summary>
+    private void Turned()
+    {
+        if (!Orientation.Sideways && Memory.Remembers)
+        {
+            _filter = Memory.Tab;
+        }
+
+        StateHasChanged();
     }
 
     public async ValueTask DisposeAsync()
@@ -918,53 +950,8 @@
             await _place.DisposeAsync();
         }
 
-        if (_phoneWatch is not null)
-        {
-            try
-            {
-                await _phoneWatch.InvokeVoidAsync("stop");
-                await _phoneWatch.DisposeAsync();
-            }
-            catch (JSDisconnectedException)
-            {
-            }
-        }
-
-        _self?.Dispose();
+        Orientation.Changed -= Turned;
     }
-
-    /// <summary>
-    /// Whether the screen is a phone's, where the shelf is a deck (ShelfDeck) rather than the list:
-    /// asked before the first render, and told again whenever it changes (a phone turned on its
-    /// side, a window narrowed), so the page and the stylesheet never disagree for long.
-    /// </summary>
-    private bool _phone;
-
-    private IJSObjectReference? _phoneWatch;
-    private DotNetObjectReference<Home>? _self;
-
-    [JSInvokable]
-    public void PhoneChanged(bool phone)
-    {
-        _phone = phone;
-        StateHasChanged();
-    }
-
-    private RenderFragment EmptyLine => __builder =>
-    {
-        if (Searching)
-        {
-            <text>Nothing on your shelf matches “@_query.Trim()”.</text>
-        }
-        else if (_filter is null)
-        {
-            <text>Your shelf is empty. Search below to add your first book.</text>
-        }
-        else
-        {
-            <text>Nothing here with that status.</text>
-        }
-    };
 
     private async Task ClearSearch()
     {
