@@ -5700,6 +5700,70 @@ main:has(.stats) {
     */
 
     /*
+        The filters are a row of underlined tabs you swipe, not pills that wrap: six labels do
+        not fit across a phone at any pill size without one of them breaking in the middle. Bled
+        to the screen's edges so the last tab can hang off it and say there is more.
+
+        They swipe sideways and nothing else. overflow-x on its own makes overflow-y auto too,
+        and the tabs' underline hangs a pixel below the strip, so the strip scrolled up and down
+        by that pixel under a thumb and floated; and a swipe that reached either end carried on
+        into the page. The strip is held on the vertical and keeps its swipes to itself, and its
+        rule is drawn inside it rather than under it, so the chosen tab's underline covers the
+        rule without hanging out of the strip to do it.
+    */
+    .filters {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        overscroll-behavior-x: contain;
+        gap: 1.1rem;
+        margin-inline: -1rem;
+        padding-inline: 1rem;
+        box-shadow: inset 0 -1px 0 var(--line);
+        scrollbar-width: none;
+    }
+
+    .filters::-webkit-scrollbar {
+        display: none;
+    }
+
+    /*
+        The list under the tabs is swiped through them (js/shelfSwipe.js), and follows the
+        finger while it does. Sideways the page has nowhere to scroll, so the browser is told as
+        much: a drag that starts sideways is left to the script and is never also a scroll, which
+        is what lets the script's listeners stay passive. Up and down, and pinching, are the
+        page's as ever; the sheets the cards open scroll by themselves, so this stops at them.
+    */
+    .shelf > .entries,
+    .shelf > .empty {
+        touch-action: pan-y pinch-zoom;
+    }
+
+    .filters .chip {
+        flex: 0 0 auto;
+        padding: 0.45rem 0 0.6rem;
+        border-radius: 0;
+        border-bottom: 2px solid transparent;
+        background: none;
+        color: var(--ink-soft);
+        font-size: 0.9rem;
+        font-weight: 550;
+        white-space: nowrap;
+    }
+
+    .filters .chip:hover:not(:disabled) {
+        background: none;
+        color: var(--ink);
+    }
+
+    .filters .chip--on,
+    .filters .chip--on:hover:not(:disabled) {
+        background: none;
+        color: var(--ink);
+        border-bottom-color: var(--accent);
+    }
+
+    /*
         The card's one action takes a line of its own, full width and a size up, and the three
         quiet ones share the line beneath it, centred, with a dot between each. On a phone the
         thumb wants one big target, and the rest of the row was only ever housekeeping.
@@ -5981,15 +6045,6 @@ main:has(.stats) {
         border-radius: 0;
         background: transparent;
         cursor: default;
-    }
-
-    /*
-        Over the shelf's deck a sideways drag is left to the page's script, which turns the deck
-        with it (js/shelfDeck.js): the books the search has narrowed the shelf to are a deck to turn
-        like any other. A tap still closes the dock.
-    */
-    body:has(.deck) .search__scrim {
-        touch-action: pan-y;
     }
 
     /* The dock's own Search button (and Enter) already ask the library; a second, larger button
@@ -6439,103 +6494,95 @@ main:has(.stats) {
     }
 }
 
-/* Shelf deck -------------------------------------------------------------- */
+/* Shelf cover flow -------------------------------------------------------- */
 
 /*
-    The shelf on a phone (Components/ShelfDeck.razor): a deck, the welcome screen's cover flow with
-    the shelf's own cards in it, and the shelves on a drum under it, turned the same way. Only a
-    phone is given one, so none of this is behind the phone's media query.
+    The shelf on a phone held on its side (Components/ShelfDeck.razor): the jackets as an iPod
+    showed albums, one face-on in the middle and three turned away either side, standing on a
+    glossy floor, the front one's title under them, and the shelves on a drum at the foot. Only a
+    phone on its side is given one (readingTracker.sideways), so none of this is behind a media
+    query; the page's heading gives it the room.
 
-    Each card is in a slot, and the component gives the slot one number, --deck-off, its distance
-    from the front; everything about where it stands is worked out here from that. Registered as
-    not inherited, as is everything worked out from it: an ordinary custom property is, so a turn
-    that changed one on a slot would restyle every element in the card inside it.
+    Each jacket is in a slot, and the component gives the slot one number, --deck-off, its
+    distance from the front; everything about where it stands is worked out here from that.
+    Registered as not inherited, as is everything worked out from it, so a turn restyles the slots
+    and nothing inside them.
 */
 @property --deck-off { syntax: "*"; inherits: false; }
 @property --deck-away { syntax: "*"; inherits: false; }
 @property --deck-lean { syntax: "*"; inherits: false; }
-@property --leave-to { syntax: "*"; inherits: false; }
 
 @keyframes deal {
     from {
         opacity: 0;
-        transform: perspective(1100px) translateX(90%) translateZ(-20rem) rotateY(-64deg) scale(0.9);
+        transform: perspective(900px) translateX(160%) translateZ(-12rem) rotateY(-64deg) scale(0.9);
     }
 }
 
-@keyframes landed {
-    40% {
-        transform: scale(1.35);
-    }
+/* On its side a phone has little height and nothing to spare: the flow has the page to itself,
+   under the header, without the heading or the search (turned upright, the phone has both). */
+main:has(.shelf > .deck) {
+    padding-block: 0.5rem 0;
 }
 
-/*
-    Every slot stands in the one grid cell, so the deck is as tall as its tallest card, with no
-    measuring, and keeps that height while a card turns or leaves; the room under it is for the
-    front card's reflection.
-*/
+.shelf:has(> .deck) :is(.shelf__heading, .search-row),
+main:has(.shelf > .deck) :is(.search, .search__fab) {
+    display: none;
+}
+
+.deck {
+    /* As tall as the screen allows once the header, the title and the drum have theirs, with a
+       fifth as much again under the jackets for the floor. */
+    --jacket-h: clamp(6rem, (100dvh - 10.5rem) / 1.22, 15rem);
+
+    position: relative;
+    margin-inline: -1.25rem;
+}
+
+/* Every slot stands in the one grid cell, a jacket wide; the room under them is for the floor. */
 .deck__cards {
-    --deck-min: max(22rem, 100dvh - 22.5rem);
-
     display: grid;
-    grid-template-areas: "card";
-    justify-items: center;
-    min-height: var(--deck-min);
-    margin: 1rem -1rem 0;
-    padding-bottom: 4.5rem;
+    grid-template-areas: "jacket";
+    justify-content: center;
+    padding: 0.5rem 0 calc(var(--jacket-h) * 0.22);
+    overflow: hidden;
     touch-action: pan-y;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .deck__slot,
 .deck__cards > .empty {
-    grid-area: card;
-    width: min(19.5rem, 100% - 5rem);
+    grid-area: jacket;
 }
 
 /*
-    Where a card stands, from how far it is from the front: the first card either side steps well
+    Where a jacket stands, from how far it is from the front: the first either side steps well
     clear of the front one and each after it only a little further, all turned away at the one
-    angle, sinking back and fading. Four away and more are all the same, and not drawn.
+    angle and sinking back. Three either side are in sight; the fourth is in the page, not drawn.
 */
 .deck__slot {
     --deck-away: min(max(var(--deck-off), -1 * var(--deck-off)), 4);
     --deck-lean: clamp(-1, var(--deck-off), 1);
 
-    position: relative;
-    z-index: calc(-1 - var(--deck-away));
+    height: var(--jacket-h);
+    aspect-ratio: 2 / 3;
+    z-index: calc(10 - var(--deck-away));
     transform:
-        perspective(1100px)
-        translateX(calc(var(--deck-lean) * (44% + var(--deck-away) * 12%)))
-        translateZ(calc(var(--deck-away) * -7rem))
-        rotateY(calc(var(--deck-lean) * -60deg))
-        scale(calc(1 - var(--deck-away) * 0.05));
-    opacity: clamp(0, 1 - (var(--deck-away) - 2) * 0.6, 1);
-    /* Out of reach behind the front card: a tap there lands on the deck, and turns it. */
-    pointer-events: none;
-    /* Quicker than the welcome deck's 620ms: a deck the reader turns by hand, card after card,
-       has to keep up with the hand. */
+        perspective(900px)
+        translateX(calc(var(--deck-lean) * (72% + var(--deck-away) * 40%)))
+        translateZ(calc(var(--deck-away) * -3.5rem))
+        rotateY(calc(var(--deck-lean) * -62deg))
+        scale(calc(1 - var(--deck-away) * 0.03));
+    opacity: clamp(0, 4 - var(--deck-away), 1);
     transition:
         transform 460ms var(--ease-out),
         opacity 460ms var(--ease-out);
-    /* Dealt in when the pile arrives, the further from the front the later. */
-    animation: deal 480ms var(--ease-out) calc(var(--deck-away) * 50ms) backwards;
+    will-change: transform;
 }
 
-/*
-    The front card is not transformed and not a layer of its own, and has no reflection while
-    anything is open on it, so the sheets it opens (History, Settings, the log form) stay fixed to
-    the screen: a transformed or reflected ancestor would become their frame, under the header.
-*/
 .deck__slot.is-front {
-    z-index: auto;
     transform: none;
-    pointer-events: auto;
-}
-
-/* The cards either side of the front are each their own layer, so turning moves them rather than
-   painting them again, blurred band and all. */
-.deck__slot:not(.is-front, .is-far) {
-    will-change: transform, opacity;
 }
 
 /* Too far back to see: not drawn at all. */
@@ -6544,132 +6591,98 @@ main:has(.stats) {
     transition: none;
 }
 
-/* Once the pile is being turned, a card coming into the deck at its far end turns into sight with
-   the rest rather than being dealt in on its own. */
-.deck__cards.is-turned .deck__slot {
-    animation: none;
+/* Dealt in, the further from the front the later: the whole flow when it arrives, and the jackets
+   around a shelf the drum has turned it to. The rest turn into sight with the flow. */
+.deck__slot.is-arriving {
+    animation: deal 480ms var(--ease-out) calc(var(--deck-away) * 50ms) backwards;
 }
 
-/* The loading ghosts only fade in, a beat late: on a warm shelf the cards are back first. */
+/* The loading ghosts only fade in, a beat late: on a warm shelf the jackets are back first. */
 .deck__cards--pending .deck__slot {
     animation: fade 360ms var(--ease-out) 140ms backwards;
 }
 
-/* A card that has changed status leaves: down into its new shelf on the drum. */
-.deck__slot.is-leaving {
-    z-index: 5;
-    pointer-events: none;
-}
-
-.deck__slot.is-flying {
-    transform: var(--leave-to);
-    opacity: 0;
-    transition:
-        transform 520ms cubic-bezier(0.5, 0, 0.2, 1),
-        opacity 520ms cubic-bezier(0.6, 0, 1, 1);
-}
-
-.deck__slot.is-flying :is(.status__menu, .status__scrim) {
-    display: none;
-}
-
 /*
-    The card itself: taller than in the list, the jacket large and in the middle with the title and
-    the status under it, the way the welcome deck shows a book. Whatever height it has over its
-    content goes around the jacket. Opaque: in a deck the cards stand over one another.
+    The jacket, and its reflection in the floor. Only a jacket, so drawing it twice is cheap: not
+    the reflection the full cards had, which was a whole panel of controls drawn again.
 */
-.deck .deck__slot > .entry {
-    --band: 15rem;
-
+.deck__jacket {
+    display: block;
     width: 100%;
-    min-height: var(--deck-min);
-    box-sizing: border-box;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-        "cover"
-        "head"
-        "status"
-        "fig"
-        "track"
-        "device"
-        "acts";
-    grid-template-rows: 1fr auto auto auto auto auto auto;
-    background: var(--card);
-    animation: none;
+    height: 100%;
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--fill);
+    box-shadow: 0 10px 24px rgb(0 0 0 / 35%);
+    -webkit-box-reflect: below 3px linear-gradient(transparent 70%, rgb(255 255 255 / 22%));
+    -webkit-touch-callout: none;
+    -webkit-user-drag: none;
 }
 
-.deck .deck__slot > .entry .entry__cover {
-    justify-self: center;
-    align-self: center;
-    width: 8.5rem;
-    margin-top: 0.3rem;
-}
-
-.deck .deck__slot > .entry .entry__status {
-    justify-self: center;
-    margin-top: 0.5rem;
-}
-
-.deck .deck__slot > .entry .entry__head {
-    align-self: start;
-    margin-top: 0.75rem;
-    text-align: center;
-}
-
-/*
-    The floor, under the front card only. Not the welcome deck's flipped copy: a card is a whole
-    panel of controls, and drawing it twice would be drawing every one of them twice. And not under
-    the cards that turn: a reflection is painted again on every frame of a 3D move, which on its
-    own took the deck from the welcome screen's smooth 60 frames a second to half that. Browsers
-    without it (Firefox) get the card standing on nothing.
-*/
-.deck .deck__slot.is-front:not(.is-leaving) > .entry:not(:has(.sheet, .panel, .status__menu)) {
-    -webkit-box-reflect: below 0.4rem linear-gradient(transparent 84%, rgb(255 255 255 / 14%));
-}
-
-/* The ghosts, set out as the card is: the jacket, and the lines under it. */
-.deck .deck__slot > .entry--pending {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 1.25rem;
-}
-
-.deck .deck__slot > .entry--pending .entry__cover {
-    margin: 0;
-}
-
-.deck .deck__slot > .entry--pending .entry__body {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+.deck__jacket img {
+    display: block;
     width: 100%;
-    margin-top: 1.25rem;
+    height: 100%;
+    object-fit: cover;
+    -webkit-user-drag: none;
 }
 
-.deck .deck__slot > .entry--pending .bone--title { width: 70%; }
-.deck .deck__slot > .entry--pending .bone--authors { width: 44%; }
-.deck .deck__slot > .entry--pending .bone--status { width: 7rem; }
-.deck .deck__slot > .entry--pending .bone--actions { width: 85%; }
+.deck__placeholder {
+    display: grid;
+    place-items: center;
+    height: 100%;
+    font-size: calc(var(--jacket-h) * 0.3);
+    font-weight: 700;
+    color: var(--ink-faint);
+}
 
-/* Run out: the line saying so stands where the cards were. */
 .deck__cards > .empty {
-    align-self: start;
-    height: var(--deck-min);
-    margin: 0;
-    box-sizing: border-box;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    align-self: center;
+    margin: 0 1rem;
     animation: rise 420ms var(--ease-out) 200ms backwards;
 }
 
-/* The deck turned without a finger. Out of sight until a keyboard reaches them. */
+/* The front book's title and author, one line each. */
+.deck__caption {
+    display: grid;
+    justify-items: center;
+    gap: 0.1rem;
+    margin: 0;
+    padding: 0 3rem;
+    text-align: center;
+}
+
+.deck__caption strong,
+.deck__caption span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.deck__caption strong {
+    font-size: 1rem;
+}
+
+.deck__caption span {
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+}
+
+/* The flow turned without a finger. Out of sight until a keyboard reaches them, then either side
+   of the front jacket, level with its middle. */
 .deck__steps {
+    position: absolute;
+    top: calc(0.5rem + var(--jacket-h) / 2);
+    left: 1rem;
+    right: 1rem;
     display: flex;
-    justify-content: space-between;
+    align-items: center;
     height: 0;
+}
+
+.deck__step--on {
+    margin-left: auto;
 }
 
 .deck__step:not(:focus-visible) {
@@ -6682,34 +6695,38 @@ main:has(.stats) {
 }
 
 .deck__step:focus-visible {
-    position: relative;
-    top: -4rem;
-    z-index: 1;
+    z-index: 20;
+    flex: none;
+    padding: 0.45rem 0.8rem;
+    border-radius: 999px;
+    background: var(--card);
+    font-size: 0.85rem;
 }
 
 /*
-    The drum: the shelves in a row turned like the deck, the one chosen face-on in the middle. Each
-    shelf's place is its distance from the chosen one (--off, from the component), and how far a
-    finger on the drum has moved it (--drag, from shelfDeck.js, which takes the transition off).
+    The drum: the shelves in a row turned like the flow, the one the front book is on face-on in
+    the middle. Each shelf's place is its distance from that one (--off, from the component), and
+    how far a finger on the drum has moved it (--drag, from shelfDeck.js, which takes the
+    transition off).
 */
 .deck__drum {
     --pitch: 9.5rem;
 
     position: relative;
-    height: 3.5rem;
-    margin: -1rem -1rem 0;
+    height: 2.75rem;
+    margin-top: 0.25rem;
     perspective: 600px;
     touch-action: none;
-    -webkit-mask-image: linear-gradient(to right, transparent, #000 18%, #000 82%, transparent);
-    mask-image: linear-gradient(to right, transparent, #000 18%, #000 82%, transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 25%, #000 75%, transparent);
+    mask-image: linear-gradient(to right, transparent, #000 25%, #000 75%, transparent);
 }
 
 .deck__word,
 .deck__word:hover:not(:disabled) {
     position: absolute;
-    top: 0.25rem;
+    top: 0;
     left: 50%;
-    height: 3rem;
+    height: 2.75rem;
     padding: 0 0.6rem;
     display: flex;
     align-items: center;
@@ -6717,7 +6734,7 @@ main:has(.stats) {
     white-space: nowrap;
     border-radius: 10px;
     background: none;
-    font-size: 1.2rem;
+    font-size: 1.05rem;
     font-weight: 700;
     color: var(--ink);
 }
@@ -6740,6 +6757,11 @@ main:has(.stats) {
     transition: none;
 }
 
+/* A shelf with nothing on it: on the drum, to be counted, but not to be turned to. */
+.deck__word:disabled {
+    color: var(--ink-faint);
+}
+
 .deck__word span {
     min-width: 1.4rem;
     height: 1.4rem;
@@ -6751,8 +6773,4 @@ main:has(.stats) {
     line-height: 1.4rem;
     text-align: center;
     color: var(--ink-soft);
-}
-
-.deck__word.is-landed span {
-    animation: landed 520ms var(--ease-out);
 }

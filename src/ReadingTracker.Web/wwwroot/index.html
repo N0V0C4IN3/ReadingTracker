@@ -120,15 +120,17 @@
         window.readingTracker = {
             prefersStillness: () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
 
-            // Whether the screen is a phone's, where the shelf is a deck (Home.razor). Asked here,
-            // synchronously, so the shelf knows before it first draws; watched, so it hears when a
-            // phone is turned on its side. The stylesheet's phone width is the same 40rem.
-            isPhone: () => window.matchMedia("(max-width: 40rem)").matches,
-            watchPhone: dotnet => {
-                const phone = window.matchMedia("(max-width: 40rem)");
-                const told = e => dotnet.invokeMethodAsync("PhoneChanged", e.matches);
-                phone.addEventListener("change", told);
-                return { stop: () => phone.removeEventListener("change", told) };
+            // Whether this is a phone held on its side, where the shelf is a cover flow (Home.razor):
+            // a short landscape screen whose main pointer is a finger. A desktop window of any shape
+            // has a mouse, and a tablet on its side is too tall. Asked here, synchronously, so the
+            // shelf knows before it first draws; watched, so it hears when the phone is turned.
+            sideways: "(orientation: landscape) and (hover: none) and (pointer: coarse) and (max-height: 32rem)",
+            isSideways: () => window.matchMedia(window.readingTracker.sideways).matches,
+            watchSideways: dotnet => {
+                const query = window.matchMedia(window.readingTracker.sideways);
+                const told = e => dotnet.invokeMethodAsync("SidewaysChanged", e.matches);
+                query.addEventListener("change", told);
+                return { stop: () => query.removeEventListener("change", told) };
             },
 
             // Whether the page is dark, and the switch for it.
