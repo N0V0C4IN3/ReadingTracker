@@ -159,7 +159,7 @@
     private Panel _panel = Panel.None;
 
     /// <summary>The jacket's address as a custom property, for the band a phone draws across the card's top.</summary>
-    private string? CoverVar => Entry.Book?.CoverUrl is { } cover ? $"--cover: url('{cover}')" : null;
+    private string? CoverVar => Entry.Book?.CoverUrl is { } cover ? $"--cover: {CoverCss.Url(cover)}" : null;
 
     /// <summary>Whether a correction form is open in the history, which then shows the reasons itself.</summary>
     private bool _correcting;

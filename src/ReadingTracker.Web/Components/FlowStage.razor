@@ -39,7 +39,7 @@
                 disabled="@(!place.Lit)"
                 aria-label="@(position == At && OnOpen.HasDelegate ? $"Open {jacket.Title}" : $"Show {jacket.Title} by {jacket.Author}")"
                 @onclick="() => PickAsync(position)">
-            <span class="cover cover--@jacket.Tone">
+            <span class="cover cover--@jacket.Tone" style="@jacket.CoverStyle">
                 <span class="cover__title">@jacket.Title</span>
                 <span class="cover__rule"></span>
                 <span class="cover__author">@jacket.Author</span>
@@ -68,7 +68,7 @@
                 aria-hidden, and no text worth reading: a screen reader announcing every title
                 twice is the accessible version of a smudge on the floor.
             *@
-            <span class="cover cover--@jacket.Tone cover--mirror" aria-hidden="true">
+            <span class="cover cover--@jacket.Tone cover--mirror" style="@jacket.CoverStyle" aria-hidden="true">
                 <span class="cover__title">@jacket.Title</span>
                 <span class="cover__rule"></span>
                 <span class="cover__author">@jacket.Author</span>

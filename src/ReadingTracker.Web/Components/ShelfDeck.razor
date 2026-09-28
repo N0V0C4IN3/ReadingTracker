@@ -1,66 +1,34 @@
 @using ReadingTracker.Web.Services
-@implements IAsyncDisposable
+@implements IDisposable
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 @inject ShelfMemory Memory
 
 @*
     The shelf on a phone held on its side: the welcome screen's cover flow (FlowStage) with the
-    shelf's own jackets in it, the way an iPod showed albums. A tap on the jacket at the front opens
-    the book. Under it, the shelves on a drum, turned the same way.
+    shelf's own jackets in it, the way an iPod showed albums, as big as the screen allows: nothing
+    else is on it. A tap on the jacket at the front opens the book.
 
     The flow is the whole shelf in one run, shelf after shelf in the shelf's own order, so turning
-    past the last book on one shelf brings up the first on the next, and the drum turns with it to
-    say where it has got to. The drum is also a way there: a shelf chosen on it turns the flow to
-    that shelf's first book. The book at the front, and so its shelf, is remembered (ShelfMemory):
-    coming back from its page, or turning the phone upright, finds the shelf where it was left.
+    past the last book on one shelf brings up the first on the next. The book at the front, and so
+    its shelf, is remembered (ShelfMemory): coming back from its page finds that book again, and
+    turning the phone upright opens the list on its shelf.
 *@
 
-<div class="deck">
-    <div class="flow flow--dressed flow--shelf @(Shelf is null ? "flow--pending" : null) @(_dealing ? "flow--dealing" : null)">
-        @if (Shelf is null)
-        {
-            @* While the shelf loads: the flow's shape, in blank jackets. *@
-            <FlowStage Jackets="Ghosts" At="Ghosts.Count / 2" />
-        }
-        else if (_jackets.Count == 0)
-        {
-            <p class="empty">@Empty</p>
-        }
-        else
-        {
-            <FlowStage Jackets="_jackets" @bind-At="Front" OnOpen="Open" />
-        }
-    </div>
-
-    @*
-        Each shelf is placed by --off, its distance from the front book's. While a finger is on the
-        drum js/shelfDrum.js adds how far it has moved (--drag, on the drum) and takes the
-        transition off; let go, the drum runs on and comes to rest on a shelf (TurnTo). A shelf with
-        nothing on it cannot be chosen, and the drum goes on past it.
-    *@
-    <div class="deck__drum" role="group" aria-label="Go to a reading status" @ref="_drum">
-        @{ var on = ShelfOrder.Rank(Showing); }
-        @foreach (var (status, at) in ShelfOrder.Statuses.Select((status, at) => (status, at)))
-        {
-            var count = Shelf?.Count(entry => entry.Status == status);
-            <button type="button"
-                    class="deck__word @($"deck__word--{status.ToLowerInvariant()}") @(at == on ? "is-on" : null)"
-                    style="--off:@(at - on)"
-                    data-status="@status"
-                    aria-pressed="@(at == on)"
-                    disabled="@(count == 0)"
-                    @onclick="() => TurnTo(status)">
-                <i class="status__dot" aria-hidden="true"></i>
-                @ReadingStatuses.Label(status)
-                @* Without a count while the shelf loads: it is not known yet. *@
-                @if (count is { } known)
-                {
-                    <span>@known</span>
-                }
-            </button>
-        }
-    </div>
+<div class="flow flow--dressed flow--shelf @(Shelf is null ? "flow--pending" : null) @(_dealing ? "flow--dealing" : null)">
+    @if (Shelf is null)
+    {
+        @* While the shelf loads: the flow's shape, in blank jackets. *@
+        <FlowStage Jackets="Ghosts" At="Ghosts.Count / 2" />
+    }
+    else if (_jackets.Count == 0)
+    {
+        <p class="empty">@Empty</p>
+    }
+    else
+    {
+        <FlowStage Jackets="_jackets" @bind-At="Front" OnOpen="Open" />
+    }
 </div>
 
 @code {
@@ -78,10 +46,6 @@
 
     private static readonly IReadOnlyList<FlowJacket> Ghosts =
         [.. Enumerable.Range(0, 7).Select(at => new FlowJacket($"ghost-{at}", "", "", null, at % FlowJacket.Tones))];
-
-    private ElementReference _drum;
-    private IJSObjectReference? _gestures;
-    private DotNetObjectReference<ShelfDeck>? _self;
 
     /// <summary>The shelf the jackets were made from, so they are made again only when it changes.</summary>
     private IReadOnlyList<LibraryEntry>? _made;
@@ -122,9 +86,6 @@
         }
     }
 
-    /// <summary>The shelf the front book is on: what the drum shows.</summary>
-    private string Showing => _ordered.Count > 0 ? _ordered[_front].Status : Start ?? ShelfOrder.Statuses[0];
-
     protected override void OnParametersSet()
     {
         if (Shelf is not { } shelf || ReferenceEquals(shelf, _made))
@@ -143,7 +104,9 @@
             entry.Book?.Title ?? "A book",
             entry.Book is { Authors.Count: > 0 } book ? string.Join(", ", book.Authors) : "",
             entry.Book?.CoverUrl,
-            (int)((uint)entry.Id.GetHashCode() % FlowJacket.Tones)))];
+            (int)((uint)entry.Id.GetHashCode() % FlowJacket.Tones),
+            // The photograph again, for the stylesheet: each book's edge is coloured from it.
+            entry.Book?.CoverUrl is { } cover ? $"--art:{CoverCss.Url(cover)}" : null))];
 
         if (!had)
         {
@@ -179,17 +142,6 @@
         }
     }
 
-    /// <summary>Turns the flow to the first book on a shelf: the drum, tapped or come to rest.</summary>
-    [JSInvokable]
-    public void TurnTo(string status)
-    {
-        if (FirstOn(status) is var to && to >= 0 && to != _front)
-        {
-            Front = to;
-            StateHasChanged();
-        }
-    }
-
     /// <summary>Opens the book at the front, its jacket growing into the book page's cover.</summary>
     private async Task Open(int position) =>
         await JS.InvokeVoidAsync("readingTracker.openBook", Navigation.ToAbsoluteUri($"shelf/{_ordered[position].Id}").ToString());
@@ -211,33 +163,6 @@
         return -1;
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            _self = DotNetObjectReference.Create(this);
-            await using var js = await JS.InvokeAsync<IJSObjectReference>("import", "./js/shelfDrum.js");
-            _gestures = await js.InvokeAsync<IJSObjectReference>("attach", _drum, _self);
-        }
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        // A deal still under way has nothing left to finish.
-        _deals++;
-
-        try
-        {
-            if (_gestures is not null)
-            {
-                await _gestures.InvokeVoidAsync("detach");
-                await _gestures.DisposeAsync();
-            }
-        }
-        catch (JSDisconnectedException)
-        {
-        }
-
-        _self?.Dispose();
-    }
+    // A deal still under way has nothing left to finish.
+    public void Dispose() => _deals++;
 }
