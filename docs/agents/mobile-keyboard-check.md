@@ -15,22 +15,12 @@ On Android the keyboard shortens the window (`interactive-widget=resizes-content
 3. **Still turns on its side.** At 844×390 with touch and landscape, the shelf is the cover flow; back at 390×844 it is the list again.
 4. **Every other text field the change touches**, the same way: open it, shrink the window, and confirm the field, its sheet and focus survive.
 
+## What it cannot show
+
 An emulated window cannot raise a real keyboard, so this catches the layout and focus half of the bug and not a `focus()` a phone refuses. Say so in the review when the change moves focus code (`armOpener`, `FocusAsync`, `focusOpener`), and ask for it to be tried on a phone.
+
+A browser with no `screen.orientation` falls back to the window's shape, which is the old bug. To see that path, pass `Object.defineProperty(window.screen, 'orientation', { value: undefined, configurable: true })` in the `initScript` and repeat step 2: the cover flow comes back. It is only old iOS, which does not shrink the window for the keyboard anyway.
 
 ## Running it
 
-Chrome DevTools (`emulate` with `<w>x<h>x3,mobile,touch[,landscape]`, then `evaluate_script`). Local dev sign-in may be off in `appsettings.Development.json`; do not edit the file to test. Pass this as `initScript` on the navigation instead, and it signs in as the dev reader for that page only:
-
-```js
-const of = window.fetch.bind(window);
-window.fetch = async (input, init) => {
-  const url = typeof input === 'string' ? input : (input.url || String(input));
-  const r = await of(input, init);
-  if (!url.includes('appsettings.Development.json')) return r;
-  const t = await r.text();
-  return new Response(t.replace(/"Enabled"\s*:\s*false/, '"Enabled": true'),
-    { status: 200, headers: { 'content-type': 'application/json' } });
-};
-```
-
-`http://localhost:5200` is the local stack (`docker compose --profile services up --build -d`).
+The launch, the phone emulation and the sign-in script are in `.claude/skills/verify/SKILL.md`, under Handle.

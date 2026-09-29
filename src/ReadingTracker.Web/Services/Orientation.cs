@@ -3,9 +3,12 @@ using Microsoft.JSInterop;
 namespace ReadingTracker.Web.Services;
 
 /// <summary>
-/// Whether this is a phone held on its side: a short landscape screen whose main pointer is a
-/// finger (readingTracker.sideways in index.html). A desktop window of any shape has a mouse, and
-/// a tablet on its side is too tall. The shelf is a cover flow then, and the list otherwise.
+/// Whether this is a phone held on its side: a short landscape window whose main pointer is a
+/// finger, on a device that is itself on its side (readingTracker.isSideways in index.html). The
+/// device is asked as well as the window because a keyboard shortens the window: a portrait phone
+/// with the keyboard up looks like a short landscape one. A desktop window of any shape has a
+/// mouse, and a tablet on its side is too tall. The shelf is a cover flow then, and the list
+/// otherwise.
 ///
 /// Known from the start, because the browser is asked synchronously when this is made, so a page
 /// can draw the right thing the first time; and kept up to date once watched, as the phone turns.

@@ -10,7 +10,7 @@ Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/do
 
 ### Reviewing a change to a phone text field
 
-Any change that touches a text field on a phone, or what decides a phone's screen (search, sheets, orientation), is checked in the browser for the keyboard before it is called reviewed or verified (`/review`, `/verify`): it opens with the cursor in the box, and it stays up when the window shrinks for it. Read `docs/agents/mobile-keyboard-check.md` and run it; `.claude/skills/verify` (`/verify`) has the handle for driving the app.
+A change that touches a text field on a phone, or what decides a phone's screen (search, sheets, orientation), is checked for the keyboard in the browser before it is called reviewed or verified. Read `docs/agents/mobile-keyboard-check.md`; `/verify` has the handle for driving the app.
 
 ### Pop-ups, menus and sheets
 
