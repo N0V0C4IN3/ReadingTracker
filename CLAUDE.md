@@ -8,6 +8,10 @@ Issues live in GitHub Issues on this repo, via the `gh` CLI. See `docs/agents/is
 
 Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
+### Reviewing a change to a phone text field
+
+A change that touches a text field on a phone, or what decides a phone's screen (search, sheets, orientation), is checked for the keyboard in the browser before it is called reviewed or verified. Read `docs/agents/mobile-keyboard-check.md`; `/verify` has the handle for driving the app.
+
 ### Pop-ups, menus and sheets
 
 Anything that opens over the page matches the existing ones: frosted glass, the shared scrim and layers, a draggable sheet from the foot on a phone, the same arrive/leave animations, fonts and status colours. Read `docs/agents/ui-overlays.md` before adding or changing one.

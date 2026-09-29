@@ -6555,7 +6555,7 @@ main:has(.stats) {
     The shelf on a phone held on its side (Components/ShelfDeck.razor): the welcome screen's cover
     flow (FlowStage, and the .flow rules above) with the shelf's jackets in it and nothing else on
     the screen, so the jackets can be as big as its little height allows. Only a phone on its side
-    is given one (readingTracker.sideways), so none of this is behind a media query.
+    is given one (readingTracker.isSideways), so none of this is behind a media query.
 */
 
 /* The screen to itself. The header and the heading are not drawn at all (MainLayout, Home); the
