@@ -125,14 +125,42 @@
             // has a mouse, and a tablet on its side is too tall. Asked here, synchronously, so the
             // shelf knows before it first draws; watched, so it hears when the phone is turned.
             sideways: "(orientation: landscape) and (hover: none) and (pointer: coarse) and (max-height: 32rem)",
-            isSideways: () => window.matchMedia(window.readingTracker.sideways).matches,
+
+            // Whether the phone itself is on its side, as the device says, and not the window. The
+            // query above is about the window, and the window is not the phone: on Android the
+            // keyboard shortens it (interactive-widget, above), and a portrait phone with the
+            // keyboard up is a short, wide window — landscape, and under 32rem. Judged by that
+            // alone, tapping the search box turned the shelf into the cover flow, took the search
+            // away, and the keyboard went with it. Where the browser cannot say (no
+            // screen.orientation) this is true and the query decides, as it did before.
+            deviceIsSideways: () => window.screen.orientation?.type?.startsWith("landscape") ?? true,
+
+            isSideways: () =>
+                window.readingTracker.deviceIsSideways() && window.matchMedia(window.readingTracker.sideways).matches,
             watchSideways: dotnet => {
                 const query = window.matchMedia(window.readingTracker.sideways);
-                // Told inside a view transition, and synchronously, so the page it re-draws is the
-                // transition's new picture: the list and the flow cross-fade rather than swap.
-                const told = e => window.readingTracker.transition(() => dotnet.invokeMethod("Turned", e.matches));
-                query.addEventListener("change", told);
-                return { stop: () => query.removeEventListener("change", told) };
+                let sideways = window.readingTracker.isSideways();
+                // Only told when the answer changed: the window changes size for a keyboard, a
+                // toolbar and a scroll, and none of those is the phone turning. Told inside a view
+                // transition, and synchronously, so the page it re-draws is the transition's new
+                // picture: the list and the flow cross-fade rather than swap.
+                const check = () => {
+                    const now = window.readingTracker.isSideways();
+                    if (now !== sideways) {
+                        sideways = now;
+                        window.readingTracker.transition(() => dotnet.invokeMethod("Turned", now));
+                    }
+                };
+                // Both, because turning the phone changes the window and the device in an order the
+                // browsers do not agree on: whichever is heard last finds the answer settled.
+                query.addEventListener("change", check);
+                window.screen.orientation?.addEventListener("change", check);
+                return {
+                    stop: () => {
+                        query.removeEventListener("change", check);
+                        window.screen.orientation?.removeEventListener("change", check);
+                    },
+                };
             },
 
             // Runs an update inside a view transition where the browser has them and the reader
