@@ -18,7 +18,7 @@
     jacket desaturated, the accent turned to grey — so on a shelf of everything the books actually
     in hand are the ones in colour.
 *@
-<article class="entry @(Working ? "entry--working" : null) @(Parked ? "entry--parked" : null) @(Finished ? "entry--finished" : null)" style="--at:@At; @CoverVar">
+<article class="entry @(Working ? "entry--working" : null) @(Parked ? "entry--parked" : null) @(Finished ? "entry--finished" : null) @(Unstarted ? "entry--unstarted" : null)" style="--at:@At; @CoverVar">
     @* The cover and the title are the way to the book's own page; the rest of the card stays
        what it was, controls and all, so the link never gets in the way of a tap on them. *@
     <a class="entry__cover" href="@PageHref" tabindex="-1" aria-hidden="true">
@@ -40,7 +40,9 @@
         the third, and everything after that full width. The figure is the card's headline
         number and sits where a headline goes, not down among the controls — see
         ProgressBar.razor — and the status stands level with the title, out of the row of
-        actions, which the stylesheet places rather than the markup.
+        actions, which the stylesheet places rather than the markup. A wanted book that has not
+        been begun has no figure or bar: a line of what is known of it sits under its authors
+        instead, and its one action is Start reading.
     *@
     <div class="entry__body">
         <div class="entry__head">
@@ -50,21 +52,35 @@
             {
                 <p class="entry__authors">@string.Join(", ", book.Authors)</p>
             }
+
+            @if (Unstarted)
+            {
+                @* What a book not yet begun can say for itself, in the place the figure would
+                   be. Under the authors rather than a row of its own, so on a phone it sits
+                   beside the cover with them. *@
+                <p class="entry__meta">@Meta</p>
+            }
         </div>
 
-        <ProgressBar Progress="Entry.Progress"
-                     TrackingMethod="@Entry.TrackingMethod"
-                     EffectivePageCount="Entry.EffectivePageCount"
-                     Bookmark="Entry.Bookmark"
-                     Finished="Finished"
-                     FinishedOn="Entry.FinishedOn" />
+        @if (!Unstarted)
+        {
+            <ProgressBar Progress="Entry.Progress"
+                         TrackingMethod="@Entry.TrackingMethod"
+                         EffectivePageCount="Entry.EffectivePageCount"
+                         Bookmark="Entry.Bookmark"
+                         Finished="Finished"
+                         FinishedOn="Entry.FinishedOn" />
+        }
 
         <StatusSelect Entry="Entry" Disabled="Working" OnPick="ChangeStatusAsync" />
 
         <div class="entry__actions">
             @if (Logging)
             {
-                <LogButton Open="_panel == Panel.Log" Disabled="Working" OnClick="() => Toggle(Panel.Log)" />
+                <LogButton Open="_panel == Panel.Log"
+                           Starting="Wanted"
+                           Disabled="Working"
+                           OnClick="() => Toggle(Panel.Log)" />
             }
             <button type="button" class="link-button" @onclick="ToggleHistoryAsync" disabled="@Working">
                 History
@@ -169,7 +185,28 @@
 
     protected override bool HistoryShowing => _panel == Panel.History;
 
-    private string Initial => (Entry.Book?.Title ?? "?").Trim() is { Length: > 0 } title
+    /// <summary>
+    /// Wanted and not begun: nothing logged and no device has said where the reader is. It has
+    /// no progress to show — a bar of nothing and a dash beside it would only say so — so the
+    /// card leaves the figure out. A wanted book that does have reading (put back on the wish
+    /// list after some) keeps it, since that is a fact about the reader they would lose.
+    /// </summary>
+    private bool Unstarted => Wanted && Entry.Progress is null && Entry.Bookmark is null;
+
+    private bool Wanted => Entry.Status == "WantToRead";
+
+    /// <summary>The length, where anyone knows it, and when it went on the shelf: "387 pages · added 3 weeks ago".</summary>
+    private string Meta
+    {
+        get
+        {
+            var added = $"added {Figures.Ago(Entry.AddedAt, DateTimeOffset.UtcNow)}";
+
+            return Entry.EffectivePageCount is { } pages ? $"{Figures.Pages(pages)} · {added}" : char.ToUpperInvariant(added[0]) + added[1..];
+        }
+    }
+
+    private string Initial =>(Entry.Book?.Title ?? "?").Trim() is { Length: > 0 } title
         ? title[..1].ToUpperInvariant()
         : "?";
 

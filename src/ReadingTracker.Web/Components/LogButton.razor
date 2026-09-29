@@ -7,6 +7,11 @@
     {
         <text>Cancel</text>
     }
+    else if (Starting)
+    {
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 2.7h3.8a2.5 2.5 0 0 1 2.7 2.5v8.2a2 2 0 0 0-2-1.9H1.5zM14.5 2.7h-3.8A2.5 2.5 0 0 0 8 5.2v8.2a2 2 0 0 1 2-1.9h4.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" /></svg>
+        <text>Start reading</text>
+    }
     else
     {
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.4 1.6l3 3L5.2 13.8 1.5 14.5l.7-3.7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" /></svg>
@@ -15,6 +20,13 @@
 </button>
 
 @code {
+    /// <summary>
+    /// The book has not been begun, so the first log is not "logging reading" but starting it —
+    /// which is what it does: Library moves a wanted book to Reading on its first session.
+    /// </summary>
+    [Parameter]
+    public bool Starting { get; set; }
+
     /// <summary>Whether the form it opens is open, in which case this closes it.</summary>
     [Parameter]
     public bool Open { get; set; }

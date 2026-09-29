@@ -14,7 +14,8 @@
     search's field and cards, with the results scrolling inside it, so a long list never pushes
     the page (or the sheet) past the screen. On a phone that view is the shelf search's own kind
     of sheet: the field at its foot, and a grip that drags it between a peek, a half and nearly
-    full (js/sheet.js).
+    full (js/sheet.js). A result opens in the main search's own sheet (BookPreview) to look at
+    before switching to it.
 *@
 
 <button type="button" class="sheet__scrim" tabindex="-1" aria-hidden="true" @onclick="OnClose"></button>
@@ -132,22 +133,26 @@
                         @foreach (var (found, at) in _found.Select((found, at) => (found, at)))
                         {
                             <div class="lib-card @(found.Id == Entry.BookId ? "lib-card--mine" : null)" @key="found.Id" style="--at:@(at - _firstNew)">
-                                @if (found.CoverUrl is { } jacket)
-                                {
-                                    <img src="@jacket" alt="" loading="lazy" />
-                                }
-                                else
-                                {
-                                    <div class="result__cover-placeholder" aria-hidden="true"></div>
-                                }
-                                <div class="lib-card__body">
-                                    <strong>@found.Title</strong>
-                                    @if (found.Authors.Count > 0)
+                                @* The jacket and the words open the edition in a sheet, as a result in the
+                                   main search does; Use this stays on the card for the reader who knows. *@
+                                <button type="button" class="lib-card__open" @onclick="() => OpenPreview(found)">
+                                    @if (found.CoverUrl is { } jacket)
                                     {
-                                        <span>@string.Join(", ", found.Authors)</span>
+                                        <img src="@jacket" alt="" loading="lazy" />
                                     }
-                                    <span class="lib-card__pages">@(found.TotalPages is { } length and > 0 ? $"{length} pages" : "length unknown")</span>
-                                </div>
+                                    else
+                                    {
+                                        <span class="result__cover-placeholder" aria-hidden="true"></span>
+                                    }
+                                    <span class="lib-card__body">
+                                        <strong>@found.Title</strong>
+                                        @if (found.Authors.Count > 0)
+                                        {
+                                            <span>@string.Join(", ", found.Authors)</span>
+                                        }
+                                        <span class="lib-card__pages">@(found.TotalPages is { } length and > 0 ? $"{length} pages" : "length unknown")</span>
+                                    </span>
+                                </button>
                                 @if (found.Id == Entry.BookId)
                                 {
                                     <span class="onshelf">This one</span>
@@ -179,6 +184,19 @@
         </div>
     }
 </div>
+
+@* Beside the panel, not in it: on a phone the panel is a sheet that moves and is glass, and a
+   fixed sheet inside either would be placed against it rather than the screen. *@
+@if (_previewing is { } previewing)
+{
+    <BookPreview @key="previewing.Id"
+                 Book="previewing"
+                 Over
+                 Current="previewing.Id == Entry.BookId"
+                 Using="_using"
+                 OnUse="() => UsePreviewedAsync(previewing)"
+                 OnClose="ClosePreview" />
+}
 
 @code {
     [Parameter, EditorRequired]
@@ -285,8 +303,39 @@
         }
     }
 
+    /// <summary>The edition open in its sheet, if one is.</summary>
+    private BookSearchResult? _previewing;
+
+    /// <summary>Whether the switch to the previewed edition is being made.</summary>
+    private bool _using;
+
+    private void OpenPreview(BookSearchResult book) => _previewing = book;
+
+    private void ClosePreview() => _previewing = null;
+
+    /// <summary>
+    /// The sheet's button: the same change as Use this on the card. The sheet closes either way —
+    /// on success the search goes with it, and on a refusal the reason is said on the card, which
+    /// the sheet would be covering.
+    /// </summary>
+    private async Task UsePreviewedAsync(BookSearchResult book)
+    {
+        _using = true;
+
+        try
+        {
+            await UseEditionAsync(book);
+        }
+        finally
+        {
+            _using = false;
+            _previewing = null;
+        }
+    }
+
     private void CloseEditionSearch()
     {
+        _previewing = null;
         _editionOpen = false;
         _editions = null;
         _found.Clear();

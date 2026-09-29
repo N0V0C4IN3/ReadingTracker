@@ -24,6 +24,27 @@ public static class Figures
 
     public static string Days(int days) => days == 1 ? "1 day" : $"{days} days";
 
+    /// <summary>
+    /// How long ago, in the coarse terms a shelf needs — "today", "yesterday", "5 days ago",
+    /// "3 weeks ago", "2 months ago", "1 year ago". Whole elapsed days rather than calendar
+    /// days, and never negative: a browser clock a little behind the server's says "today", not
+    /// "in 2 days".
+    /// </summary>
+    public static string Ago(DateTimeOffset since, DateTimeOffset now)
+    {
+        var days = Math.Max(0, (int)(now - since).TotalDays);
+
+        return days switch
+        {
+            0 => "today",
+            1 => "yesterday",
+            < 14 => $"{days} days ago",
+            < 60 => $"{days / 7} weeks ago",
+            < 365 => $"{days / 30} months ago",
+            _ => days / 365 == 1 ? "1 year ago" : $"{days / 365} years ago",
+        };
+    }
+
     /// <summary>"45 min", "2 h", "1 h 20 min".</summary>
     public static string Duration(int minutes) =>
         minutes < 60 ? $"{minutes} min" : minutes % 60 == 0 ? $"{minutes / 60} h" : $"{minutes / 60} h {minutes % 60} min";

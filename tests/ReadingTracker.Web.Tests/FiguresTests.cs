@@ -32,4 +32,31 @@ public class FiguresTests
     {
         Assert.Equal(said, Figures.Duration(minutes));
     }
+
+    [Theory]
+    [InlineData(0, "today")]
+    [InlineData(1, "yesterday")]
+    [InlineData(5, "5 days ago")]
+    [InlineData(13, "13 days ago")]
+    [InlineData(14, "2 weeks ago")]
+    [InlineData(21, "3 weeks ago")]
+    [InlineData(59, "8 weeks ago")]
+    [InlineData(60, "2 months ago")]
+    [InlineData(364, "12 months ago")]
+    [InlineData(365, "1 year ago")]
+    [InlineData(800, "2 years ago")]
+    public void Writes_how_long_ago(int days, string said)
+    {
+        var now = new DateTimeOffset(2026, 9, 29, 12, 0, 0, TimeSpan.Zero);
+
+        Assert.Equal(said, Figures.Ago(now.AddDays(-days), now));
+    }
+
+    [Fact]
+    public void Never_writes_a_time_in_the_future()
+    {
+        var now = new DateTimeOffset(2026, 9, 29, 12, 0, 0, TimeSpan.Zero);
+
+        Assert.Equal("today", Figures.Ago(now.AddDays(2), now));
+    }
 }

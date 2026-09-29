@@ -18,10 +18,13 @@
     Instead of logging, the foot adds the book, as whichever status the reader picks; the adding
     itself is the shelf's (OnAdd), which knows what to reload. One sheet is one result: the
     shelf keys it by the book, so another result is another sheet.
+
+    Settings' edition search opens the same sheet on its results (OnUse): the book is already
+    the reader's, so the foot offers to switch to this edition rather than to add it.
 *@
 
-<button type="button" class="preview__scrim" tabindex="-1" aria-hidden="true" @onclick="OnClose"></button>
-<aside class="preview" role="dialog" aria-modal="true" aria-labelledby="@($"preview-{Book.Id:N}")" @onkeydown="CloseOnEscape" @ref="_sheetEl">
+<button type="button" class="preview__scrim @(Over ? "preview__scrim--over" : null)" tabindex="-1" aria-hidden="true" @onclick="OnClose"></button>
+<aside class="preview @(Over ? "preview--over" : null)" role="dialog" aria-modal="true" aria-labelledby="@($"preview-{Book.Id:N}")" @onkeydown="CloseOnEscape" @ref="_sheetEl">
     <button type="button" class="search__grip" aria-label="Resize the book's details"></button>
     <div class="preview__bar">
         <button type="button" class="preview__close" aria-label="Close" @ref="_close" @onclick="OnClose">
@@ -63,24 +66,44 @@
     </div>
 
     <div class="preview__foot">
-        <AddProblemNotice Problem="Problem" />
+        @if (OnUse.HasDelegate)
+        {
+            @* Finding another edition of a book already on the shelf: nothing is added, so no
+               status to pick, only the switch — and what it does and does not carry. *@
+            <p class="hint preview__note">Only the page count follows the new edition. Your status, sessions and device link stay.</p>
 
-        @* Each status with the dot the shelf card's status list gives it (the .status colours). *@
-        <div class="status preview__statuses" role="group" aria-label="Add it as">
-            @foreach (var status in ReadingStatuses.AddableAs)
+            @if (Current)
             {
-                <button type="button"
-                        class="preview__status preview__status--@status.ToLowerInvariant()"
-                        aria-pressed="@(_status == status ? "true" : "false")"
-                        @onclick="() => _status = status">
-                    <i class="status__dot" aria-hidden="true"></i>
-                    @ReadingStatuses.Label(status)
+                <p class="onshelf preview__current">This is your edition</p>
+            }
+            else
+            {
+                <button type="button" class="button--primary button--large preview__add" disabled="@Using" @onclick="OnUse">
+                    @(Using ? "Switching…" : "Use this edition")
                 </button>
             }
-        </div>
-        <button type="button" class="button--primary button--large preview__add" disabled="@Adding" @onclick="() => OnAdd.InvokeAsync(_status)">
-            @(Adding ? "Adding…" : "Add to shelf")
-        </button>
+        }
+        else
+        {
+            <AddProblemNotice Problem="Problem" />
+
+            @* Each status with the dot the shelf card's status list gives it (the .status colours). *@
+            <div class="status preview__statuses" role="group" aria-label="Add it as">
+                @foreach (var status in ReadingStatuses.AddableAs)
+                {
+                    <button type="button"
+                            class="preview__status preview__status--@status.ToLowerInvariant()"
+                            aria-pressed="@(_status == status ? "true" : "false")"
+                            @onclick="() => _status = status">
+                        <i class="status__dot" aria-hidden="true"></i>
+                        @ReadingStatuses.Label(status)
+                    </button>
+                }
+            </div>
+            <button type="button" class="button--primary button--large preview__add" disabled="@Adding" @onclick="() => OnAdd.InvokeAsync(_status)">
+                @(Adding ? "Adding…" : "Add to shelf")
+            </button>
+        }
     </div>
 </aside>
 
@@ -102,6 +125,29 @@
 
     [Parameter]
     public EventCallback OnClose { get; set; }
+
+    /// <summary>
+    /// Set when the sheet is opened from a book's own Settings, to pick another edition of it
+    /// rather than to add a new book: the foot then offers this switch instead of the statuses
+    /// and Add to shelf.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnUse { get; set; }
+
+    /// <summary>Whether the switch is being made right now.</summary>
+    [Parameter]
+    public bool Using { get; set; }
+
+    /// <summary>The book shown is the edition the reader already has, so there is nothing to switch to.</summary>
+    [Parameter]
+    public bool Current { get; set; }
+
+    /// <summary>
+    /// Opened over another sheet (Settings, on a phone) rather than over the page: one layer up,
+    /// so its scrim dims that sheet too and it is not left showing through.
+    /// </summary>
+    [Parameter]
+    public bool Over { get; set; }
 
     private string _status = ReadingStatuses.OnAdding;
 

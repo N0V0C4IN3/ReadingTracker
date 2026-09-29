@@ -1709,37 +1709,44 @@ button.danger:hover:not(:disabled) {
     height: 0.34em;
     border-radius: 0.08em;
     background: var(--accent);
-    animation: stack 1.6s infinite;
+    animation: stack 2s infinite;
 }
 
 /*
-    The stagger is 0.1s, not 0.18s, and the cycle is 1.6s, not 2.4s. This is drawn over waits that
-    are frequently shorter than it: a book's details arrive in a few hundred milliseconds, and at
-    the old timings the last book had not landed until 1.3s, so what a reader actually saw was two
-    or three books arriving and the whole thing vanishing mid-fall. A wait that is never seen
-    finishing reads as a stutter rather than as an animation. The whole pile is now down by 0.78s.
+    The cycle is the page turn's own, 2s, so the two waits keep the same pace whichever one a
+    visit draws. It was 1.6s, which read as hurried next to it: the books came down in a rush
+    and were gone again. The stagger is 0.12s, in proportion. It is still drawn over waits that
+    are frequently short — a book's details arrive in a few hundred milliseconds — so the pile
+    is down by 0.96s rather than the 0.78s it was, but the first book is landing at 0.6s, which
+    is soon enough that a short wait still shows books arriving and not only falling.
 */
 .splash__stack-book:nth-child(1) { width: 2.4em; left: -0.26em; animation-delay: 0s; }
-.splash__stack-book:nth-child(2) { width: 2.0em; left:  0.32em; animation-delay: 0.1s; }
-.splash__stack-book:nth-child(3) { width: 2.6em; left: -0.34em; animation-delay: 0.2s; }
-.splash__stack-book:nth-child(4) { width: 1.8em; left:  0.22em; animation-delay: 0.3s; }
-.splash__stack-book:nth-child(5) { width: 2.2em; left: -0.3em;  animation-delay: 0.4s; }
+.splash__stack-book:nth-child(2) { width: 2.0em; left:  0.32em; animation-delay: 0.12s; }
+.splash__stack-book:nth-child(3) { width: 2.6em; left: -0.34em; animation-delay: 0.24s; }
+.splash__stack-book:nth-child(4) { width: 1.8em; left:  0.22em; animation-delay: 0.36s; }
+.splash__stack-book:nth-child(5) { width: 2.2em; left: -0.3em;  animation-delay: 0.48s; }
 
 /*
     Straight down, from two and a half book-heights of clear air, on a curve that accelerates: a
     thing that slows as it nears the ground is being lowered onto it, not dropped. No sideways
     drift either — each book falls plumb onto its own spot, which is what makes the off-centre
     landings read as a pile rather than as a slide-in.
+
+    Smoother than it was in two ways. The fall starts more gently and gathers less speed, so the
+    book meets the pile at a pace the eye can follow instead of arriving at a snap; and the
+    settle is a shallower, longer rise and return, each leg on a curve that eases at both ends,
+    so the book comes to rest rather than bounces. A hold, then a slow fade, so nothing pops.
 */
 @keyframes stack {
     0%        { opacity: 0; transform: translateY(-2.6em);
-                animation-timing-function: cubic-bezier(0.4, 0, 0.85, 0.4); }
-    24%       { opacity: 1; transform: translateY(0);
+                animation-timing-function: cubic-bezier(0.4, 0, 0.8, 0.5); }
+    30%       { opacity: 1; transform: translateY(0);
                 animation-timing-function: var(--ease-out); }
-    29%       { transform: translateY(-0.1em); }
-    35%       { transform: translateY(0); }
-    76%       { opacity: 1; transform: translateY(0); }
-    88%, 100% { opacity: 0; transform: translateY(0.3em); }
+    38%       { transform: translateY(-0.07em);
+                animation-timing-function: var(--ease); }
+    48%       { transform: translateY(0); }
+    78%       { opacity: 1; transform: translateY(0); }
+    90%, 100% { opacity: 0; transform: translateY(0.3em); }
 }
 
 /*
@@ -2604,6 +2611,23 @@ button.danger:hover:not(:disabled) {
     font-size: 0.9rem;
 }
 
+/*
+    A book wanted and not begun has no figure or bar — see ShelfEntry.razor — so what is known of
+    it takes their place under the authors: its length and when it was added, in the ink the
+    authors are in, a size down. The cover strip is no longer held up by a progress block, so it
+    comes down with the card.
+*/
+.entry__meta {
+    margin: 0.4rem 0 0;
+    color: var(--ink-soft);
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.entry--unstarted .entry__cover {
+    min-height: 9.5rem;
+}
+
 /* Top right of the card, level with the title: where a book stands is the one control worth
    reading before the reading itself, and up here it is out of the row of actions. */
 .entry__status {
@@ -3017,15 +3041,12 @@ button.danger:hover:not(:disabled) {
     color: var(--ink-soft);
 }
 
-/* When a finished book was finished: a date after the label, quieter still, a size down. */
+/* When a finished book was finished: the caption at the far end of the figure's line, in the
+   voice of the caption a book in progress has there. */
 .progress__when {
-    font-size: 0.78rem;
+    font-size: 0.85rem;
     font-variant-numeric: tabular-nums;
-    color: var(--ink-faint);
-}
-
-.progress__when::before {
-    content: "· ";
+    color: var(--ink-soft);
 }
 
 /* Full width, under the title and the figure both. Named explicitly: the wrapper is display:
@@ -3787,6 +3808,27 @@ html:has(.preview:not(.is-leaving)) {
 
 .preview__scrim {
     touch-action: none;
+}
+
+/* Opened over Settings' edition search, itself a sheet on a phone (22, its scrim 21): one layer
+   up, so this scrim dims that sheet and this sheet sits over it. */
+.preview__scrim--over,
+.preview__scrim--over:hover:not(:disabled) {
+    z-index: 23;
+}
+
+.preview--over {
+    z-index: 24;
+}
+
+.preview__note {
+    margin: 0;
+    text-align: center;
+}
+
+.preview__current {
+    margin: 0;
+    text-align: center;
 }
 
 body:has(.preview) .search__fab {

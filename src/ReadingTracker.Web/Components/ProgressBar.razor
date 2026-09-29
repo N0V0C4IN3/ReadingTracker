@@ -20,8 +20,9 @@
 
     A Finished book is past all of this: the status is the fact, whatever the sessions add up
     to, so the figure says Read and the bar is full, and where a device last was is not worth a
-    line. What is worth one is when — the shelf sorts the finished by it. The sessions are
-    still there in History.
+    line. What is worth one is when — the shelf sorts the finished by it — at the far end of the
+    figure's line, where the caption goes on a book in progress. How long the book is is not:
+    the reader knows they read all of it. The sessions are still there in History.
 *@
 
 <div class="progress">
@@ -29,7 +30,6 @@
     {
         <div class="progress__figure">
             <strong>Read</strong>
-            <span>@(EffectivePageCount is { } total ? $"all {total} pages" : "cover to cover")</span>
             @if (FinishedOn is { } day)
             {
                 <time class="progress__when" datetime="@day.ToString("yyyy-MM-dd")">@day.ToString("d MMM yyyy")</time>
