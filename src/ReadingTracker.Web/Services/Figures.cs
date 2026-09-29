@@ -26,9 +26,10 @@ public static class Figures
 
     /// <summary>
     /// How long ago, in the coarse terms a shelf needs — "today", "yesterday", "5 days ago",
-    /// "3 weeks ago", "2 months ago", "1 year ago". Whole elapsed days rather than calendar
-    /// days, and never negative: a browser clock a little behind the server's says "today", not
-    /// "in 2 days".
+    /// "3 weeks ago", "1 month ago", "11 months ago", "1 year ago". Whole elapsed days rather
+    /// than calendar days, and never negative: a browser clock a little behind the server's says
+    /// "today", not "in 2 days". Weeks stop at six, where months begin, and months stop at eleven,
+    /// so no span reads as more than the unit above it would call it.
     /// </summary>
     public static string Ago(DateTimeOffset since, DateTimeOffset now)
     {
@@ -39,10 +40,23 @@ public static class Figures
             0 => "today",
             1 => "yesterday",
             < 14 => $"{days} days ago",
-            < 60 => $"{days / 7} weeks ago",
-            < 365 => $"{days / 30} months ago",
+            < 42 => $"{days / 7} weeks ago",
+            < 365 => Months(Math.Min(11, days / 30)),
             _ => days / 365 == 1 ? "1 year ago" : $"{days / 365} years ago",
         };
+
+        static string Months(int months) => months == 1 ? "1 month ago" : $"{months} months ago";
+    }
+
+    /// <summary>
+    /// What a shelf can say about a book not yet begun: its length, where anyone knows it, and
+    /// when it went on the shelf — "387 pages · added 3 weeks ago", or "Added 3 weeks ago".
+    /// </summary>
+    public static string Added(int? pages, DateTimeOffset addedAt, DateTimeOffset now)
+    {
+        var when = Ago(addedAt, now);
+
+        return pages is > 0 ? $"{Pages(pages.Value)} · added {when}" : $"Added {when}";
     }
 
     /// <summary>"45 min", "2 h", "1 h 20 min".</summary>

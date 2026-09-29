@@ -1572,6 +1572,9 @@ button.danger:hover:not(:disabled) {
     says how far along it is, rather than sitting in the top-left corner saying "Loading…".
 */
 .splash {
+    /* One pace for the page turn and the falling books, so the two waits never drift apart. */
+    --cycle: 2s;
+
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -1627,7 +1630,7 @@ button.danger:hover:not(:disabled) {
     border-radius: 1px 3px 3px 1px;
     background: var(--accent);
     transform-origin: left center;
-    animation: turn 2s var(--ease) infinite;
+    animation: turn var(--cycle) var(--ease) infinite;
 }
 
 @keyframes turn {
@@ -1709,13 +1712,13 @@ button.danger:hover:not(:disabled) {
     height: 0.34em;
     border-radius: 0.08em;
     background: var(--accent);
-    animation: stack 2s infinite;
+    animation: stack var(--cycle) infinite;
 }
 
 /*
-    The cycle is the page turn's own, 2s, so the two waits keep the same pace whichever one a
-    visit draws. It was 1.6s, which read as hurried next to it: the books came down in a rush
-    and were gone again. The stagger is 0.12s, in proportion. It is still drawn over waits that
+    The cycle is the page turn's own (--cycle, on .splash), so the two waits keep the same pace
+    whichever one a visit draws. It was 1.6s, which read as hurried next to it: the books came
+    down in a rush and were gone again. The stagger is 0.12s, in proportion. It is still drawn over waits that
     are frequently short — a book's details arrive in a few hundred milliseconds — so the pile
     is down by 0.96s rather than the 0.78s it was, but the first book is landing at 0.6s, which
     is soon enough that a short wait still shows books arriving and not only falling.
@@ -2411,6 +2414,16 @@ button.danger:hover:not(:disabled) {
 .entry--working {
     opacity: 0.6;
     transition: opacity 160ms var(--ease) 260ms;
+}
+
+/*
+    Not while a sheet is open from it. Anything below full opacity is a stacking context of its
+    own, so a sheet inside a dimmed card is dimmed with it and its layers (22, 24) only count
+    among the card's own: it would drop under the header and the cards after it for as long as
+    the change took. The sheet has its scrim; the card behind it can wait undimmed.
+*/
+.entry--working:has(.sheet, .preview) {
+    opacity: 1;
 }
 
 /*
@@ -3821,11 +3834,8 @@ html:has(.preview:not(.is-leaving)) {
     z-index: 24;
 }
 
-.preview__note {
-    margin: 0;
-    text-align: center;
-}
-
+/* The words of SwitchEditionFoot: what the switch carries, and that this is the edition already. */
+.preview__note,
 .preview__current {
     margin: 0;
     text-align: center;

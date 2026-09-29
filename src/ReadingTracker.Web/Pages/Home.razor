@@ -454,12 +454,13 @@
            inside it would be placed against the dock rather than the screen. *@
         @if (_previewing is { } previewing)
         {
-            <BookPreview @key="previewing.Id"
-                         Book="previewing"
-                         Adding="@(_adding == previewing.Id)"
-                         Problem="@(_addProblemFor == previewing.Id ? _addProblem : null)"
-                         OnAdd="status => AddToLibraryAsync(previewing.Id, status)"
-                         OnClose="ClosePreview" />
+            <BookPreview @key="previewing.Id" Book="previewing" OnClose="ClosePreview">
+                <Foot>
+                    <AddToShelfFoot Adding="@(_adding == previewing.Id)"
+                                    Problem="@(_addProblemFor == previewing.Id ? _addProblem : null)"
+                                    OnAdd="status => AddToLibraryAsync(previewing.Id, status)" />
+                </Foot>
+            </BookPreview>
         }
 
         @if (!_searchOpen)

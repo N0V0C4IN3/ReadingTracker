@@ -16,6 +16,16 @@ public static class ReadingStatuses
     /// <summary>The statuses a book can go onto the shelf as. A book is not added to be set aside.</summary>
     public static readonly IReadOnlyList<string> AddableAs = ["WantToRead", "Reading", "Finished"];
 
+    /// <summary>
+    /// Wanted and not begun: nothing logged and no device has said where the reader is. A book
+    /// like that has no progress to show, and what its first log does is start it — Library moves
+    /// a wanted book to Reading on its first session. A wanted book that does have reading (put
+    /// back on the wish list after some) is not this: that is a fact about the reader they would
+    /// lose.
+    /// </summary>
+    public static bool NotBegun(LibraryEntry entry) =>
+        entry.Status == OnAdding && entry.Progress is null && entry.Bookmark is null;
+
     public static string Label(string status) => status switch
     {
         "WantToRead" => "Want to read",

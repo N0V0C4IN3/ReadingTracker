@@ -1,0 +1,45 @@
+@using ReadingTracker.Web.Services
+
+@*
+    The foot of a search result's sheet (BookPreview): the book is not the reader's yet, so it
+    offers to add it — as whichever status the reader picks, each with the dot the shelf card's
+    status list gives it (the .status colours). The adding itself is the shelf's (OnAdd), which
+    knows what to reload.
+
+    One foot is one result: the sheet is keyed by its book, so the status picked is forgotten
+    with the sheet and another result starts from the default again.
+*@
+
+<AddProblemNotice Problem="Problem" />
+
+<div class="status preview__statuses" role="group" aria-label="Add it as">
+    @foreach (var status in ReadingStatuses.AddableAs)
+    {
+        <button type="button"
+                class="preview__status preview__status--@status.ToLowerInvariant()"
+                aria-pressed="@(_status == status ? "true" : "false")"
+                @onclick="() => _status = status">
+            <i class="status__dot" aria-hidden="true"></i>
+            @ReadingStatuses.Label(status)
+        </button>
+    }
+</div>
+<button type="button" class="button--primary button--large preview__add" disabled="@Adding" @onclick="() => OnAdd.InvokeAsync(_status)">
+    @(Adding ? "Adding…" : "Add to shelf")
+</button>
+
+@code {
+    /// <summary>Whether the shelf is adding this book right now.</summary>
+    [Parameter]
+    public bool Adding { get; set; }
+
+    /// <summary>What went wrong the last time this book was added, if anything did.</summary>
+    [Parameter]
+    public AddToLibraryProblem? Problem { get; set; }
+
+    /// <summary>Add the book, as the status given.</summary>
+    [Parameter]
+    public EventCallback<string> OnAdd { get; set; }
+
+    private string _status = ReadingStatuses.OnAdding;
+}

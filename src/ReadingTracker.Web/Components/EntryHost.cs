@@ -55,6 +55,9 @@ public abstract class EntryHost : ComponentBase
 
     protected bool Finished => Entry.Status == "Finished";
 
+    /// <summary>Wanted and not begun (<see cref="ReadingStatuses.NotBegun"/>), so its first log is Start reading.</summary>
+    protected bool NotBegun => ReadingStatuses.NotBegun(Entry);
+
     protected bool Parked => Entry.Status is "OnHold" or "Dropped";
 
     /// <summary>

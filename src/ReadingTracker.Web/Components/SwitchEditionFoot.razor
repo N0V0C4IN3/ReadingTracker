@@ -1,0 +1,37 @@
+@*
+    The foot of an edition's sheet (BookPreview), opened from a result in Settings' edition
+    search: the book is already the reader's, so nothing is added and there is no status to
+    pick — only the switch, and what it does and does not carry with it.
+
+    The edition the reader already has says so instead of offering itself.
+*@
+
+<p class="hint preview__note">Only the page count follows the new edition. Your status, sessions and device link stay.</p>
+
+@if (Current)
+{
+    <p class="onshelf preview__current">This is your edition</p>
+}
+else
+{
+    <button type="button" class="button--primary button--large preview__add" disabled="@(Switching || Disabled)" @onclick="OnUse">
+        @(Switching ? "Switching…" : "Use this edition")
+    </button>
+}
+
+@code {
+    /// <summary>The sheet's book is the edition the reader already has, so there is nothing to switch to.</summary>
+    [Parameter]
+    public bool Current { get; set; }
+
+    /// <summary>Whether the switch is being made right now.</summary>
+    [Parameter]
+    public bool Switching { get; set; }
+
+    /// <summary>The host is busy with a change: the same guard as Use this on the card.</summary>
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    [Parameter]
+    public EventCallback OnUse { get; set; }
+}

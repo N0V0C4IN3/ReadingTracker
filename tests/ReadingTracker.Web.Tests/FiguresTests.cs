@@ -40,9 +40,11 @@ public class FiguresTests
     [InlineData(13, "13 days ago")]
     [InlineData(14, "2 weeks ago")]
     [InlineData(21, "3 weeks ago")]
-    [InlineData(59, "8 weeks ago")]
+    [InlineData(41, "5 weeks ago")]
+    [InlineData(42, "1 month ago")]
+    [InlineData(59, "1 month ago")]
     [InlineData(60, "2 months ago")]
-    [InlineData(364, "12 months ago")]
+    [InlineData(364, "11 months ago")]
     [InlineData(365, "1 year ago")]
     [InlineData(800, "2 years ago")]
     public void Writes_how_long_ago(int days, string said)
@@ -58,5 +60,17 @@ public class FiguresTests
         var now = new DateTimeOffset(2026, 9, 29, 12, 0, 0, TimeSpan.Zero);
 
         Assert.Equal("today", Figures.Ago(now.AddDays(2), now));
+    }
+
+    [Theory]
+    [InlineData(387, 21, "387 pages · added 3 weeks ago")]
+    [InlineData(1, 0, "1 page · added today")]
+    [InlineData(null, 2, "Added 2 days ago")]
+    [InlineData(0, 2, "Added 2 days ago")]
+    public void Says_what_a_book_not_yet_begun_has(int? pages, int daysAgo, string said)
+    {
+        var now = new DateTimeOffset(2026, 9, 29, 12, 0, 0, TimeSpan.Zero);
+
+        Assert.Equal(said, Figures.Added(pages, now.AddDays(-daysAgo), now));
     }
 }

@@ -18,7 +18,7 @@
     jacket desaturated, the accent turned to grey — so on a shelf of everything the books actually
     in hand are the ones in colour.
 *@
-<article class="entry @(Working ? "entry--working" : null) @(Parked ? "entry--parked" : null) @(Finished ? "entry--finished" : null) @(Unstarted ? "entry--unstarted" : null)" style="--at:@At; @CoverVar">
+<article class="entry @(Working ? "entry--working" : null) @(Parked ? "entry--parked" : null) @(Finished ? "entry--finished" : null) @(NotBegun ? "entry--unstarted" : null)" style="--at:@At; @CoverVar">
     @* The cover and the title are the way to the book's own page; the rest of the card stays
        what it was, controls and all, so the link never gets in the way of a tap on them. *@
     <a class="entry__cover" href="@PageHref" tabindex="-1" aria-hidden="true">
@@ -53,16 +53,16 @@
                 <p class="entry__authors">@string.Join(", ", book.Authors)</p>
             }
 
-            @if (Unstarted)
+            @if (NotBegun)
             {
                 @* What a book not yet begun can say for itself, in the place the figure would
                    be. Under the authors rather than a row of its own, so on a phone it sits
                    beside the cover with them. *@
-                <p class="entry__meta">@Meta</p>
+                <p class="entry__meta">@Figures.Added(Entry.EffectivePageCount, Entry.AddedAt, DateTimeOffset.UtcNow)</p>
             }
         </div>
 
-        @if (!Unstarted)
+        @if (!NotBegun)
         {
             <ProgressBar Progress="Entry.Progress"
                          TrackingMethod="@Entry.TrackingMethod"
@@ -78,7 +78,7 @@
             @if (Logging)
             {
                 <LogButton Open="_panel == Panel.Log"
-                           Starting="Wanted"
+                           Starting="NotBegun"
                            Disabled="Working"
                            OnClick="() => Toggle(Panel.Log)" />
             }
@@ -93,7 +93,9 @@
             </button>
         </div>
 
-        @if (Reasons.Count > 0 && !_correcting)
+        @* Settings says them itself: on a phone its sheet covers this card, and a reason said
+           only here would go unread. *@
+        @if (Reasons.Count > 0 && !_correcting && _panel != Panel.Settings)
         {
             <ul class="entry__reasons" role="alert">
                 @foreach (var reason in Reasons)
@@ -140,6 +142,7 @@
         {
             <EntrySettings Entry="Entry"
                            Disabled="Working"
+                           Reasons="Reasons"
                            OnTrackingMethod="ChangeTrackingMethodAsync"
                            OnPageCount="SetPageCountAsync"
                            OnEdition="UseEditionAsync"
@@ -185,28 +188,7 @@
 
     protected override bool HistoryShowing => _panel == Panel.History;
 
-    /// <summary>
-    /// Wanted and not begun: nothing logged and no device has said where the reader is. It has
-    /// no progress to show — a bar of nothing and a dash beside it would only say so — so the
-    /// card leaves the figure out. A wanted book that does have reading (put back on the wish
-    /// list after some) keeps it, since that is a fact about the reader they would lose.
-    /// </summary>
-    private bool Unstarted => Wanted && Entry.Progress is null && Entry.Bookmark is null;
-
-    private bool Wanted => Entry.Status == "WantToRead";
-
-    /// <summary>The length, where anyone knows it, and when it went on the shelf: "387 pages · added 3 weeks ago".</summary>
-    private string Meta
-    {
-        get
-        {
-            var added = $"added {Figures.Ago(Entry.AddedAt, DateTimeOffset.UtcNow)}";
-
-            return Entry.EffectivePageCount is { } pages ? $"{Figures.Pages(pages)} · {added}" : char.ToUpperInvariant(added[0]) + added[1..];
-        }
-    }
-
-    private string Initial =>(Entry.Book?.Title ?? "?").Trim() is { Length: > 0 } title
+    private string Initial => (Entry.Book?.Title ?? "?").Trim() is { Length: > 0 } title
         ? title[..1].ToUpperInvariant()
         : "?";
 

@@ -227,6 +227,15 @@ export function detach(el, keepSize = false) {
     delete el.dataset.sheet;
 }
 
+/**
+ * Puts focus back on the control that opened a sheet, once the sheet has gone. Blazor removes
+ * the sheet with the focus still inside it, which leaves focus on the page and a keyboard
+ * reader having to tab back to where they were.
+ */
+export function focusOpener(id) {
+    document.getElementById(id)?.focus({ preventScroll: true });
+}
+
 const armed = new WeakSet();
 
 /**
