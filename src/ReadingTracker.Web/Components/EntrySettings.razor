@@ -14,7 +14,8 @@
     search's field and cards, with the results scrolling inside it, so a long list never pushes
     the page (or the sheet) past the screen. On a phone that view is the shelf search's own kind
     of sheet: the field at its foot, and a grip that drags it between a peek, a half and nearly
-    full (js/sheet.js).
+    full (js/sheet.js). A result opens in the main search's own sheet (BookPreview) to look at
+    before switching to it.
 *@
 
 <button type="button" class="sheet__scrim" tabindex="-1" aria-hidden="true" @onclick="OnClose"></button>
@@ -30,6 +31,11 @@
 
     @if (!_editionOpen)
     {
+        @if (Reasons.Count > 0)
+        {
+            <p class="hint hint--bad" role="alert">@string.Join(" ", Reasons)</p>
+        }
+
         <div class="settings__grid">
             <section class="settings__item">
                 <label class="settings__label" for="@($"method-{Entry.Id}")">Track by</label>
@@ -110,7 +116,9 @@
         </div>
         <p class="hint settings__note">Only the page count follows the new edition.</p>
 
-        @if (_editionProblem is { } editionProblem)
+        @* The library could not be searched, or the host refused the switch: said here, where
+           the reader is, and not only on the card, which on a phone this sheet covers. *@
+        @if ((_editionProblem ?? (Reasons.Count > 0 ? string.Join(" ", Reasons) : null)) is { } editionProblem)
         {
             <p class="hint hint--bad settings__note" role="alert">@editionProblem</p>
         }
@@ -131,24 +139,28 @@
                     <div class="lib-grid">
                         @foreach (var (found, at) in _found.Select((found, at) => (found, at)))
                         {
-                            <div class="lib-card @(found.Id == Entry.BookId ? "lib-card--mine" : null)" @key="found.Id" style="--at:@(at - _firstNew)">
-                                @if (found.CoverUrl is { } jacket)
-                                {
-                                    <img src="@jacket" alt="" loading="lazy" />
-                                }
-                                else
-                                {
-                                    <div class="result__cover-placeholder" aria-hidden="true"></div>
-                                }
-                                <div class="lib-card__body">
-                                    <strong>@found.Title</strong>
-                                    @if (found.Authors.Count > 0)
+                            <div class="lib-card @(IsMine(found) ? "lib-card--mine" : null)" @key="found.Id" style="--at:@(at - _firstNew)">
+                                @* The jacket and the words open the edition in a sheet, as a result in the
+                                   main search does; Use this stays on the card for the reader who knows. *@
+                                <button type="button" class="lib-card__open" id="@OpenerId(found.Id)" @onclick="() => OpenPreview(found)">
+                                    @if (found.CoverUrl is { } jacket)
                                     {
-                                        <span>@string.Join(", ", found.Authors)</span>
+                                        <img src="@jacket" alt="" loading="lazy" />
                                     }
-                                    <span class="lib-card__pages">@(found.TotalPages is { } length and > 0 ? $"{length} pages" : "length unknown")</span>
-                                </div>
-                                @if (found.Id == Entry.BookId)
+                                    else
+                                    {
+                                        <span class="result__cover-placeholder" aria-hidden="true"></span>
+                                    }
+                                    <span class="lib-card__body">
+                                        <strong>@found.Title</strong>
+                                        @if (found.Authors.Count > 0)
+                                        {
+                                            <span>@string.Join(", ", found.Authors)</span>
+                                        }
+                                        <span class="lib-card__pages">@(found.TotalPages is { } length and > 0 ? $"{length} pages" : "length unknown")</span>
+                                    </span>
+                                </button>
+                                @if (IsMine(found))
                                 {
                                     <span class="onshelf">This one</span>
                                 }
@@ -180,12 +192,34 @@
     }
 </div>
 
+@* Beside the panel, not in it: on a phone the panel is a sheet that moves and is glass, and a
+   fixed sheet inside either would be placed against it rather than the screen. *@
+@if (_previewing is { } previewing)
+{
+    <BookPreview @key="previewing.Id" Book="previewing" Over OnClose="ClosePreview">
+        <Foot>
+            <SwitchEditionFoot Current="IsMine(previewing)"
+                               Switching="_using"
+                               Disabled="Disabled"
+                               OnUse="() => UseEditionAsync(previewing)" />
+        </Foot>
+    </BookPreview>
+}
+
 @code {
     [Parameter, EditorRequired]
     public required LibraryEntry Entry { get; set; }
 
     [Parameter]
     public bool Disabled { get; set; }
+
+    /// <summary>
+    /// What the host refused the last change for, in Library's words. Said here as well as on
+    /// the card: on a phone this is a sheet over the card, and a reason said only under it would
+    /// go unread. The host leaves them out of the card while Settings is open.
+    /// </summary>
+    [Parameter]
+    public IReadOnlyList<string> Reasons { get; set; } = [];
 
     /// <summary>The book, named at the head of the phone's sheet, which covers the card it came from.</summary>
     [Parameter]
@@ -285,8 +319,30 @@
         }
     }
 
+    /// <summary>The edition open in its sheet, if one is.</summary>
+    private BookSearchResult? _previewing;
+
+    /// <summary>Whether the switch to the previewed edition is being made.</summary>
+    private bool _using;
+
+    /// <summary>The result whose card opened the sheet, so focus can go back to it when the sheet closes.</summary>
+    private Guid? _restoreFocusTo;
+
+    private bool IsMine(BookSearchResult book) => book.Id == Entry.BookId;
+
+    private static string OpenerId(Guid bookId) => $"edition-{bookId:N}";
+
+    private void OpenPreview(BookSearchResult book) => _previewing = book;
+
+    private void ClosePreview()
+    {
+        _restoreFocusTo = _previewing?.Id;
+        _previewing = null;
+    }
+
     private void CloseEditionSearch()
     {
+        _previewing = null;
         _editionOpen = false;
         _editions = null;
         _found.Clear();
@@ -346,11 +402,34 @@
         }
     }
 
+    /// <summary>
+    /// Switches to this edition, from the card's Use this or the sheet's button alike, so both
+    /// answer to the same guards. When it took, the search closes and the sheet with it; when it
+    /// was refused only the sheet does, leaving the reason (Reasons) in the search beneath.
+    /// </summary>
     private async Task UseEditionAsync(BookSearchResult book)
     {
-        if (await OnEdition(book.Id))
+        if (Disabled || _using || IsMine(book))
         {
-            CloseEditionSearch();
+            return;
+        }
+
+        _using = true;
+
+        try
+        {
+            if (await OnEdition(book.Id))
+            {
+                CloseEditionSearch();
+            }
+            else
+            {
+                ClosePreview();
+            }
+        }
+        finally
+        {
+            _using = false;
         }
     }
 
@@ -378,6 +457,18 @@
         {
             _focusQuery = false;
             await _queryBox.FocusAsync();
+        }
+
+        // The sheet has gone, taking focus with it: back to the card that opened it, so a keyboard
+        // reader is where they were and Escape still steps back. Not when the result has gone too.
+        if (_restoreFocusTo is { } opener && _previewing is null && _sheet is not null)
+        {
+            _restoreFocusTo = null;
+
+            if (_editionOpen && _found.Any(found => found.Id == opener))
+            {
+                await _sheet.InvokeVoidAsync("focusOpener", OpenerId(opener));
+            }
         }
     }
 

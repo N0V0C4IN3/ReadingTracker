@@ -45,11 +45,16 @@
     @if (Logging)
     {
         <div class="reading__actions">
-            <LogButton Open="_panel == Panel.Log" Disabled="Working" OnClick="() => Toggle(Panel.Log)" />
+            <LogButton Open="_panel == Panel.Log"
+                       Starting="NotBegun"
+                       Disabled="Working"
+                       OnClick="() => Toggle(Panel.Log)" />
         </div>
     }
 
-    @if (Reasons.Count > 0 && !_correcting)
+    @* Settings says them itself: on a phone its sheet covers this page, and a reason said only
+       here would go unread. *@
+    @if (Reasons.Count > 0 && !_correcting && _panel != Panel.Settings)
     {
         <ul class="entry__reasons" role="alert">
             @foreach (var reason in Reasons)
@@ -110,6 +115,7 @@
     {
         <EntrySettings Entry="Entry"
                        Disabled="Working"
+                       Reasons="Reasons"
                        OnTrackingMethod="ChangeTrackingMethodAsync"
                        OnPageCount="SetPageCountAsync"
                        OnEdition="UseEditionAsync"

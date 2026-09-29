@@ -26,7 +26,9 @@ All the values below are tokens that already exist on `:root`. Never hard-code a
 - Layers:
   - The header is 20.
   - A sheet's scrim is 21, the sheet 22.
+  - A sheet opened over another sheet (a book's details from Settings' edition search) is one layer pair up: scrim 23, sheet 24 (`.preview--over`), so its scrim dims the sheet beneath.
   - The search dock and its `+` button are 10.
+  - Mount an overlay beside the panel that opens it, never inside a sheet or a card: a transform, a backdrop filter or opacity below 1 on an ancestor makes a `position: fixed` overlay lay out against that ancestor instead of the screen, and its layers count only inside it. A card with a change in flight fades (`.entry--working`), except while a sheet is open from it.
 - **Nothing behind scrolls.** Add `html:has(<surface>:not(.is-leaving)) { overflow: hidden; }` and `touch-action: none` on the scrim. Give the surface's own scroll area `overscroll-behavior: contain`.
 - Hide the phone's `+` button while a sheet is up: `body:has(<surface>) .search__fab { visibility: hidden; }`.
 

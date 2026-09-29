@@ -15,13 +15,14 @@
     BookAbout). The page count stands out on its own line, since it is what the reader will be
     counting against once the book is theirs.
 
-    Instead of logging, the foot adds the book, as whichever status the reader picks; the adding
-    itself is the shelf's (OnAdd), which knows what to reload. One sheet is one result: the
-    shelf keys it by the book, so another result is another sheet.
+    The foot is the caller's (Foot): what can be done with the book depends on who opened it.
+    The shelf's search offers to add it (AddToShelfFoot); Settings' edition search, where the
+    book is already the reader's, offers to switch to it (SwitchEditionFoot). One sheet is one
+    result: the caller keys it by the book, so another result is another sheet.
 *@
 
-<button type="button" class="preview__scrim" tabindex="-1" aria-hidden="true" @onclick="OnClose"></button>
-<aside class="preview" role="dialog" aria-modal="true" aria-labelledby="@($"preview-{Book.Id:N}")" @onkeydown="CloseOnEscape" @ref="_sheetEl">
+<button type="button" class="preview__scrim @(Over ? "preview__scrim--over" : null)" tabindex="-1" aria-hidden="true" @onclick="OnClose"></button>
+<aside class="preview @(Over ? "preview--over" : null)" role="dialog" aria-modal="true" aria-labelledby="@($"preview-{Book.Id:N}")" @onkeydown="CloseOnEscape" @ref="_sheetEl">
     <button type="button" class="search__grip" aria-label="Resize the book's details"></button>
     <div class="preview__bar">
         <button type="button" class="preview__close" aria-label="Close" @ref="_close" @onclick="OnClose">
@@ -63,24 +64,7 @@
     </div>
 
     <div class="preview__foot">
-        <AddProblemNotice Problem="Problem" />
-
-        @* Each status with the dot the shelf card's status list gives it (the .status colours). *@
-        <div class="status preview__statuses" role="group" aria-label="Add it as">
-            @foreach (var status in ReadingStatuses.AddableAs)
-            {
-                <button type="button"
-                        class="preview__status preview__status--@status.ToLowerInvariant()"
-                        aria-pressed="@(_status == status ? "true" : "false")"
-                        @onclick="() => _status = status">
-                    <i class="status__dot" aria-hidden="true"></i>
-                    @ReadingStatuses.Label(status)
-                </button>
-            }
-        </div>
-        <button type="button" class="button--primary button--large preview__add" disabled="@Adding" @onclick="() => OnAdd.InvokeAsync(_status)">
-            @(Adding ? "Adding…" : "Add to shelf")
-        </button>
+        @Foot
     </div>
 </aside>
 
@@ -88,22 +72,19 @@
     [Parameter, EditorRequired]
     public required BookSearchResult Book { get; set; }
 
-    /// <summary>Whether the shelf is adding this book right now.</summary>
-    [Parameter]
-    public bool Adding { get; set; }
-
-    /// <summary>What went wrong the last time this book was added, if anything did.</summary>
-    [Parameter]
-    public AddToLibraryProblem? Problem { get; set; }
-
-    /// <summary>Add the book, as the status given.</summary>
-    [Parameter]
-    public EventCallback<string> OnAdd { get; set; }
-
     [Parameter]
     public EventCallback OnClose { get; set; }
 
-    private string _status = ReadingStatuses.OnAdding;
+    /// <summary>What can be done with the book: AddToShelfFoot, or SwitchEditionFoot.</summary>
+    [Parameter]
+    public RenderFragment? Foot { get; set; }
+
+    /// <summary>
+    /// Opened over another sheet (Settings, on a phone) rather than over the page: one layer up,
+    /// so its scrim dims that sheet too and it is not left showing through.
+    /// </summary>
+    [Parameter]
+    public bool Over { get; set; }
 
     private CatalogBook? _book;
     private BookUnavailable? _bookProblem;

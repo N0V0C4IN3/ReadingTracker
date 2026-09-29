@@ -18,7 +18,7 @@
     jacket desaturated, the accent turned to grey — so on a shelf of everything the books actually
     in hand are the ones in colour.
 *@
-<article class="entry @(Working ? "entry--working" : null) @(Parked ? "entry--parked" : null) @(Finished ? "entry--finished" : null)" style="--at:@At; @CoverVar">
+<article class="entry @(Working ? "entry--working" : null) @(Parked ? "entry--parked" : null) @(Finished ? "entry--finished" : null) @(NotBegun ? "entry--unstarted" : null)" style="--at:@At; @CoverVar">
     @* The cover and the title are the way to the book's own page; the rest of the card stays
        what it was, controls and all, so the link never gets in the way of a tap on them. *@
     <a class="entry__cover" href="@PageHref" tabindex="-1" aria-hidden="true">
@@ -40,7 +40,9 @@
         the third, and everything after that full width. The figure is the card's headline
         number and sits where a headline goes, not down among the controls — see
         ProgressBar.razor — and the status stands level with the title, out of the row of
-        actions, which the stylesheet places rather than the markup.
+        actions, which the stylesheet places rather than the markup. A wanted book that has not
+        been begun has no figure or bar: a line of what is known of it sits under its authors
+        instead, and its one action is Start reading.
     *@
     <div class="entry__body">
         <div class="entry__head">
@@ -50,21 +52,35 @@
             {
                 <p class="entry__authors">@string.Join(", ", book.Authors)</p>
             }
+
+            @if (NotBegun)
+            {
+                @* What a book not yet begun can say for itself, in the place the figure would
+                   be. Under the authors rather than a row of its own, so on a phone it sits
+                   beside the cover with them. *@
+                <p class="entry__meta">@Figures.Added(Entry.EffectivePageCount, Entry.AddedAt, DateTimeOffset.UtcNow)</p>
+            }
         </div>
 
-        <ProgressBar Progress="Entry.Progress"
-                     TrackingMethod="@Entry.TrackingMethod"
-                     EffectivePageCount="Entry.EffectivePageCount"
-                     Bookmark="Entry.Bookmark"
-                     Finished="Finished"
-                     FinishedOn="Entry.FinishedOn" />
+        @if (!NotBegun)
+        {
+            <ProgressBar Progress="Entry.Progress"
+                         TrackingMethod="@Entry.TrackingMethod"
+                         EffectivePageCount="Entry.EffectivePageCount"
+                         Bookmark="Entry.Bookmark"
+                         Finished="Finished"
+                         FinishedOn="Entry.FinishedOn" />
+        }
 
         <StatusSelect Entry="Entry" Disabled="Working" OnPick="ChangeStatusAsync" />
 
         <div class="entry__actions">
             @if (Logging)
             {
-                <LogButton Open="_panel == Panel.Log" Disabled="Working" OnClick="() => Toggle(Panel.Log)" />
+                <LogButton Open="_panel == Panel.Log"
+                           Starting="NotBegun"
+                           Disabled="Working"
+                           OnClick="() => Toggle(Panel.Log)" />
             }
             <button type="button" class="link-button" @onclick="ToggleHistoryAsync" disabled="@Working">
                 History
@@ -77,7 +93,9 @@
             </button>
         </div>
 
-        @if (Reasons.Count > 0 && !_correcting)
+        @* Settings says them itself: on a phone its sheet covers this card, and a reason said
+           only here would go unread. *@
+        @if (Reasons.Count > 0 && !_correcting && _panel != Panel.Settings)
         {
             <ul class="entry__reasons" role="alert">
                 @foreach (var reason in Reasons)
@@ -124,6 +142,7 @@
         {
             <EntrySettings Entry="Entry"
                            Disabled="Working"
+                           Reasons="Reasons"
                            OnTrackingMethod="ChangeTrackingMethodAsync"
                            OnPageCount="SetPageCountAsync"
                            OnEdition="UseEditionAsync"
