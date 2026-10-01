@@ -8,13 +8,8 @@ public class DailyPagesTests
 
     private static readonly TimeZoneInfo Utc = TimeZoneInfo.Utc;
 
-    /// <summary>
-    /// A session as Library sends it: in pages it came to its amount, and in percent to whatever
-    /// <paramref name="pages"/> says — nothing, when the book's length is not known.
-    /// </summary>
     private static ReadingSessionView Session(int daysAgo, decimal amount, string unit = "Pages", int hour = 10, decimal? pages = null) =>
-        new(Guid.NewGuid(), amount, unit, "Reader", new DateTimeOffset(Today.AddDays(-daysAgo).ToDateTime(new TimeOnly(hour, 0)), TimeSpan.Zero), null, null,
-            unit == "Pages" ? amount : pages);
+        LibrarySays.Session(new DateTimeOffset(Today.AddDays(-daysAgo).ToDateTime(new TimeOnly(hour, 0)), TimeSpan.Zero), amount, unit, pages: pages);
 
     [Fact]
     public void Is_twenty_one_days_ending_today_with_nothing_on_days_without_reading()

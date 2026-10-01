@@ -30,7 +30,7 @@ public class ReadingPaceTests
             null);
 
     private static ReadingSessionView Session(int daysAgo, decimal amount = 10, string unit = "Pages") =>
-        new(Guid.NewGuid(), amount, unit, "Reader", At(daysAgo), null, null, unit == "Pages" ? amount : null);
+        LibrarySays.Session(At(daysAgo), amount, unit);
 
     /// <summary>Mid-morning on that day, so the day is the same in any nearby zone.</summary>
     private static DateTimeOffset At(int daysAgo) =>

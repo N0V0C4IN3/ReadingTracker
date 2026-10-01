@@ -104,7 +104,7 @@
 
     /// <summary>How far the reader has got, which is where the slider starts.</summary>
     [Parameter]
-    public AmountRead Amount { get; set; } = new AmountRead.NotStarted();
+    public AmountRead Amount { get; set; } = AmountRead.None;
 
     /// <summary>How much read and nothing else, for today: the shelf card's form.</summary>
     [Parameter]

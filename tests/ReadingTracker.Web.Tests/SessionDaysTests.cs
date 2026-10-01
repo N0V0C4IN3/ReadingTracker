@@ -8,13 +8,8 @@ public class SessionDaysTests
 
     private static readonly TimeZoneInfo Utc = TimeZoneInfo.Utc;
 
-    /// <summary>
-    /// A session as Library sends it: in pages it came to its amount, and in percent to whatever
-    /// <paramref name="pages"/> says — nothing, when the book's length is not known.
-    /// </summary>
     private static ReadingSessionView Session(int daysAgo, decimal amount, string unit = "Pages", int hour = 10, int? minutes = null, string source = "Reader", decimal? pages = null) =>
-        new(Guid.NewGuid(), amount, unit, source, new DateTimeOffset(Today.AddDays(-daysAgo).ToDateTime(new TimeOnly(hour, 0)), TimeSpan.Zero), minutes, null,
-            unit == "Pages" ? amount : pages);
+        LibrarySays.Session(new DateTimeOffset(Today.AddDays(-daysAgo).ToDateTime(new TimeOnly(hour, 0)), TimeSpan.Zero), amount, unit, source, minutes, pages);
 
     [Fact]
     public void Groups_by_day_latest_day_first_and_latest_session_first_within_it()

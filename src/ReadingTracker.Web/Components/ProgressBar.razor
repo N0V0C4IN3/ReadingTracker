@@ -65,7 +65,7 @@
             <strong>@percent%</strong>
             @* Tracking by percentage makes the bar's percentage and the reader's own total the
                same quantity, and "14%" over "13.5% read" reads as two facts that disagree. *@
-            <span>@(Amount is AmountRead.InPages inPages ? Read(inPages) : "read")</span>
+            <span>@(Amount.PagesRead is { } pagesRead ? Read(pagesRead) : "read")</span>
         </div>
         <div class="progress__track" role="progressbar"
              aria-valuenow="@percent" aria-valuemin="0" aria-valuemax="100"
@@ -77,12 +77,12 @@
             }
         </div>
     }
-    else if (Amount is AmountRead.InPages unmeasured)
+    else
     {
         @* No page count anywhere, so a percentage cannot be worked out. The total is still
            worth showing: it is what the reader actually told us. *@
         <div class="progress__figure">
-            <strong>@Figures.Trim(unmeasured.Amount)</strong>
+            <strong>@Figures.Trim(Amount.PagesRead ?? 0)</strong>
             <span>pages read</span>
         </div>
         <div class="progress__track" aria-hidden="true"></div>
@@ -100,7 +100,7 @@
 @code {
     /// <summary>How much has been read (<see cref="LibraryEntry.AmountRead"/>); nothing logged until told otherwise.</summary>
     [Parameter]
-    public AmountRead Amount { get; set; } = new AmountRead.NotStarted();
+    public AmountRead Amount { get; set; } = AmountRead.None;
 
     [Parameter, EditorRequired]
     public required string TrackingMethod { get; set; }
@@ -123,9 +123,9 @@
     /// worth saying what the total is out of, and Library has already stopped that total at the
     /// whole book — so this says "208 of 208 pages" and never more, however much was logged.
     /// </summary>
-    private string Read(AmountRead.InPages pages)
+    private string Read(decimal pagesRead)
     {
-        var amount = Figures.Trim(pages.Amount);
+        var amount = Figures.Trim(pagesRead);
 
         return EffectivePageCount is { } total ? $"{amount} of {total} pages" : $"{amount} pages read";
     }

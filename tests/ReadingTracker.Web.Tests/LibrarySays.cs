@@ -8,7 +8,7 @@ namespace ReadingTracker.Web.Tests;
 /// hand-built <c>Progress</c> can be a combination no real answer ever is — a percent with no
 /// amount, say — and a test of that proves nothing about the page a reader sees. Build from here;
 /// the shapes Library cannot produce are written out longhand, in the one place that says what
-/// is done with them (<c>AmountReadTests</c>).
+/// is done with them (<c>AmountReadTests</c>). The same goes for a session's pages.
 /// </summary>
 internal static class LibrarySays
 {
@@ -26,4 +26,18 @@ internal static class LibrarySays
 
     /// <summary>A total in percent, which always has its whole percent: it is the unit.</summary>
     public static Progress Percent(decimal amount, int percentComplete) => new(amount, "Percentage", percentComplete);
+
+    /// <summary>
+    /// A session as Library sends it. In pages it came to its amount; in percent it came to
+    /// <paramref name="pages"/>, which Library works out from the book's length and which is
+    /// nothing when nobody knows it.
+    /// </summary>
+    public static ReadingSessionView Session(
+        DateTimeOffset at,
+        decimal amount,
+        string unit = "Pages",
+        string source = "Reader",
+        int? minutes = null,
+        decimal? pages = null) =>
+        new(Guid.NewGuid(), amount, unit, source, at, minutes, null, unit == "Pages" ? amount : pages);
 }

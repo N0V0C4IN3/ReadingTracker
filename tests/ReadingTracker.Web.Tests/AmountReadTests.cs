@@ -12,7 +12,7 @@ public sealed class AmountReadTests
     [Fact]
     public void No_progress_is_not_started_which_is_not_the_same_as_none_of_it_read()
     {
-        Assert.Equal(new AmountRead.NotStarted(), AmountRead.Of(LibrarySays.Nothing));
+        Assert.Equal(AmountRead.None, AmountRead.Of(LibrarySays.Nothing));
     }
 
     [Fact]
@@ -46,7 +46,6 @@ public sealed class AmountReadTests
     {
         var read = Assert.IsType<AmountRead.InPercent>(AmountRead.Of(LibrarySays.Percent(13.5m, 14)));
 
-        Assert.Equal(13.5m, read.Amount);
         Assert.Equal(14, read.PercentComplete);
         Assert.Null(read.PagesRead);
     }

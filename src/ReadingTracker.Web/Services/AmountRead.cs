@@ -13,15 +13,18 @@ namespace ReadingTracker.Web.Services;
 /// </summary>
 public abstract record AmountRead
 {
-    private AmountRead()
-    {
-    }
+    private static readonly NeedsPageCount Unbridged = new();
+
+    private AmountRead(int? percentComplete) => PercentComplete = percentComplete;
+
+    /// <summary>Nothing logged: the case for no progress at all, and what a display starts from.</summary>
+    public static AmountRead None { get; } = new NotStarted();
 
     /// <summary>
     /// How far through the book, as a whole percent, where that can be said; null where it cannot.
     /// A whole percent never rounds up to 100, so 100 is the whole book and nothing less.
     /// </summary>
-    public abstract int? PercentComplete { get; }
+    public int? PercentComplete { get; }
 
     /// <summary>
     /// Read to the end. Offered, never done for the reader: a log that gets there is a good moment
@@ -30,23 +33,26 @@ public abstract record AmountRead
     public bool ReachedTheEnd => PercentComplete == 100;
 
     /// <summary>What has been read in pages, when the total is said in pages; null in percent, or not at all.</summary>
-    public decimal? PagesRead => this is InPages pages ? pages.Amount : null;
+    public virtual decimal? PagesRead => null;
 
     /// <summary>
     /// Reads Library's answer. Null is nothing logged, which is not the same as none of it read.
     /// </summary>
     public static AmountRead Of(Progress? progress) => progress switch
     {
-        null => new NotStarted(),
-        { AmountRead: { } amount, Unit: "Percentage", PercentComplete: { } whole } => new InPercent(amount, whole),
+        null => None,
+        { AmountRead: not null, Unit: "Percentage", PercentComplete: { } whole } => new InPercent(whole),
         { AmountRead: { } amount, Unit: "Pages" } => new InPages(amount, progress.PercentComplete),
-        _ => new NeedsPageCount(),
+        _ => Unbridged,
     };
 
     /// <summary>Nothing has been logged, and no device has said anything: not zero, none at all.</summary>
     public sealed record NotStarted : AmountRead
     {
-        public override int? PercentComplete => null;
+        public NotStarted()
+            : base((int?)null)
+        {
+        }
     }
 
     /// <summary>
@@ -55,21 +61,32 @@ public abstract record AmountRead
     /// </summary>
     public sealed record NeedsPageCount : AmountRead
     {
-        public override int? PercentComplete => null;
+        public NeedsPageCount()
+            : base((int?)null)
+        {
+        }
     }
 
-    /// <summary>The total is said in percent, which is how the reader tracks this book: <paramref name="Amount"/> as they would say it, and its whole percent.</summary>
-    public sealed record InPercent(decimal Amount, int Whole) : AmountRead
+    /// <summary>The total is said in percent, which is how the reader tracks this book; its whole percent is all a display says.</summary>
+    public sealed record InPercent : AmountRead
     {
-        public override int? PercentComplete => Whole;
+        public InPercent(int percentComplete)
+            : base(percentComplete)
+        {
+        }
     }
 
     /// <summary>
-    /// The total is said in pages. <paramref name="Whole"/> is its whole percent, null when nobody
-    /// knows how long the book is, so there is nothing to be a share of.
+    /// The total is said in pages. Its whole percent is null when nobody knows how long the book
+    /// is, so there is nothing for it to be a share of.
     /// </summary>
-    public sealed record InPages(decimal Amount, int? Whole) : AmountRead
+    public sealed record InPages : AmountRead
     {
-        public override int? PercentComplete => Whole;
+        public InPages(decimal amount, int? percentComplete)
+            : base(percentComplete) => Amount = amount;
+
+        public decimal Amount { get; }
+
+        public override decimal? PagesRead => Amount;
     }
 }
