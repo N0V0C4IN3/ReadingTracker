@@ -68,7 +68,7 @@
     {
         <SessionForm Unit="@Entry.TrackingMethod"
                      EffectivePageCount="Entry.EffectivePageCount"
-                     Progress="Entry.Progress"
+                     Amount="Entry.AmountRead"
                      Title="@Entry.Book?.Title"
                      SubmitLabel="Log it"
                      OnSubmit="LogAsync"
@@ -83,7 +83,7 @@
                       OnNotYet="Close" />
     }
 
-    <PagesChart Sessions="Sessions" EffectivePageCount="Entry.EffectivePageCount" />
+    <PagesChart Sessions="Sessions" />
 
     <section class="history">
         <h2 class="group history__eyebrow">
@@ -95,7 +95,6 @@
         </h2>
         <SessionHistory Sessions="Sessions"
                         Unit="@Entry.TrackingMethod"
-                        EffectivePageCount="Entry.EffectivePageCount"
                         Reasons="Reasons"
                         OnCorrectDay="CorrectDayAsync"
                         OnDeleteDay="DeleteDayAsync"

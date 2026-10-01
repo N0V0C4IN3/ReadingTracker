@@ -2,8 +2,9 @@ namespace ReadingTracker.Web.Services;
 
 /// <summary>
 /// One calendar day of a reader's history: its sessions, latest first, and what they add up to.
-/// <paramref name="Pages"/> is the sum of what can be counted in pages — pages as logged, and
-/// percent through the effective page count — and null when nothing can; <paramref name="Percent"/>
+/// <paramref name="Pages"/> is the sum of what came to pages (<see cref="ReadingSessionView.Pages"/>:
+/// pages as logged, and percent through the effective page count, as Library worked them out) and
+/// null when nothing did; <paramref name="Percent"/>
 /// is the sum of percent that could not be, and null when there is none; <paramref name="Minutes"/>
 /// is the sum of the durations given, and null when none was.
 /// </summary>
@@ -35,14 +36,11 @@ public static class SessionDays
     /// <summary>How many days show before the rest are behind "Show all": three weeks of daily reading, and a bit.</summary>
     public const int ShownAtFirst = 20;
 
-    public static IReadOnlyList<SessionDay> Of(
-        IReadOnlyList<ReadingSessionView> sessions,
-        int? effectivePageCount,
-        TimeZoneInfo zone) =>
+    public static IReadOnlyList<SessionDay> Of(IReadOnlyList<ReadingSessionView> sessions, TimeZoneInfo zone) =>
         sessions
             .GroupBy(session => ReaderDays.Of(session.OccurredAt, zone))
             .OrderByDescending(day => day.Key)
-            .Select(day => Summed(day.Key, day.OrderByDescending(session => session.OccurredAt).ToList(), effectivePageCount))
+            .Select(day => Summed(day.Key, day.OrderByDescending(session => session.OccurredAt).ToList()))
             .ToList();
 
     /// <summary>
@@ -54,7 +52,7 @@ public static class SessionDays
 
     public static bool Folded(IReadOnlyList<SessionDay> days) => days.Count > ShownAtFirst;
 
-    private static SessionDay Summed(DateOnly day, IReadOnlyList<ReadingSessionView> sessions, int? effectivePageCount)
+    private static SessionDay Summed(DateOnly day, IReadOnlyList<ReadingSessionView> sessions)
     {
         decimal? pages = null;
         decimal? percent = null;
@@ -62,17 +60,15 @@ public static class SessionDays
 
         foreach (var session in sessions)
         {
-            switch (session.Unit)
+            // A session with no pages was logged in percent of a book nobody knows the length of,
+            // so all there is to add up is the percent.
+            if (session.Pages is { } read)
             {
-                case "Pages":
-                    pages = (pages ?? 0) + session.Amount;
-                    break;
-                case "Percentage" when effectivePageCount is { } total:
-                    pages = (pages ?? 0) + session.Amount * total / 100;
-                    break;
-                default:
-                    percent = (percent ?? 0) + session.Amount;
-                    break;
+                pages = (pages ?? 0) + read;
+            }
+            else
+            {
+                percent = (percent ?? 0) + session.Amount;
             }
 
             if (session.DurationMinutes is { } lasted)

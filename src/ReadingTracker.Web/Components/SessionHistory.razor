@@ -23,7 +23,7 @@ else if (Sessions.Count == 0)
 else
 {
     var today = DateOnly.FromDateTime(DateTime.Now);
-    var days = SessionDays.Of(Sessions, EffectivePageCount, TimeZoneInfo.Local);
+    var days = SessionDays.Of(Sessions, TimeZoneInfo.Local);
 
     <ol class="days">
         @foreach (var day in SessionDays.Shown(days, _all))
@@ -81,10 +81,6 @@ else
     /// <summary>The entry's TrackingMethod, which is the unit the correction form offers.</summary>
     [Parameter, EditorRequired]
     public required string Unit { get; set; }
-
-    /// <summary>The entry's effective page count, which is what turns a day's percent into pages.</summary>
-    [Parameter]
-    public int? EffectivePageCount { get; set; }
 
     /// <summary>Restates a day — these sessions — as the one given. Answers whether it took; the form closes only when it did.</summary>
     [Parameter, EditorRequired]
@@ -168,6 +164,7 @@ else
             "Reader",
             start,
             day.Minutes,
-            total is { } amount ? new DisplayedAmount(amount, Unit) : null);
+            total is { } amount ? new DisplayedAmount(amount, Unit) : null,
+            day.Pages);
     }
 }

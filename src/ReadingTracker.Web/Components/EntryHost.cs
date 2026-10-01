@@ -164,7 +164,7 @@ public abstract class EntryHost : ComponentBase
             // yet. Only a log that took the reader to the end raises this, and only while the
             // book is not already finished, so nobody is asked twice about the same book and a
             // reader who said "not yet" is left alone until they read more.
-            if (logged.Entry is { Progress.PercentComplete: 100, Status: not "Finished" })
+            if (logged.Entry is { AmountRead.ReachedTheEnd: true, Status: not "Finished" })
             {
                 ReachedEnd();
             }

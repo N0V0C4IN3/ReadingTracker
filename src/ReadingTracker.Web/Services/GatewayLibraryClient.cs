@@ -1,10 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace ReadingTracker.Web.Services;
 
 /// <summary>A LibraryEntry as the Gateway (by way of Library) describes it.</summary>
+/// <param name="Progress">Library's answer as it came; read through <see cref="AmountRead"/>, not field by field.</param>
 /// <param name="Bookmark">Where a device last said the reader is; null when no device has said.</param>
 public sealed record LibraryEntry(
     Guid Id,
@@ -17,7 +19,12 @@ public sealed record LibraryEntry(
     int? EffectivePageCount,
     BookDetails? Book,
     Progress? Progress,
-    Bookmark? Bookmark);
+    Bookmark? Bookmark)
+{
+    /// <summary>How much of the book the reader has read, as a case a display can tell apart.</summary>
+    [JsonIgnore]
+    public AmountRead AmountRead => AmountRead.Of(Progress);
+}
 
 /// <summary>
 /// Where the reader is in a book, as a percentage, as last reported by a device (ADR-0015). A
@@ -43,7 +50,8 @@ public sealed record BookDetails(
 /// <summary>
 /// How much of a book the reader has read, added up from their sessions. <paramref name="AmountRead"/>
 /// and <paramref name="Unit"/> are null together, when the reader has logged in both pages and
-/// percent and no page count exists to add the two together with.
+/// percent and no page count exists to add the two together with. Those fields mean something
+/// only together, so it is read through <see cref="Services.AmountRead"/>.
 /// </summary>
 public sealed record Progress(decimal? AmountRead, string? Unit, int? PercentComplete);
 
@@ -54,6 +62,12 @@ public sealed record Progress(decimal? AmountRead, string? Unit, int? PercentCom
 /// never has to work the conversion out for itself.
 /// </summary>
 /// <param name="Source">"Reader" for a session typed in, "Device" for one a device reported.</param>
+/// <param name="Pages">
+/// What it came to in pages, as Library worked it out from the book's effective page count:
+/// unrounded, so a day's or a year's can be added up, and not stopped at the end of the book,
+/// because a session is kept as it was stated. Null when it was logged in percent of a book
+/// nobody knows the length of.
+/// </param>
 public sealed record ReadingSessionView(
     Guid Id,
     decimal Amount,
@@ -61,7 +75,8 @@ public sealed record ReadingSessionView(
     string Source,
     DateTimeOffset OccurredAt,
     int? DurationMinutes,
-    DisplayedAmount? Displayed);
+    DisplayedAmount? Displayed,
+    decimal? Pages);
 
 public sealed record DisplayedAmount(decimal Amount, string Unit);
 

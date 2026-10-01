@@ -64,7 +64,7 @@ public sealed record ReadingPace(
         var daysGone = Math.Max(0, measuredTo.DayNumber - started.DayNumber);
         var daysReading = Math.Max(1, daysGone);
 
-        var pagesRead = entry.Progress is { AmountRead: { } amount, Unit: "Pages" } ? amount : (decimal?)null;
+        var pagesRead = entry.AmountRead.PagesRead;
         var pageCount = entry.EffectivePageCount;
 
         var noRate = NoRate(entry, sessions.Count, pagesRead, pageCount, daysGone, finished);
@@ -78,7 +78,7 @@ public sealed record ReadingPace(
 
     private static PaceGap? NoRate(LibraryEntry entry, int sessions, decimal? pagesRead, int? pageCount, int daysGone, bool finished)
     {
-        if (sessions == 0 || entry.Progress is null)
+        if (sessions == 0 || entry.AmountRead is AmountRead.NotStarted)
         {
             return PaceGap.NotStarted;
         }

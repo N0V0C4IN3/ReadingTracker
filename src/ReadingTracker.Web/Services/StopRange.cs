@@ -15,7 +15,7 @@ public sealed record StopRange(bool Pages, int Total, int Read)
     /// The range for a book, or null when there is none to slide along: a book tracked in pages
     /// with no page count has no end, and a book read to its end has nowhere left to stop.
     /// </summary>
-    public static StopRange? For(string trackingMethod, int? pageCount, Progress? progress)
+    public static StopRange? For(string trackingMethod, int? pageCount, AmountRead amount)
     {
         var pages = trackingMethod != "Percentage";
 
@@ -26,13 +26,10 @@ public sealed record StopRange(bool Pages, int Total, int Read)
 
         var total = pages ? pageCount!.Value : 100;
 
-        // Library adds the sessions up in the book's unit, or leaves the amount out when they were
-        // logged in both units and there is no page count to add them with; the percent is there
-        // either way, whenever a page count is.
-        var read = pages
-            ? progress is { Unit: "Pages", AmountRead: { } amount } ? amount
-              : progress?.PercentComplete is { } percent ? percent * total / 100m : 0
-            : progress?.PercentComplete ?? 0;
+        // Library says the total in the book's unit wherever the page count lets it, so a book
+        // tracked in pages with a page count is read in pages and one in percent in percent; what
+        // is not said in that unit is not where the reader is, and the slider starts at the top.
+        var read = pages ? amount.PagesRead ?? 0 : amount.PercentComplete ?? 0;
 
         var at = (int)Math.Clamp(Math.Floor(read), 0, total);
 
