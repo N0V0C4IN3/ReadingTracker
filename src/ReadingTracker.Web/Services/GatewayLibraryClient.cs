@@ -179,8 +179,12 @@ public sealed record LibraryChange(LibraryChangeProblem? Problem, IReadOnlyList<
 /// <summary>
 /// The browser's window onto a reader's Library, reached through the Gateway rather than
 /// Library directly — nothing in this application is allowed to know Library's address.
+///
+/// It is also where the shelf is told it changed: the changes that can move the count of finished
+/// books (a status that took, an entry removed) announce themselves, so no caller has to remember
+/// to — the header's goal badge cannot be left stale by a caller that forgot.
 /// </summary>
-public sealed class GatewayLibraryClient(HttpClient httpClient)
+public sealed class GatewayLibraryClient(HttpClient httpClient, ShelfChanges shelf)
 {
     /// <summary>
     /// The reader's shelf, narrowed to one ReadingStatus when <c>status</c> is given. The filter
@@ -273,16 +277,27 @@ public sealed class GatewayLibraryClient(HttpClient httpClient)
 
     /// <summary>
     /// Moves a book to a status. <paramref name="finishedOn"/> goes only with Finished, and says
-    /// which day it was when the reader knows — an import does — rather than today.
+    /// which day it was when the reader knows — an import does — rather than today. A status that
+    /// took is announced to the shelf (<see cref="ShelfChanges"/>): it may have moved the count of
+    /// finished books.
     /// </summary>
-    public Task<LibraryChange<LibraryEntry>> SetStatusAsync(
+    public async Task<LibraryChange<LibraryEntry>> SetStatusAsync(
         Guid entryId,
         string status,
         CancellationToken cancellationToken,
-        DateOnly? finishedOn = null) =>
-        ChangeAsync<LibraryEntry>(
+        DateOnly? finishedOn = null)
+    {
+        var change = await ChangeAsync<LibraryEntry>(
             client => client.PutAsJsonAsync($"api/library/{entryId}/status", new { status, finishedOn }, cancellationToken),
             cancellationToken);
+
+        if (change.Ok)
+        {
+            shelf.Announce();
+        }
+
+        return change;
+    }
 
     public Task<LibraryChange<ReadingGoal>> GetGoalAsync(int year, CancellationToken cancellationToken) =>
         ChangeAsync<ReadingGoal>(client => client.GetAsync($"api/library/goals/{year}", cancellationToken), cancellationToken);
@@ -382,10 +397,23 @@ public sealed class GatewayLibraryClient(HttpClient httpClient)
             client => client.DeleteAsync($"api/library/{entryId}/sessions/{sessionId}", cancellationToken),
             cancellationToken);
 
-    public Task<LibraryChange> RemoveAsync(Guid entryId, CancellationToken cancellationToken) =>
-        ChangeAsync(
+    /// <summary>
+    /// Takes a book off the shelf. Announced to the shelf when it went, whatever it was: a
+    /// finished one was counted, and the client does not know which this was.
+    /// </summary>
+    public async Task<LibraryChange> RemoveAsync(Guid entryId, CancellationToken cancellationToken)
+    {
+        var change = await ChangeAsync(
             client => client.DeleteAsync($"api/library/{entryId}", cancellationToken),
             cancellationToken);
+
+        if (change.Ok)
+        {
+            shelf.Announce();
+        }
+
+        return change;
+    }
 
     /// <summary>
     /// Every change to something already on the shelf fails in the same four ways, so they are
