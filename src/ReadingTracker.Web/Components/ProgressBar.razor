@@ -41,7 +41,7 @@
             <div class="progress__fill" style="width: 100%"></div>
         </div>
     }
-    else if (Progress is not { } progress)
+    else if (Amount is AmountRead.NotStarted)
     {
         <div class="progress__figure progress__figure--none">
             <strong aria-hidden="true">—</strong>
@@ -49,7 +49,7 @@
         </div>
         <div class="progress__track" aria-hidden="true"></div>
     }
-    else if (progress.AmountRead is null)
+    else if (Amount is AmountRead.NeedsPageCount)
     {
         @* Some of it logged in pages, some in percent, and no page count to add the two
            together with. The reader can fix it, and the Settings panel is where. *@
@@ -59,13 +59,13 @@
         </div>
         <div class="progress__track" aria-hidden="true"></div>
     }
-    else if (progress.PercentComplete is { } percent)
+    else if (Amount.PercentComplete is { } percent)
     {
         <div class="progress__figure">
             <strong>@percent%</strong>
             @* Tracking by percentage makes the bar's percentage and the reader's own total the
                same quantity, and "14%" over "13.5% read" reads as two facts that disagree. *@
-            <span>@(progress.Unit == "Percentage" ? "read" : Read(progress))</span>
+            <span>@(Amount.PagesRead is { } pagesRead ? Read(pagesRead) : "read")</span>
         </div>
         <div class="progress__track" role="progressbar"
              aria-valuenow="@percent" aria-valuemin="0" aria-valuemax="100"
@@ -82,7 +82,7 @@
         @* No page count anywhere, so a percentage cannot be worked out. The total is still
            worth showing: it is what the reader actually told us. *@
         <div class="progress__figure">
-            <strong>@Figures.Trim(progress.AmountRead.Value)</strong>
+            <strong>@Figures.Trim(Amount.PagesRead ?? 0)</strong>
             <span>pages read</span>
         </div>
         <div class="progress__track" aria-hidden="true"></div>
@@ -98,8 +98,9 @@
 </div>
 
 @code {
+    /// <summary>How much has been read (<see cref="LibraryEntry.AmountRead"/>); nothing logged until told otherwise.</summary>
     [Parameter]
-    public Progress? Progress { get; set; }
+    public AmountRead Amount { get; set; } = AmountRead.None;
 
     [Parameter, EditorRequired]
     public required string TrackingMethod { get; set; }
@@ -122,9 +123,9 @@
     /// worth saying what the total is out of, and Library has already stopped that total at the
     /// whole book — so this says "208 of 208 pages" and never more, however much was logged.
     /// </summary>
-    private string Read(Progress progress)
+    private string Read(decimal pagesRead)
     {
-        var amount = Figures.Trim(progress.AmountRead!.Value);
+        var amount = Figures.Trim(pagesRead);
 
         return EffectivePageCount is { } total ? $"{amount} of {total} pages" : $"{amount} pages read";
     }

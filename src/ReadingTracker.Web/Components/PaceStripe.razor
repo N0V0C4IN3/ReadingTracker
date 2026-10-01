@@ -24,7 +24,7 @@
                 <dd><strong class="stripe__accent">100%</strong></dd>
             </div>
         }
-        else if (Entry.Progress is { PercentComplete: { } percent })
+        else if (Entry.AmountRead.PercentComplete is { } percent)
         {
             <div class="stripe__figure">
                 <dt>@(pace.PagesRead is { } read && pace.PageCount is { } of ? $"{Figures.Trim(read)} of {of} pages" : "read")</dt>
@@ -34,7 +34,7 @@
         else
         {
             <div class="stripe__figure stripe__figure--none">
-                <dt>@(Entry.Progress is null ? "nothing logged yet" : Entry.Progress.AmountRead is null ? "set a page count" : "no page count")</dt>
+                <dt>@(Entry.AmountRead switch { AmountRead.NotStarted => "nothing logged yet", AmountRead.NeedsPageCount => "set a page count", _ => "no page count" })</dt>
                 <dd><strong aria-hidden="true">—</strong></dd>
             </div>
         }

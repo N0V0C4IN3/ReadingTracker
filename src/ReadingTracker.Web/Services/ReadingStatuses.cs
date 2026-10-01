@@ -24,7 +24,7 @@ public static class ReadingStatuses
     /// lose.
     /// </summary>
     public static bool NotBegun(LibraryEntry entry) =>
-        entry.Status == OnAdding && entry.Progress is null && entry.Bookmark is null;
+        entry.Status == OnAdding && entry.AmountRead is AmountRead.NotStarted && entry.Bookmark is null;
 
     public static string Label(string status) => status switch
     {

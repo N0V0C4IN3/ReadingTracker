@@ -64,7 +64,7 @@
 
         @if (!NotBegun)
         {
-            <ProgressBar Progress="Entry.Progress"
+            <ProgressBar Amount="Entry.AmountRead"
                          TrackingMethod="@Entry.TrackingMethod"
                          EffectivePageCount="Entry.EffectivePageCount"
                          Bookmark="Entry.Bookmark"
@@ -109,7 +109,7 @@
         {
             <SessionForm Unit="@Entry.TrackingMethod"
                          EffectivePageCount="Entry.EffectivePageCount"
-                         Progress="Entry.Progress"
+                         Amount="Entry.AmountRead"
                          Brief
                          DetailsHref="@PageHref"
                          Title="@Entry.Book?.Title"
@@ -127,7 +127,6 @@
                 <p class="sheet__title">History <span class="sheet__book">@Entry.Book?.Title</span></p>
                 <SessionHistory Sessions="Sessions"
                                 Unit="@Entry.TrackingMethod"
-                                EffectivePageCount="Entry.EffectivePageCount"
                                 Reasons="Reasons"
                                 OnCorrectDay="CorrectDayAsync"
                                 OnDeleteDay="DeleteDayAsync"

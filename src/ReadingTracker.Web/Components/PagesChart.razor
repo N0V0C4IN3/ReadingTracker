@@ -10,7 +10,7 @@
 
 @if (Sessions is { } sessions)
 {
-    var series = DailyPages.Of(sessions, EffectivePageCount, DateOnly.FromDateTime(DateTime.Now), TimeZoneInfo.Local);
+    var series = DailyPages.Of(sessions, DateOnly.FromDateTime(DateTime.Now), TimeZoneInfo.Local);
     var max = series.Max;
 
     <figure class="chart">
@@ -61,9 +61,6 @@
     /// <summary>The entry's sessions; null while they are still being fetched, when there is nothing to draw.</summary>
     [Parameter]
     public IReadOnlyList<ReadingSessionView>? Sessions { get; set; }
-
-    [Parameter]
-    public int? EffectivePageCount { get; set; }
 
     private static string Label(DayPages day)
     {

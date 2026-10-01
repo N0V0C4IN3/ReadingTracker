@@ -37,24 +37,41 @@ public static class Progress
     }
 
     /// <summary>
-    /// How far through the book a total puts the reader, which is never further than the end of
-    /// it. A reader twenty pages from the end who logs forty has not read 320 pages of a
-    /// 300-page book; they have read all of it, and probably want to be asked whether they have
-    /// finished. What they typed stays on the record either way — only this derived total stops.
+    /// How much of the book a reader has read, as a percentage: the baseline a device's first
+    /// report is measured against, so hand-logged reading is neither counted twice nor thrown
+    /// away. Never past the whole book, which is where the total shown stops too. Null when it
+    /// cannot be said as a percentage: pages logged and no page count known.
+    /// </summary>
+    public static decimal? AsPercent(ReadingTotals totals, int? totalPages) =>
+        totals.In(TrackingMethod.Percentage, totalPages) is { } read
+            ? Capped(read, TrackingMethod.Percentage, totalPages)
+            : null;
+
+    private static ReadingProgress Reached(decimal amountRead, TrackingMethod unit, int? totalPages)
+    {
+        var read = Capped(amountRead, unit, totalPages);
+
+        return new ReadingProgress(read, unit, PercentComplete(read, unit, totalPages));
+    }
+
+    /// <summary>
+    /// A total never further than the end of the book. A reader twenty pages from the end who
+    /// logs forty has not read 320 pages of a 300-page book; they have read all of it, and
+    /// probably want to be asked whether they have finished. What they typed stays on the record
+    /// either way — only this derived total stops.
     ///
     /// Nothing stops when nobody knows how long the book is, because there is no end to stop at.
     /// </summary>
-    private static ReadingProgress Reached(decimal amountRead, TrackingMethod unit, int? totalPages)
+    private static decimal Capped(decimal amountRead, TrackingMethod unit, int? totalPages)
     {
         decimal? wholeBook = unit switch
         {
             TrackingMethod.Percentage => 100m,
-            _ => totalPages,
+            _ when totalPages is > 0 => totalPages,
+            _ => null,
         };
 
-        var read = wholeBook is { } whole && amountRead > whole ? whole : amountRead;
-
-        return new ReadingProgress(read, unit, PercentComplete(read, unit, totalPages));
+        return wholeBook is { } whole && amountRead > whole ? whole : amountRead;
     }
 
     /// <summary>

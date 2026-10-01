@@ -334,6 +334,36 @@ public sealed class GatewayLibraryClientChangeTests
         Assert.Equal(["Device", "Reader"], outcome.Value!.Select(session => session.Source));
     }
 
+    [Fact]
+    public async Task Reads_what_each_session_came_to_in_pages_which_may_be_nothing()
+    {
+        var (client, gateway) = CreateClient();
+        gateway.Respond = _ => StubHttpMessageHandler.Json($"[{Session(pages: "37.5")}, {Session(pages: "null")}]");
+
+        var outcome = await client.GetSessionsAsync(EntryId, CancellationToken.None);
+
+        Assert.Equal([37.5m, null], outcome.Value!.Select(session => session.Pages));
+    }
+
+    [Fact]
+    public async Task Reads_how_much_of_a_book_has_been_read_as_the_case_it_is()
+    {
+        var (client, gateway) = CreateClient();
+        gateway.Respond = _ => StubHttpMessageHandler.Json($"""
+            [
+              {Entry("Reading", progress: """{ "amountRead": 150, "unit": "Pages", "percentComplete": 50 }""")},
+              {Entry("Reading", progress: """{ "amountRead": null, "unit": null, "percentComplete": null }""")},
+              {Entry("WantToRead")}
+            ]
+            """);
+
+        var (entries, _) = await client.GetEntriesAsync(null, CancellationToken.None);
+
+        Assert.Equal(
+            [new AmountRead.InPages(150m, 50), new AmountRead.NeedsPageCount(), new AmountRead.NotStarted()],
+            entries!.Select(entry => entry.AmountRead));
+    }
+
     private static (GatewayLibraryClient Client, StubHttpMessageHandler Gateway) CreateClient()
     {
         var gateway = new StubHttpMessageHandler();
@@ -345,7 +375,8 @@ public sealed class GatewayLibraryClientChangeTests
         string status,
         string trackingMethod = "Pages",
         int? pageCountOverride = null,
-        string bookmark = "null") =>
+        string bookmark = "null",
+        string progress = "null") =>
         $$"""
         {
           "id": "{{EntryId}}",
@@ -362,12 +393,12 @@ public sealed class GatewayLibraryClientChangeTests
             "coverUrl": null,
             "totalPages": 445
           },
-          "progress": null,
+          "progress": {{progress}},
           "bookmark": {{bookmark}}
         }
         """;
 
-    private static string Session(string source = "Reader") =>
+    private static string Session(string source = "Reader", string pages = "22") =>
         $$"""
         {
           "id": "{{SessionId}}",
@@ -376,7 +407,8 @@ public sealed class GatewayLibraryClientChangeTests
           "source": "{{source}}",
           "occurredAt": "2026-09-08T00:00:00+00:00",
           "durationMinutes": 45,
-          "displayed": { "amount": 5, "unit": "Percentage" }
+          "displayed": { "amount": 5, "unit": "Percentage" },
+          "pages": {{pages}}
         }
         """;
 }

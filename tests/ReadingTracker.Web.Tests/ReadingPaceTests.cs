@@ -30,7 +30,7 @@ public class ReadingPaceTests
             null);
 
     private static ReadingSessionView Session(int daysAgo, decimal amount = 10, string unit = "Pages") =>
-        new(Guid.NewGuid(), amount, unit, "Reader", At(daysAgo), null, null);
+        LibrarySays.Session(At(daysAgo), amount, unit);
 
     /// <summary>Mid-morning on that day, so the day is the same in any nearby zone.</summary>
     private static DateTimeOffset At(int daysAgo) =>
@@ -167,7 +167,7 @@ public class ReadingPaceTests
         // 23:30 UTC yesterday is already today in Kyiv (UTC+3), so the reader started today.
         var lateLastNight = new DateTimeOffset(Today.AddDays(-1).ToDateTime(new TimeOnly(23, 30)), TimeSpan.Zero);
         var kyiv = TimeZoneInfo.CreateCustomTimeZone("kyiv", TimeSpan.FromHours(3), "Kyiv", "Kyiv");
-        var session = new ReadingSessionView(Guid.NewGuid(), 10, "Pages", "Reader", lateLastNight, null, null);
+        var session = new ReadingSessionView(Guid.NewGuid(), 10, "Pages", "Reader", lateLastNight, null, null, 10);
 
         var pace = ReadingPace.Of(Entry(amountRead: 10), [session], Today, kyiv);
 

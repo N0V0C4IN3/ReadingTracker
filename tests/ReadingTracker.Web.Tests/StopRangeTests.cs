@@ -4,10 +4,12 @@ namespace ReadingTracker.Web.Tests;
 
 public class StopRangeTests
 {
+    private static AmountRead Read(Progress? progress) => AmountRead.Of(progress);
+
     [Fact]
     public void A_book_in_pages_runs_from_the_pages_read_to_its_page_count()
     {
-        var range = StopRange.For("Pages", 248, new Progress(138, "Pages", 56))!;
+        var range = StopRange.For("Pages", 248, Read(LibrarySays.Pages(138, 56)))!;
 
         Assert.Equal(new StopRange(true, 248, 138), range);
         Assert.Equal(110, range.Left);
@@ -16,7 +18,7 @@ public class StopRangeTests
     [Fact]
     public void A_book_in_percent_runs_from_its_percent_to_a_hundred()
     {
-        var range = StopRange.For("Percentage", 248, new Progress(56, "Percentage", 56))!;
+        var range = StopRange.For("Percentage", 248, Read(LibrarySays.Percent(56, 56)))!;
 
         Assert.Equal(new StopRange(false, 100, 56), range);
     }
@@ -24,32 +26,49 @@ public class StopRangeTests
     [Fact]
     public void A_book_in_percent_needs_no_page_count()
     {
-        Assert.Equal(new StopRange(false, 100, 30), StopRange.For("Percentage", null, new Progress(30, "Percentage", 30)));
+        Assert.Equal(new StopRange(false, 100, 30), StopRange.For("Percentage", null, Read(LibrarySays.Percent(30, 30))));
     }
 
     [Fact]
     public void A_book_not_started_starts_at_nothing()
     {
-        Assert.Equal(new StopRange(true, 300, 0), StopRange.For("Pages", 300, null));
+        Assert.Equal(new StopRange(true, 300, 0), StopRange.For("Pages", 300, Read(LibrarySays.Nothing)));
     }
 
     [Fact]
-    public void Sessions_logged_in_both_units_are_placed_by_the_percent_read()
+    public void A_book_in_percent_with_no_page_count_and_pages_logged_starts_at_nothing()
     {
-        // No amount, since the two units cannot be added without a page count at the time; the
-        // percent says where the reader is regardless.
-        Assert.Equal(new StopRange(true, 200, 50), StopRange.For("Pages", 200, new Progress(null, null, 25)));
+        // Pages logged, nobody knows the length, and the reader now tracks by percent: Library
+        // says the total in the unit it was logged in, which is not a place on a percent slider.
+        Assert.Equal(new StopRange(false, 100, 0), StopRange.For("Percentage", null, Read(LibrarySays.Pages(120, null))));
+    }
+
+    [Fact]
+    public void A_total_library_cannot_total_places_nobody_and_starts_at_nothing()
+    {
+        // Logged in both units with no page count: there is no page count to make a range of in
+        // pages, and in percent there is no total to say where the reader is.
+        Assert.Null(StopRange.For("Pages", null, Read(LibrarySays.CannotTotal)));
+        Assert.Equal(new StopRange(false, 100, 0), StopRange.For("Percentage", null, Read(LibrarySays.CannotTotal)));
+    }
+
+    [Fact]
+    public void A_shape_library_cannot_produce_is_not_trusted_to_place_the_reader()
+    {
+        // A percent and no amount cannot be what Library says; the slider starts at the top
+        // rather than somewhere worked out from half of an answer.
+        Assert.Equal(new StopRange(true, 200, 0), StopRange.For("Pages", 200, AmountRead.Of(new Progress(null, null, 25))));
     }
 
     [Fact]
     public void A_book_in_pages_with_no_page_count_has_no_range() =>
-        Assert.Null(StopRange.For("Pages", null, new Progress(40, "Pages", null)));
+        Assert.Null(StopRange.For("Pages", null, Read(LibrarySays.Pages(40, null))));
 
     [Theory]
     [InlineData(248)]
     [InlineData(260)]
     public void A_book_read_to_its_end_or_past_it_has_no_range(int read) =>
-        Assert.Null(StopRange.For("Pages", 248, new Progress(read, "Pages", 100)));
+        Assert.Null(StopRange.For("Pages", 248, Read(LibrarySays.Pages(read, 100))));
 
     [Theory]
     [InlineData(100, 138)]

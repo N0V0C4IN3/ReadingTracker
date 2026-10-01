@@ -98,13 +98,13 @@
     [Parameter]
     public EventCallback OnCancel { get; set; }
 
-    /// <summary>The book's length, which with <see cref="Progress"/> gives the slider its ends.</summary>
+    /// <summary>The book's length, which with <see cref="Amount"/> gives the slider its ends.</summary>
     [Parameter]
     public int? EffectivePageCount { get; set; }
 
     /// <summary>How far the reader has got, which is where the slider starts.</summary>
     [Parameter]
-    public Progress? Progress { get; set; }
+    public AmountRead Amount { get; set; } = AmountRead.None;
 
     /// <summary>How much read and nothing else, for today: the shelf card's form.</summary>
     [Parameter]
@@ -164,7 +164,7 @@
     private string UnitLabel => Unit == "Percentage" ? "%" : "pages";
 
     /// <summary>What a new stretch can be slid along; none for a correction, which is a number.</summary>
-    private StopRange? Range => Existing is null ? StopRange.For(Unit, EffectivePageCount, Progress) : null;
+    private StopRange? Range => Existing is null ? StopRange.For(Unit, EffectivePageCount, Amount) : null;
 
     protected override void OnParametersSet()
     {

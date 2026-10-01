@@ -6,8 +6,8 @@ public sealed record DayPages(DateOnly Day, decimal Pages);
 /// <summary>
 /// Pages read per calendar day over the last <see cref="WindowDays"/> days, ending today, for
 /// the chart on the Book page. A pure series from the entry's ReadingSessions: each session's
-/// pages go to the day it happened on in the reader's own time zone, and a session logged in
-/// percent is turned into pages through the effective page count. One that cannot be — percent
+/// pages (<see cref="ReadingSessionView.Pages"/>, as Library worked them out, percent included)
+/// go to the day it happened on in the reader's own time zone. One that came to none — percent
 /// with no page count to go through — is left out and counted, so the chart can say so.
 /// </summary>
 /// <param name="Days">Exactly <see cref="WindowDays"/> days, oldest first, the last one today.</param>
@@ -26,7 +26,6 @@ public sealed record DailyPages(IReadOnlyList<DayPages> Days, int LeftOut)
 
     public static DailyPages Of(
         IReadOnlyList<ReadingSessionView> sessions,
-        int? effectivePageCount,
         DateOnly today,
         TimeZoneInfo zone)
     {
@@ -44,7 +43,7 @@ public sealed record DailyPages(IReadOnlyList<DayPages> Days, int LeftOut)
                 continue;
             }
 
-            if (PagesOf(session, effectivePageCount) is not { } read)
+            if (session.Pages is not { } read)
             {
                 leftOut++;
                 continue;
@@ -62,11 +61,4 @@ public sealed record DailyPages(IReadOnlyList<DayPages> Days, int LeftOut)
 
         return new DailyPages(days, leftOut);
     }
-
-    private static decimal? PagesOf(ReadingSessionView session, int? effectivePageCount) => session.Unit switch
-    {
-        "Pages" => session.Amount,
-        "Percentage" when effectivePageCount is { } total => session.Amount * total / 100,
-        _ => null,
-    };
 }
