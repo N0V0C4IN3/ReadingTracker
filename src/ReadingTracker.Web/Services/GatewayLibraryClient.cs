@@ -397,7 +397,10 @@ public sealed class GatewayLibraryClient(HttpClient httpClient, ShelfChanges she
             client => client.DeleteAsync($"api/library/{entryId}/sessions/{sessionId}", cancellationToken),
             cancellationToken);
 
-    /// <summary>Takes a book off the shelf. Announced to the shelf when it went: a finished one was counted.</summary>
+    /// <summary>
+    /// Takes a book off the shelf. Announced to the shelf when it went, whatever it was: a
+    /// finished one was counted, and the client does not know which this was.
+    /// </summary>
     public async Task<LibraryChange> RemoveAsync(Guid entryId, CancellationToken cancellationToken)
     {
         var change = await ChangeAsync(

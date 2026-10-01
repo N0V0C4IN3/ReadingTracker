@@ -93,6 +93,16 @@
 
     private bool _asked;
 
+    /// <summary>
+    /// The number of the latest question asked, and of the one whose answer is showing. An import
+    /// announces after every book, so several asks can be in flight at once, and their answers can
+    /// arrive out of order or not at all. An answer is kept only if it is newer than the one
+    /// showing: an older count never lands after a newer one, and an ask that fails costs nothing.
+    /// </summary>
+    private int _asking;
+
+    private int _showing;
+
     protected override void OnInitialized() => Shelf.Changed += Refresh;
 
     /// <summary>Asked for once somebody is signed in; before that the answer would be a 401.</summary>
@@ -107,20 +117,14 @@
         await LoadAsync();
     }
 
-    /// <summary>
-    /// Which question is the latest. An import announces after every book, so several asks can be
-    /// in flight at once and their answers can arrive out of order; only the answer to the latest
-    /// one is kept, or an older count could land last and stay.
-    /// </summary>
-    private int _asking;
-
     private async Task LoadAsync()
     {
         var asking = ++_asking;
         var answer = await Library.GetGoalAsync(Year, CancellationToken.None);
 
-        if (answer.Ok && asking == _asking)
+        if (answer.Ok && asking > _showing)
         {
+            _showing = asking;
             _goal = answer.Value;
             _books ??= _goal!.Books;
         }
@@ -175,8 +179,9 @@
 
         if (answer.Ok)
         {
-            // The goal as it was just set outranks any refresh still on its way with the old one.
-            _asking++;
+            // The goal as it was just set outranks any ask made before it, still on its way with
+            // the old one; one made after it is newer, and is kept.
+            _showing = ++_asking;
             _goal = answer.Value;
             _open = false;
         }

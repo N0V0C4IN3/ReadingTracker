@@ -1,4 +1,5 @@
 using System.Net;
+using System.Runtime.CompilerServices;
 using ReadingTracker.Web.Services;
 
 namespace ReadingTracker.Web.Tests;
@@ -22,7 +23,7 @@ public sealed class GatewayLibraryClientAnnounceTests
         var outcome = await client.SetStatusAsync(EntryId, "Finished", CancellationToken.None);
 
         Assert.True(outcome.Ok);
-        Assert.Equal(1, announced.Count);
+        Assert.Equal(1, announced.Value);
     }
 
     [Fact]
@@ -34,7 +35,7 @@ public sealed class GatewayLibraryClientAnnounceTests
         var outcome = await client.RemoveAsync(EntryId, CancellationToken.None);
 
         Assert.True(outcome.Ok);
-        Assert.Equal(1, announced.Count);
+        Assert.Equal(1, announced.Value);
     }
 
     [Fact]
@@ -48,7 +49,7 @@ public sealed class GatewayLibraryClientAnnounceTests
         var shelved = await client.AddAsAsync(BookId, "Finished", CancellationToken.None);
 
         Assert.Equal("Finished", shelved.Entry!.Status);
-        Assert.Equal(1, announced.Count);
+        Assert.Equal(1, announced.Value);
     }
 
     [Theory]
@@ -63,7 +64,7 @@ public sealed class GatewayLibraryClientAnnounceTests
         var outcome = await client.SetStatusAsync(EntryId, "Finished", CancellationToken.None);
 
         Assert.False(outcome.Ok);
-        Assert.Equal(0, announced.Count);
+        Assert.Equal(0, announced.Value);
     }
 
     [Theory]
@@ -77,7 +78,7 @@ public sealed class GatewayLibraryClientAnnounceTests
         var outcome = await client.RemoveAsync(EntryId, CancellationToken.None);
 
         Assert.False(outcome.Ok);
-        Assert.Equal(0, announced.Count);
+        Assert.Equal(0, announced.Value);
     }
 
     [Fact]
@@ -89,7 +90,7 @@ public sealed class GatewayLibraryClientAnnounceTests
         await client.SetStatusAsync(EntryId, "Finished", CancellationToken.None);
         await client.RemoveAsync(EntryId, CancellationToken.None);
 
-        Assert.Equal(0, announced.Count);
+        Assert.Equal(0, announced.Value);
     }
 
     [Fact]
@@ -103,7 +104,7 @@ public sealed class GatewayLibraryClientAnnounceTests
         var shelved = await client.AddAsAsync(BookId, "Finished", CancellationToken.None);
 
         Assert.True(shelved.StatusRefused);
-        Assert.Equal(0, announced.Count);
+        Assert.Equal(0, announced.Value);
     }
 
     [Fact]
@@ -114,7 +115,7 @@ public sealed class GatewayLibraryClientAnnounceTests
 
         await client.AddAsync(BookId, CancellationToken.None);
 
-        Assert.Equal(0, announced.Count);
+        Assert.Equal(0, announced.Value);
     }
 
     [Fact]
@@ -129,7 +130,7 @@ public sealed class GatewayLibraryClientAnnounceTests
         await client.SetTrackingMethodAsync(EntryId, "Percentage", CancellationToken.None);
         await client.SetPageCountAsync(EntryId, 300, CancellationToken.None);
 
-        Assert.Equal(0, announced.Count);
+        Assert.Equal(0, announced.Value);
     }
 
     [Fact]
@@ -144,22 +145,17 @@ public sealed class GatewayLibraryClientAnnounceTests
         await client.GetGoalAsync(2026, CancellationToken.None);
         await client.GetSessionsAsync(EntryId, CancellationToken.None);
 
-        Assert.Equal(0, announced.Count);
+        Assert.Equal(0, announced.Value);
     }
 
-    private static (GatewayLibraryClient Client, StubHttpMessageHandler Gateway, Announcements Announced) CreateClient()
+    private static (GatewayLibraryClient Client, StubHttpMessageHandler Gateway, StrongBox<int> Announced) CreateClient()
     {
         var gateway = new StubHttpMessageHandler();
         var httpClient = new HttpClient(gateway) { BaseAddress = new Uri("http://gateway.test/") };
         var shelf = new ShelfChanges();
-        var announced = new Announcements();
-        shelf.Changed += () => announced.Count++;
+        var announced = new StrongBox<int>();
+        shelf.Changed += () => announced.Value++;
         return (new GatewayLibraryClient(httpClient, shelf), gateway, announced);
-    }
-
-    private sealed class Announcements
-    {
-        public int Count { get; set; }
     }
 
     private static string Entry(string status) =>
