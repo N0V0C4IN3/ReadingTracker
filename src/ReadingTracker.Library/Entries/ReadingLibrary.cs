@@ -485,7 +485,8 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
     /// What the reader had read before any device said anything, as the baseline a first report
     /// is measured against — so hand-logged reading is neither counted twice nor thrown away.
     /// Zero when it cannot be expressed as a percentage: pages logged and no page count known.
-    /// Never past the whole book, which is where the derived total stops too.
+    /// Worked out, and stopped at the whole book, by <see cref="Progress.AsPercent"/>, so it is
+    /// the same amount read the shelf shows.
     /// </summary>
     private async Task<decimal> AmountReadAsPercentAsync(
         LibraryEntry entry,
@@ -494,9 +495,7 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
     {
         var totals = (await TotalsAsync([entry.Id], cancellationToken)).GetValueOrDefault(entry.Id, ReadingTotals.Nothing);
 
-        return totals.In(TrackingMethod.Percentage, entry.EffectivePageCount(catalogPageCount)) is { } read
-            ? Math.Min(read, 100m)
-            : 0m;
+        return Progress.AsPercent(totals, entry.EffectivePageCount(catalogPageCount)) ?? 0m;
     }
 
     private Task AnnounceIfChangedAsync(

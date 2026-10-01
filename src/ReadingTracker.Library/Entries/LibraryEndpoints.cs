@@ -733,10 +733,16 @@ public static class LibraryEndpoints
 
     /// <summary>
     /// A session as it was recorded, plus the same reading expressed in whatever method the
-    /// reader now tracks the book by. The recorded amount is never converted — it is the record
-    /// of what the reader actually entered.
+    /// reader now tracks the book by, and in pages. The recorded amount is never converted — it
+    /// is the record of what the reader actually entered.
     /// </summary>
     /// <param name="Source">Whether the reader typed this or a device reported it.</param>
+    /// <param name="Pages">
+    /// What the session came to in pages, unrounded because these are added up and rounding each
+    /// first would lose the small ones; and not stopped at the end of the book, because a session
+    /// is kept as it was stated. Null when it was logged in percent of a book nobody knows the
+    /// length of.
+    /// </param>
     private sealed record SessionResponse(
         Guid Id,
         decimal Amount,
@@ -744,7 +750,8 @@ public static class LibraryEndpoints
         string Source,
         DateTimeOffset OccurredAt,
         int? DurationMinutes,
-        DisplayedAmountResponse? Displayed)
+        DisplayedAmountResponse? Displayed,
+        decimal? Pages)
     {
         public static SessionResponse From(ReadingSession session, TrackingMethod method, int? totalPages) =>
             new(
@@ -754,7 +761,8 @@ public static class LibraryEndpoints
                 session.Source.ToString(),
                 session.OccurredAt,
                 session.DurationMinutes,
-                DisplayedAmountResponse.Of(session, method, totalPages));
+                DisplayedAmountResponse.Of(session, method, totalPages),
+                UnitConversion.PagesRead(session.Amount, session.Unit, totalPages));
     }
 
     /// <summary>
