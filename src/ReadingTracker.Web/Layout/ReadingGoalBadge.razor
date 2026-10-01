@@ -10,9 +10,9 @@
     this year and offers to set one; the count is worth seeing either way.
 
     Fetched once when the header appears and again whenever the shelf says something changed
-    (a book marked Finished, an import landing), so the number never lags what the reader just
-    did. Nothing is shown until the first answer: a header that says "0 / 0" for a beat is
-    wrong for that beat.
+    (a status that took, an entry removed — the Library client says so, an import's books
+    included), so the number never lags what the reader just did. Nothing is shown until the
+    first answer: a header that says "0 / 0" for a beat is wrong for that beat.
 *@
 
 <AuthorizeView>
@@ -107,18 +107,26 @@
         await LoadAsync();
     }
 
+    /// <summary>
+    /// Which question is the latest. An import announces after every book, so several asks can be
+    /// in flight at once and their answers can arrive out of order; only the answer to the latest
+    /// one is kept, or an older count could land last and stay.
+    /// </summary>
+    private int _asking;
+
     private async Task LoadAsync()
     {
+        var asking = ++_asking;
         var answer = await Library.GetGoalAsync(Year, CancellationToken.None);
 
-        if (answer.Ok)
+        if (answer.Ok && asking == _asking)
         {
             _goal = answer.Value;
             _books ??= _goal!.Books;
         }
     }
 
-    /// <summary>A book was finished, or an import landed: the figure may have moved.</summary>
+    /// <summary>The shelf said something changed (a status took, an entry went): the figure may have moved.</summary>
     private void Refresh() => _ = InvokeAsync(async () =>
     {
         await LoadAsync();
@@ -167,6 +175,8 @@
 
         if (answer.Ok)
         {
+            // The goal as it was just set outranks any refresh still on its way with the old one.
+            _asking++;
             _goal = answer.Value;
             _open = false;
         }

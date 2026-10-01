@@ -10,7 +10,7 @@ namespace ReadingTracker.Web.Services;
 /// every tenth book. The wait is said as a countdown, from the Gateway's own Retry-After: a
 /// number that comes down reads as work; a line that says "waiting" reads as stuck.
 /// </summary>
-public sealed class ImportJob(GatewayCatalogClient catalog, GatewayLibraryClient library, ShelfChanges shelf)
+public sealed class ImportJob(GatewayCatalogClient catalog, GatewayLibraryClient library)
 {
     public IReadOnlyList<ImportedBook> Books { get; private set; } = [];
 
@@ -91,7 +91,6 @@ public sealed class ImportJob(GatewayCatalogClient catalog, GatewayLibraryClient
             Running = false;
             Done = true;
             Announce();
-            shelf.Announce();
         }
     }
 

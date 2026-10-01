@@ -21,9 +21,6 @@ public abstract class EntryHost : ComponentBase
     [Inject]
     protected GatewayLibraryClient Library { get; set; } = default!;
 
-    [Inject]
-    protected ShelfChanges Shelf { get; set; } = default!;
-
     [Parameter, EditorRequired]
     public required LibraryEntry Entry { get; set; }
 
@@ -101,12 +98,12 @@ public abstract class EntryHost : ComponentBase
             return;
         }
 
+        // Library's client announces a status that took (ShelfChanges), which is how the header's
+        // goal badge, counting finished books, hears of it.
         await RunAsync(token => Library.SetStatusAsync(Entry.Id, status, token), async entry =>
         {
             StatusChanged(entry);
             await Show(entry);
-            // The header's goal badge counts finished books, and this may have been one.
-            Shelf.Announce();
         });
     }
 

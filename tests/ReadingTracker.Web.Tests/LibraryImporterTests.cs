@@ -140,7 +140,7 @@ public class LibraryImporterTests
         var waits = new List<TimeSpan>();
         var importer = new LibraryImporter(
             new GatewayCatalogClient(http),
-            new GatewayLibraryClient(http),
+            new GatewayLibraryClient(http, new ShelfChanges()),
             (wait, _) => { waits.Add(wait); return Task.CompletedTask; });
         return (importer, gateway, waits);
     }
