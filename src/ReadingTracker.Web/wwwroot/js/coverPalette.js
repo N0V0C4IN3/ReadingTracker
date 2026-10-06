@@ -3,9 +3,9 @@
 // Two things are taken from the cover. The washes — the three broad fields of colour in the
 // mesh behind the page (see body's background-image in app.css) — become the cover's three
 // most present colours, at the tints the theme already uses. And the accent — buttons, the
-// status, the progress bar, the monogram — becomes the cover's most saturated colour, brought
-// to the lightness the theme keeps its own accent at, so it contrasts the same on either
-// ground. Everything else is left to the theme; the ink never changes.
+// status, the progress bar, the monogram — becomes the cover's most saturated colour, deep on
+// light and pale on dark, and taken further where it needs to be to read on a card (see
+// paint). Everything else is left to the theme; the ink never changes.
 //
 // The colours are read here rather than in Catalog because the reading is cheap — forty pixels
 // across — and putting it there would mean a migration and a library to decode images for what
@@ -73,12 +73,12 @@ function contrast(a, b) {
     return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
 
-// The theme's card, which the accent is read against: the progress figure and the status sit
-// on one. Read from the stylesheet so a change of theme there needs no change here.
-function cardColour(dark) {
-    const hex = /^#([0-9a-f]{6})$/i.exec(getComputedStyle(root).getPropertyValue("--card").trim());
-    if (hex) { return [0, 2, 4].map(i => parseInt(hex[1].slice(i, i + 2), 16)); }
-    return dark ? [28, 31, 33] : [252, 253, 254];
+// A colour token of the theme's, as [r, g, b], or null where it is not a plain #rrggbb: read
+// from the stylesheet so that a change of theme there needs no change here, and never guessed
+// at, so a token written some other way is skipped rather than measured against stale numbers.
+function tokenColour(name) {
+    const hex = /^#([0-9a-f]{6})$/i.exec(getComputedStyle(root).getPropertyValue(name).trim());
+    return hex ? [0, 2, 4].map(i => parseInt(hex[1].slice(i, i + 2), 16)) : null;
 }
 
 // --- reading the cover -----------------------------------------------------------------------
@@ -138,11 +138,10 @@ function paint() {
     if (!current) { return; }
     const dark = isDark();
 
-    // The washes at the theme's own tints — the mesh is a tint of the page, not a picture —
-    // with their lightness and saturation brought to where the theme keeps its own: pale on
-    // dark, and on light both deeper and more vivid, since a tint on a pale ground is not seen
-    // otherwise.
-    // Light at about half: on Cloud's pale ground a jacket's fields at full strength read as blotches.
+    // The washes as tints — the mesh is a tint of the page, not a picture — with their
+    // lightness and saturation brought to where the theme keeps its own: pale on dark, and on
+    // light both deeper and more vivid, since a tint on a pale ground is not seen otherwise.
+    // Fainter on light than on dark: on a ground that pale, fields any stronger read as blotches.
     const tints = dark ? [17, 13, 13] : [9, 8, 7];
     current.washes.forEach((c, i) => {
         const l = dark ? clamp(c.l, 0.58, 0.78) : clamp(c.l, 0.45, 0.6);
@@ -162,13 +161,18 @@ function paint() {
     // A fixed lightness is not a fixed contrast, though: at the same lightness a yellow or a cyan
     // is far brighter to the eye than a blue, and on a white card a yellow at 0.38 measured 2.2:1.
     // So from that starting lightness it goes on deepening (on light) or paling (on dark) until
-    // it reaches 4.5:1 against the card, the figure for body-size text. About half are there
-    // already and do not move; the bright ones go to an olive or a teal of their own hue.
+    // it reaches 4.6:1 against both the page and the card. The accent is drawn on either — a
+    // link on the bare page, the figure on a card — and on everything between: a sheer card, or
+    // its own soft tint under the monogram. Those two are the extremes, so clearing both clears
+    // the lot, and the tenth over 4.5:1 (the figure for body-size text) is for the mesh showing
+    // through. Many hues are there already and do not move; the bright ones go to an olive or a
+    // teal of their own hue.
     const { h } = current.accent;
     const s = dark ? clamp(current.accent.s, 0.35, 0.55) : clamp(current.accent.s, 0.6, 0.85);
-    const card = cardColour(dark);
+    const grounds = [tokenColour("--page"), tokenColour("--card")].filter(Boolean);
+    const reads = l => grounds.every(ground => contrast(hslToRgb(h, s, l), ground) >= 4.6);
     let l = dark ? 0.68 : 0.38;
-    while (contrast(hslToRgb(h, s, l), card) < 4.5 && l > 0.15 && l < 0.9) {
+    while (!reads(l) && l > 0.15 && l < 0.9) {
         l += dark ? 0.01 : -0.01;
     }
     const base = hslToRgb(h, s, l);
