@@ -3,9 +3,9 @@
 // Two things are taken from the cover. The washes — the three broad fields of colour in the
 // mesh behind the page (see body's background-image in app.css) — become the cover's three
 // most present colours, at the tints the theme already uses. And the accent — buttons, the
-// status, the progress bar, the monogram — becomes the cover's most saturated colour, brought
-// to the lightness the theme keeps its own accent at, so it contrasts the same on either
-// ground. Everything else is left to the theme; the ink never changes.
+// status, the progress bar, the monogram — becomes the cover's most saturated colour, deep on
+// light and pale on dark, and taken further where it needs to be to read on a card (see
+// paint). Everything else is left to the theme; the ink never changes.
 //
 // The colours are read here rather than in Catalog because the reading is cheap — forty pixels
 // across — and putting it there would mean a migration and a library to decode images for what
@@ -58,6 +58,28 @@ function hueGap(a, b) {
 }
 
 const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+
+// WCAG's relative luminance and the contrast ratio between two colours, as [r, g, b] in 0–255.
+function luminance(rgb) {
+    const [r, g, b] = rgb.map(v => {
+        v /= 255;
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contrast(a, b) {
+    const x = luminance(a), y = luminance(b);
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+
+// A colour token of the theme's, as [r, g, b], or null where it is not a plain #rrggbb: read
+// from the stylesheet so that a change of theme there needs no change here, and never guessed
+// at, so a token written some other way is skipped rather than measured against stale numbers.
+function tokenColour(name) {
+    const hex = /^#([0-9a-f]{6})$/i.exec(getComputedStyle(root).getPropertyValue(name).trim());
+    return hex ? [0, 2, 4].map(i => parseInt(hex[1].slice(i, i + 2), 16)) : null;
+}
 
 // --- reading the cover -----------------------------------------------------------------------
 
@@ -116,11 +138,11 @@ function paint() {
     if (!current) { return; }
     const dark = isDark();
 
-    // The washes at the theme's own tints — the mesh is a tint of the page, not a picture —
-    // with their lightness and saturation brought to where the theme keeps its own: pale on
-    // dark, and on light both deeper and more vivid, since a tint on a pale ground is not seen
-    // otherwise.
-    const tints = dark ? [17, 13, 13] : [17, 15, 13];
+    // The washes as tints — the mesh is a tint of the page, not a picture — with their
+    // lightness and saturation brought to where the theme keeps its own: pale on dark, and on
+    // light both deeper and more vivid, since a tint on a pale ground is not seen otherwise.
+    // Fainter on light than on dark: on a ground that pale, fields any stronger read as blotches.
+    const tints = dark ? [17, 13, 13] : [9, 8, 7];
     current.washes.forEach((c, i) => {
         const l = dark ? clamp(c.l, 0.58, 0.78) : clamp(c.l, 0.45, 0.6);
         const s = dark ? clamp(c.s, 0.35, 0.7) : clamp(c.s, 0.6, 0.9);
@@ -135,16 +157,32 @@ function paint() {
     // The accent's job is contrast: pale on dark, deep on light, whatever the jacket's own
     // lightness. The hue is the jacket's; on light the saturation is pushed, since a deep
     // colour at the theme's quiet saturation reads as mud on a pale ground.
+    //
+    // A fixed lightness is not a fixed contrast, though: at the same lightness a yellow or a cyan
+    // is far brighter to the eye than a blue, and on a white card a yellow at 0.38 measured 2.2:1.
+    // So from that starting lightness it goes on deepening (on light) or paling (on dark) until
+    // it reaches 4.6:1 against both the page and the card. The accent is drawn on either — a
+    // link on the bare page, the figure on a card — and on everything between: a sheer card, or
+    // its own soft tint under the monogram. Those two are the extremes, so clearing both clears
+    // the lot, and the tenth over 4.5:1 (the figure for body-size text) is for the mesh showing
+    // through. Many hues are there already and do not move; the bright ones go to an olive or a
+    // teal of their own hue.
     const { h } = current.accent;
     const s = dark ? clamp(current.accent.s, 0.35, 0.55) : clamp(current.accent.s, 0.6, 0.85);
-    const base = hslToRgb(h, s, dark ? 0.68 : 0.38);
-    const hover = hslToRgb(h, s, dark ? 0.74 : 0.33);
+    const grounds = [tokenColour("--page"), tokenColour("--card")].filter(Boolean);
+    const reads = l => grounds.every(ground => contrast(hslToRgb(h, s, l), ground) >= 4.6);
+    let l = dark ? 0.68 : 0.38;
+    while (!reads(l) && l > 0.15 && l < 0.9) {
+        l += dark ? 0.01 : -0.01;
+    }
+    const base = hslToRgb(h, s, l);
+    const hover = hslToRgb(h, s, dark ? l + 0.06 : l - 0.05);
     const ink = hslToRgb(h, s, dark ? 0.12 : 1);
     root.style.setProperty("--accent", `rgb(${base.join(" ")})`);
     root.style.setProperty("--accent-hover", `rgb(${hover.join(" ")})`);
     root.style.setProperty("--accent-soft", `rgb(${base.join(" ")} / ${dark ? 15 : 11}%)`);
     root.style.setProperty("--accent-ink", `rgb(${ink.join(" ")})`);
-    root.style.setProperty("--wash-accent", `rgb(${base.join(" ")} / 17%)`);
+    root.style.setProperty("--wash-accent", `rgb(${base.join(" ")} / ${dark ? 17 : 9}%)`);
 }
 
 function remember(bookId, palette) {
