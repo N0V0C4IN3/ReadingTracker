@@ -8,6 +8,10 @@ Issues live in GitHub Issues on this repo, via the `gh` CLI. See `docs/agents/is
 
 Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
+### Writing web frontend code
+
+Before adding a helper, component, script or style to `ReadingTracker.Web`, check `docs/agents/web-frontend.md`. It maps each job to the piece that already does it.
+
 ### Reviewing a change to a phone text field
 
 A change that touches a text field on a phone, or what decides a phone's screen (search, sheets, orientation), is checked for the keyboard in the browser before it is called reviewed or verified. Read `docs/agents/mobile-keyboard-check.md`; `/verify` has the handle for driving the app.

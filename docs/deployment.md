@@ -1,35 +1,41 @@
 # Deploying ReadingTracker
 
-> **Most of this page describes the old deployment.**
-> [ADR-0012](adr/0012-self-host-on-a-raspberry-pi-behind-tailscale-funnel.md) moved the services,
-> Postgres and the broker onto a Raspberry Pi reached through Tailscale Funnel. What is deployed
-> today is `docker-compose.pi.yml` on that Pi, with secrets in an untracked `.env` beside it.
->
-> **The frontend half of this page is still current**: it stays on Azure Static Web Apps and
-> `deploy-web.yml` still ships it on every push to master. Only `WEB_GATEWAY_BASE_ADDRESS` has
-> changed, to the Pi's `ts.net` address.
->
-> Everything below about Container Apps, Neon and CloudAMQP is kept because it is the way back.
-> `deploy-services.yml` still works and is still configured; it simply no longer runs on a push,
-> so nothing rebuilds a deployment nobody is using. Run it by hand to return to Azure, and point
-> `WEB_GATEWAY_BASE_ADDRESS` at the Container Apps gateway again.
+## What is deployed today
 
-The stack this page describes was fixed by [ADR-0005](adr/0005-deployment-stack.md): the three
-services to Azure Container Apps, Postgres to Neon, the WebAssembly frontend to Azure Static Web
-Apps.
+There are two halves, and they ship differently.
 
-Two workflows do the deploying, both on a push to `master` and both runnable by hand from the
-Actions tab:
+| Half | Where | Address | How it ships |
+| --- | --- | --- | --- |
+| Frontend (`ReadingTracker.Web`) | Azure Static Web Apps | https://thankful-bush-00466b40f.6.azurestaticapps.net | `deploy-web.yml`, on its own, on every push to `master`. Merging a PR deploys it |
+| Services, Postgres, broker | A Raspberry Pi, through Tailscale Funnel ([ADR-0012](adr/0012-self-host-on-a-raspberry-pi-behind-tailscale-funnel.md)) | https://readingtracker.tail03af11.ts.net | By hand (below). Secrets are in an untracked `.env` beside `docker-compose.pi.yml` on the Pi |
 
-- `.github/workflows/deploy-services.yml` — builds Catalog, Library and Gateway images, pushes
-  them to this repository's GHCR namespace, updates the container apps, then asks each one's
-  `/health` endpoint from outside before calling it done.
-- `.github/workflows/deploy-web.yml` — writes `appsettings.Production.json`, publishes the
-  frontend and uploads it.
+To deploy the services, on the Pi, in the repository's checkout there:
 
-Neither will run to completion until the resources below exist and the repository is configured.
-Both fail on the first step with a message naming what is missing, rather than deploying
-something half-configured.
+```sh
+git pull
+docker compose -f docker-compose.pi.yml up --build -d
+curl -s https://readingtracker.tail03af11.ts.net/health   # through the Funnel, as visitors reach it
+```
+
+The maintainer's `deploy-to-pi` skill and agent do this, and check the disk and the stack, but
+they live in a personal Claude setup, not in this repository.
+
+What joins the two halves:
+
+- The frontend's `WEB_GATEWAY_BASE_ADDRESS` (a repository variable `deploy-web.yml` reads) is the
+  Pi's address above.
+- The Gateway lets the frontend in through `ALLOWED_ORIGIN` in the Pi's `.env` (the Static Web
+  App's address; see `deploy/pi/.env.example`).
+- Google's OAuth client lists the Static Web App's address among its JavaScript origins, and its
+  `/authentication/login-callback` among its redirect URIs.
+
+So a merge alone puts out only the frontend. "Deploy" means both halves that the change touches:
+
+- **Frontend only:** the merge was the deploy. Watch the `Deploy frontend` run go green, then check the address.
+- **Services only:** deploy them to the Pi after the merge.
+- **Both, where the frontend reads something new from a service:** deploy the services to the Pi first, then merge. Merging first puts the new frontend live against the old services.
+
+Locally, the stack is `docker-compose.yml`: `bash tools/dev/up.sh` rebuilds it and waits until http://localhost:5200 answers.
 
 ## Why the frontend needs a generated settings file
 
@@ -78,6 +84,65 @@ What each source is for, so the next origin goes in the right place:
 Adding a provider that serves covers means nothing; adding one the *browser* has to call means
 its origin in `connect-src`. `Permissions-Policy` turns off camera, microphone, geolocation and
 payment, none of which this application has any use for.
+
+## Known rough edges
+
+**Cold start.** The frontend takes around eight seconds to first paint on a published Release
+build, and it is not the download — the framework arrives in about 250ms and the rest is the
+WebAssembly runtime starting. Ahead-of-time compilation is the lever, at the cost of a
+substantially larger download. Unmeasured against this deployment; worth doing before it is
+worth arguing about.
+
+**No smoke test of the whole path.** Each deploy checks the thing it deployed — the settings file
+for the frontend, `/health` for the services — and none signs in and loads a shelf. That
+gap is the deployment-shaped version of the one [#59](https://github.com/N0V0C4IN3/ReadingTracker/issues/59)
+describes.
+
+**The Funnel ingress goes dark.** Seen once so far: after the tailscale sidecar lost its control
+connection (`PollNetMap: unexpected EOF` in its log), Tailscale's ingress relays stopped forwarding
+to the node while everything on the Pi reported healthy — `tailscale funnel status` still said
+"Funnel on", and the hostname still answered from the Pi itself because MagicDNS resolves it to
+the tailnet address, not the ingress. Visitors got a failed TLS handshake and the frontend said
+ReadingTracker could not be reached. `docker compose -f docker-compose.pi.yml restart tailscale`
+fixed it in seconds. The `funnel-watch` service in the compose file now does that unattended: it
+probes `/health` through public DNS (so through the ingress) once a minute and restarts the sidecar
+after three misses; `docker compose logs funnel-watch` shows every miss and restart.
+
+**A silent broker.** `/health` does not cover RabbitMQ, deliberately: a service that cannot reach
+the broker is still able to serve every request a reader makes, so reporting it unhealthy would
+take a working service out of rotation over a degraded feature. The cost is that a broken
+broker connection is invisible to every automated check there is. Adding a book and watching it
+reach the shelf is the manual test; a `degraded` health status that nothing acts
+on is the fix, if this ever bites.
+
+## The old deployment, kept as the way back
+
+Until [ADR-0012](adr/0012-self-host-on-a-raspberry-pi-behind-tailscale-funnel.md), the services ran
+on Azure Container Apps, Postgres on Neon and the broker on CloudAMQP, as
+[ADR-0005](adr/0005-deployment-stack.md) set out. The rest of this page is kept as the way back.
+`deploy-services.yml` still works and is still configured, but it runs only by hand now, so
+nothing rebuilds a deployment nobody is using. To return, run it and point
+`WEB_GATEWAY_BASE_ADDRESS` at the Container Apps gateway again.
+
+Some of the setup below is still the frontend's today: the Static Web App in **3. Azure**, the
+OAuth client's origins in **4. Google**, and the `WEB_*` variables and
+`AZURE_STATIC_WEB_APPS_API_TOKEN` in **5. This repository**. The rest (Neon, the broker, the
+container apps, and **Order**) is the way back only.
+
+The two workflows:
+
+- `.github/workflows/deploy-services.yml`, run by hand. It builds the Catalog, Library and Gateway
+  images, pushes them to this repository's GHCR namespace, updates the container apps, then asks
+  each one's `/health` endpoint from outside before calling it done.
+- `.github/workflows/deploy-web.yml`, on every push to `master`. It writes
+  `appsettings.Production.json`, publishes the frontend and uploads it.
+
+Neither runs to completion until the resources below exist and the repository is configured. Both
+fail on their first step with a message naming what is missing, rather than deploying something
+half-configured.
+
+Container Apps scale to zero, so the first request after an idle period also paid for a container
+starting. The health check in the services workflow is patient about this on purpose.
 
 ## What to create
 
@@ -215,8 +280,8 @@ unnoticed in.
 
 Add the Static Web Apps URL to the OAuth client's **Authorised JavaScript origins**, and
 `https://<the-app>/authentication/login-callback` to its **Authorised redirect URIs**. Until this
-is done, sign-in fails from the deployed site while working locally, because the only origin
-currently registered is `http://localhost:5200`.
+is done, sign-in fails from the deployed site while working locally, because the client knows
+only `http://localhost:5200`. (Today's Static Web App is registered: see the top of this page.)
 
 Dev sign-in cannot be turned on in production and needs nothing done to it. It requires both the
 Development environment *and* an explicit flag, independently, on the frontend and on the Gateway
@@ -239,7 +304,7 @@ repository on the `master` branch.
 | `AZURE_SUBSCRIPTION_ID` | the subscription id |
 | `AZURE_RESOURCE_GROUP` | `readingtracker` |
 | `CONTAINER_APP_PREFIX` | `readingtracker` |
-| `WEB_GATEWAY_BASE_ADDRESS` | `https://readingtracker-gateway.<region>.azurecontainerapps.io/` |
+| `WEB_GATEWAY_BASE_ADDRESS` | today the Pi's `https://readingtracker.tail03af11.ts.net/`; on Azure, `https://readingtracker-gateway.<region>.azurecontainerapps.io/` |
 | `WEB_GOOGLE_CLIENT_ID` | only if production uses a different OAuth client from the committed one |
 
 **Secrets**:
@@ -260,36 +325,3 @@ The frontend needs the gateway's address, so the services go first.
 5. Put the gateway's URL in `WEB_GATEWAY_BASE_ADDRESS`, and the Static Web App's URL in the
    Gateway's `AllowedOrigins__0` and in the Google OAuth client.
 6. Run **Deploy frontend**.
-
-## Known rough edges
-
-**Cold start.** The frontend takes around eight seconds to first paint on a published Release
-build, and it is not the download — the framework arrives in about 250ms and the rest is the
-WebAssembly runtime starting. Ahead-of-time compilation is the lever, at the cost of a
-substantially larger download. Unmeasured against this deployment; worth doing before it is
-worth arguing about.
-
-Container Apps scale to zero, so the first request after an idle period also pays for a container
-starting. The health check in the services workflow is patient about this on purpose.
-
-**No smoke test of the whole path.** Both workflows check the thing they deployed — `/health` for
-the services, the settings file for the frontend — and neither signs in and loads a shelf. That
-gap is the deployment-shaped version of the one [#59](https://github.com/N0V0C4IN3/ReadingTracker/issues/59)
-describes.
-
-**The Funnel ingress goes dark.** Seen once so far: after the tailscale sidecar lost its control
-connection (`PollNetMap: unexpected EOF` in its log), Tailscale's ingress relays stopped forwarding
-to the node while everything on the Pi reported healthy — `tailscale funnel status` still said
-"Funnel on", and the hostname still answered from the Pi itself because MagicDNS resolves it to
-the tailnet address, not the ingress. Visitors got a failed TLS handshake and the frontend said
-ReadingTracker could not be reached. `docker compose -f docker-compose.pi.yml restart tailscale`
-fixed it in seconds. The `funnel-watch` service in the compose file now does that unattended: it
-probes `/health` through public DNS (so through the ingress) once a minute and restarts the sidecar
-after three misses; `docker compose logs funnel-watch` shows every miss and restart.
-
-**A silent broker.** `/health` does not cover RabbitMQ, deliberately: a service that cannot reach
-the broker is still able to serve every request a reader makes, so reporting it unhealthy would
-take a working service out of rotation over a degraded feature. The cost is that a broken
-broker connection is invisible to every automated check there is. Adding a book and watching it
-reach the shelf is the manual test; a `degraded` health status that Container Apps does not act
-on is the fix, if this ever bites.
