@@ -17,33 +17,6 @@ So a merge alone puts out only the frontend. "Deploy" means both halves that the
 
 Locally, the stack is `docker-compose.yml`: `bash tools/dev/up.sh` rebuilds it and waits until http://localhost:5200 answers.
 
-## The old deployment, kept as the way back
-
-The rest of this page describes the Azure deployment that ADR-0012 replaced. Its frontend parts
-are still current; only `WEB_GATEWAY_BASE_ADDRESS` has changed, to the Pi's `ts.net` address.
-
-> Everything below about Container Apps, Neon and CloudAMQP is kept because it is the way back.
-> `deploy-services.yml` still works and is still configured; it simply no longer runs on a push,
-> so nothing rebuilds a deployment nobody is using. Run it by hand to return to Azure, and point
-> `WEB_GATEWAY_BASE_ADDRESS` at the Container Apps gateway again.
-
-The stack this page describes was fixed by [ADR-0005](adr/0005-deployment-stack.md): the three
-services to Azure Container Apps, Postgres to Neon, the WebAssembly frontend to Azure Static Web
-Apps.
-
-Two workflows do the deploying, both on a push to `master` and both runnable by hand from the
-Actions tab:
-
-- `.github/workflows/deploy-services.yml` — builds Catalog, Library and Gateway images, pushes
-  them to this repository's GHCR namespace, updates the container apps, then asks each one's
-  `/health` endpoint from outside before calling it done.
-- `.github/workflows/deploy-web.yml` — writes `appsettings.Production.json`, publishes the
-  frontend and uploads it.
-
-Neither will run to completion until the resources below exist and the repository is configured.
-Both fail on the first step with a message naming what is missing, rather than deploying
-something half-configured.
-
 ## Why the frontend needs a generated settings file
 
 A WebAssembly app is static files executing in someone else's browser. It has no environment
@@ -91,6 +64,33 @@ What each source is for, so the next origin goes in the right place:
 Adding a provider that serves covers means nothing; adding one the *browser* has to call means
 its origin in `connect-src`. `Permissions-Policy` turns off camera, microphone, geolocation and
 payment, none of which this application has any use for.
+
+## The old deployment, kept as the way back
+
+The rest of this page describes the Azure deployment that ADR-0012 replaced. The frontend
+half of it is the one above; only `WEB_GATEWAY_BASE_ADDRESS` has changed, to the Pi's `ts.net` address.
+
+> Everything below about Container Apps, Neon and CloudAMQP is kept because it is the way back.
+> `deploy-services.yml` still works and is still configured; it simply no longer runs on a push,
+> so nothing rebuilds a deployment nobody is using. Run it by hand to return to Azure, and point
+> `WEB_GATEWAY_BASE_ADDRESS` at the Container Apps gateway again.
+
+The stack this page describes was fixed by [ADR-0005](adr/0005-deployment-stack.md): the three
+services to Azure Container Apps, Postgres to Neon, the WebAssembly frontend to Azure Static Web
+Apps.
+
+Two workflows do the deploying, both on a push to `master` and both runnable by hand from the
+Actions tab:
+
+- `.github/workflows/deploy-services.yml` — builds Catalog, Library and Gateway images, pushes
+  them to this repository's GHCR namespace, updates the container apps, then asks each one's
+  `/health` endpoint from outside before calling it done.
+- `.github/workflows/deploy-web.yml` — writes `appsettings.Production.json`, publishes the
+  frontend and uploads it.
+
+Neither will run to completion until the resources below exist and the repository is configured.
+Both fail on the first step with a message naming what is missing, rather than deploying
+something half-configured.
 
 ## What to create
 

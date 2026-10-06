@@ -3,7 +3,7 @@
 # tool came out LF beside its CRLF neighbours, and edits had to match line endings by hand.
 * text=auto eol=lf
 
-# Shell scripts and the Lua the Kindle runs must stay LF whatever the checkout: sh trips on a
-# carriage return, and a plugin file edited on Windows would otherwise ship with them.
+# Shell scripts and the Lua the Kindle runs are always text, never left to detection: sh trips on
+# a carriage return, and the plugin ships to the Kindle as it is.
 *.sh text eol=lf
 readingtracker.koplugin/** text eol=lf

@@ -4,23 +4,36 @@
 # 000 or ERR_EMPTY_RESPONSE, which looks like a broken change and isn't one.
 #
 # Run from anywhere: bash tools/dev/up.sh
-# Exits 0 once the web app and the three services all answer; non-zero, naming the one that didn't,
-# after two minutes.
+# Exits 0 once the web app and the three services all answer. A failed build prints its whole
+# output; a service that has not answered two minutes after the build is named, with how to see
+# its logs. The build itself takes a few minutes on top.
 set -u -o pipefail
 
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
-docker compose --profile services up --build -d 2>&1 | tail -n 3 || exit 1
+log=$(mktemp)
+trap 'rm -f "$log"' EXIT
+if ! docker compose --profile services up --build -d > "$log" 2>&1; then
+    cat "$log" >&2
+    echo "up: the build or start failed (output above)." >&2
+    exit 1
+fi
 
-wait_for() { # name url
-    for _ in $(seq 1 60); do
-        [ "$(curl -s -o /dev/null -w '%{http_code}' "$2")" = 200 ] && { echo "up: $1 ($2)"; return 0; }
+# One deadline for all four, rather than two minutes each.
+deadline=$((SECONDS + 120))
+
+wait_for() { # service url
+    until [ "$(curl -s --max-time 2 -o /dev/null -w '%{http_code}' "$2")" = 200 ]; do
+        if [ "$SECONDS" -ge "$deadline" ]; then
+            echo "up: $1 did not answer at $2 within two minutes; see: docker compose logs $1" >&2
+            return 1
+        fi
         sleep 2
     done
-    echo "up: $1 did not answer at $2 within two minutes; see: docker compose logs $1" >&2
-    return 1
+    echo "up: $1 ($2)"
 }
 
+# The ports are docker-compose.yml's.
 wait_for catalog http://localhost:5103/health &&
     wait_for library http://localhost:5110/health &&
     wait_for gateway http://localhost:5100/health &&

@@ -12,9 +12,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # The full history, so check-web.sh can measure files against where the branch left master.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      # Dropped patterns and the line budget: what the .NET build cannot see.
+      # Dropped declarations and the line budget: what the .NET build cannot see.
       - name: Check web frontend
         run: bash tools/check-web.sh
 
