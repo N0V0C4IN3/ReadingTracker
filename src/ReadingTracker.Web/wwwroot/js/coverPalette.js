@@ -59,6 +59,28 @@ function hueGap(a, b) {
 
 const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
 
+// WCAG's relative luminance and the contrast ratio between two colours, as [r, g, b] in 0–255.
+function luminance(rgb) {
+    const [r, g, b] = rgb.map(v => {
+        v /= 255;
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contrast(a, b) {
+    const x = luminance(a), y = luminance(b);
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+
+// The theme's card, which the accent is read against: the progress figure and the status sit
+// on one. Read from the stylesheet so a change of theme there needs no change here.
+function cardColour(dark) {
+    const hex = /^#([0-9a-f]{6})$/i.exec(getComputedStyle(root).getPropertyValue("--card").trim());
+    if (hex) { return [0, 2, 4].map(i => parseInt(hex[1].slice(i, i + 2), 16)); }
+    return dark ? [28, 31, 33] : [252, 253, 254];
+}
+
 // --- reading the cover -----------------------------------------------------------------------
 
 // Draws the cover forty pixels wide, counts its pixels into coarse buckets, and picks three
@@ -120,7 +142,8 @@ function paint() {
     // with their lightness and saturation brought to where the theme keeps its own: pale on
     // dark, and on light both deeper and more vivid, since a tint on a pale ground is not seen
     // otherwise.
-    const tints = dark ? [17, 13, 13] : [17, 15, 13];
+    // Light at about half: on Cloud's pale ground a jacket's fields at full strength read as blotches.
+    const tints = dark ? [17, 13, 13] : [9, 8, 7];
     current.washes.forEach((c, i) => {
         const l = dark ? clamp(c.l, 0.58, 0.78) : clamp(c.l, 0.45, 0.6);
         const s = dark ? clamp(c.s, 0.35, 0.7) : clamp(c.s, 0.6, 0.9);
@@ -135,16 +158,27 @@ function paint() {
     // The accent's job is contrast: pale on dark, deep on light, whatever the jacket's own
     // lightness. The hue is the jacket's; on light the saturation is pushed, since a deep
     // colour at the theme's quiet saturation reads as mud on a pale ground.
+    //
+    // A fixed lightness is not a fixed contrast, though: at the same lightness a yellow or a cyan
+    // is far brighter to the eye than a blue, and on a white card a yellow at 0.38 measured 2.2:1.
+    // So from that starting lightness it goes on deepening (on light) or paling (on dark) until
+    // it reaches 4.5:1 against the card, the figure for body-size text. About half are there
+    // already and do not move; the bright ones go to an olive or a teal of their own hue.
     const { h } = current.accent;
     const s = dark ? clamp(current.accent.s, 0.35, 0.55) : clamp(current.accent.s, 0.6, 0.85);
-    const base = hslToRgb(h, s, dark ? 0.68 : 0.38);
-    const hover = hslToRgb(h, s, dark ? 0.74 : 0.33);
+    const card = cardColour(dark);
+    let l = dark ? 0.68 : 0.38;
+    while (contrast(hslToRgb(h, s, l), card) < 4.5 && l > 0.15 && l < 0.9) {
+        l += dark ? 0.01 : -0.01;
+    }
+    const base = hslToRgb(h, s, l);
+    const hover = hslToRgb(h, s, dark ? l + 0.06 : l - 0.05);
     const ink = hslToRgb(h, s, dark ? 0.12 : 1);
     root.style.setProperty("--accent", `rgb(${base.join(" ")})`);
     root.style.setProperty("--accent-hover", `rgb(${hover.join(" ")})`);
     root.style.setProperty("--accent-soft", `rgb(${base.join(" ")} / ${dark ? 15 : 11}%)`);
     root.style.setProperty("--accent-ink", `rgb(${ink.join(" ")})`);
-    root.style.setProperty("--wash-accent", `rgb(${base.join(" ")} / 17%)`);
+    root.style.setProperty("--wash-accent", `rgb(${base.join(" ")} / ${dark ? 17 : 9}%)`);
 }
 
 function remember(bookId, palette) {
