@@ -44,7 +44,8 @@ Most review findings on `ReadingTracker.Web` PRs are a second copy of something 
 | The stop slider's floor (it can't go behind where the reader was) | `js/stopSlider.js` |
 | The reading calendar scrolled to the latest weeks on a phone | `js/calendar.js` |
 | The raw Google ID token | `js/idToken.js`, through `IdTokenProvider` |
-| Is this a phone | There are two phone widths today: `max-width: 40rem` for the shelf page (its tabs, the search dock, and `shelfSwipe.js`, which asks with the same query), and `max-width: 560px` for cards, sheets and panels. Put a rule in the block its feature already uses, and don't add a third. The Devices page (`480px`) and the reading stats (`900px`) have their own layout breaks. For a phone on its side, use `Orientation` |
+| Recording why a sign-in callback failed | `js/signInDiagnostics.js` |
+| Is this a phone | Two phone widths, by what they hold today. `max-width: 40rem` is the page frame and the shelf: `main`, the header and goal badge, the shelf cards (`.entry`), the Book page's head, form fields and the log form, the filters and the search dock (and `shelfSwipe.js` asks the same query). `max-width: 560px` is what opens over the page and the other pages: the preview and other sheets, the status menu, settings, the pace stripe, stats and calendar, import. Put a rule in the block its neighbours are in, and don't add a third. `900px` is a layout break for stats and import; `480px` is the Devices page. For a phone on its side, use `Orientation` |
 
 ## Styles (`wwwroot/css/app.css`)
 
@@ -54,5 +55,5 @@ Most review findings on `ReadingTracker.Web` PRs are a second copy of something 
 
   Add a new list's class to the first group's selectors (and to the ring rule under it). Don't write the colours again.
 - **Pop-ups, menus and sheets.** See `ui-overlays.md`.
-- **Size.** `app.css` is past the 1000-line budget. `tools/check-web.sh` lets a branch grow it by 50 lines at most. A feature that needs more gets a stylesheet of its own in `wwwroot/css/`, linked from `index.html` after `app.css` and using the same tokens. `Home.razor` is held the same way: move code out into a component.
+- **Size.** `tools/check-web.sh` holds every file to 1000 lines, and lets a branch grow one already past that (today `app.css` and `Home.razor`) by 50 lines at most. When a stylesheet is full, a feature gets one of its own in `wwwroot/css/`, linked from `index.html` after `app.css` and using the same tokens. When a page is full, move code out into a component.
 - **Dropped patterns.** These live in `tools/check-web.sh`, which fails a commit that brings one back. When you replace a pattern for good, add it there.
