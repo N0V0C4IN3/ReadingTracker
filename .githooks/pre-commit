@@ -34,6 +34,12 @@ if [ -z "$code" ]; then
     exit 0
 fi
 
+# Seconds, against the build's minute and a half, so it goes first.
+if ! bash tools/check-web.sh; then
+    echo "pre-commit: tools/check-web.sh failed — commit refused." >&2
+    exit 1
+fi
+
 if ! command -v dotnet >/dev/null 2>&1; then
     echo "pre-commit: dotnet is not on PATH, so nothing could be built or tested." >&2
     exit 1

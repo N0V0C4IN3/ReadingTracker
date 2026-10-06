@@ -14,6 +14,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Dropped patterns and the line budget: what the .NET build cannot see.
+      - name: Check web frontend
+        run: bash tools/check-web.sh
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"

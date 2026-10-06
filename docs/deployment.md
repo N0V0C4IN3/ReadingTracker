@@ -1,14 +1,27 @@
 # Deploying ReadingTracker
 
-> **Most of this page describes the old deployment.**
-> [ADR-0012](adr/0012-self-host-on-a-raspberry-pi-behind-tailscale-funnel.md) moved the services,
-> Postgres and the broker onto a Raspberry Pi reached through Tailscale Funnel. What is deployed
-> today is `docker-compose.pi.yml` on that Pi, with secrets in an untracked `.env` beside it.
->
-> **The frontend half of this page is still current**: it stays on Azure Static Web Apps and
-> `deploy-web.yml` still ships it on every push to master. Only `WEB_GATEWAY_BASE_ADDRESS` has
-> changed, to the Pi's `ts.net` address.
->
+## What is deployed today
+
+There are two halves, and they ship differently.
+
+| Half | Where | Address | How it ships |
+| --- | --- | --- | --- |
+| Frontend (`ReadingTracker.Web`) | Azure Static Web Apps | https://thankful-bush-00466b40f.6.azurestaticapps.net | `deploy-web.yml`, on its own, on every push to `master`. Merging a PR deploys it |
+| Services, Postgres, broker | A Raspberry Pi, through Tailscale Funnel ([ADR-0012](adr/0012-self-host-on-a-raspberry-pi-behind-tailscale-funnel.md)) | https://readingtracker.tail03af11.ts.net | By hand: the `deploy-to-pi` skill or agent runs `docker-compose.pi.yml` there. Secrets are in an untracked `.env` beside it |
+
+So a merge alone puts out only the frontend. "Deploy" means both halves that the change touches:
+
+- **Frontend only:** the merge was the deploy. Watch the `Deploy frontend` run go green, then check the address.
+- **Services only:** run `deploy-to-pi` after the merge.
+- **Both, where the frontend reads something new from a service:** deploy the services to the Pi first, then merge. Merging first puts the new frontend live against the old services.
+
+Locally, the stack is `docker-compose.yml`: `bash tools/dev/up.sh` rebuilds it and waits until http://localhost:5200 answers.
+
+## The old deployment, kept as the way back
+
+The rest of this page describes the Azure deployment that ADR-0012 replaced. Its frontend parts
+are still current; only `WEB_GATEWAY_BASE_ADDRESS` has changed, to the Pi's `ts.net` address.
+
 > Everything below about Container Apps, Neon and CloudAMQP is kept because it is the way back.
 > `deploy-services.yml` still works and is still configured; it simply no longer runs on a push,
 > so nothing rebuilds a deployment nobody is using. Run it by hand to return to Azure, and point
