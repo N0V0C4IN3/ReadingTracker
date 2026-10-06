@@ -23,7 +23,11 @@ deadline=$((SECONDS + 120))
 
 wait_for() { # service path
     local address url
-    address=$(docker compose port "$1" 8080) || { echo "up: $1 publishes no port 8080." >&2; return 1; }
+    # A service that died on start has no port to ask for: that is its logs' story, too.
+    address=$(docker compose port "$1" 8080 2>/dev/null) || {
+        echo "up: $1 is not running; see: docker compose logs $1" >&2
+        return 1
+    }
     url="http://localhost:${address##*:}$2"
     until [ "$(curl -s --max-time 2 -o /dev/null -w '%{http_code}' "$url")" = 200 ]; do
         if [ "$SECONDS" -ge "$deadline" ]; then
@@ -39,4 +43,4 @@ wait_for catalog /health &&
     wait_for library /health &&
     wait_for gateway /health &&
     wait_for web / &&
-    echo "up: ready at http://localhost:$(docker compose port web 8080 | sed 's/.*://')"
+    echo "up: ready."

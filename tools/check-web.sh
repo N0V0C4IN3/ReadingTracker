@@ -5,9 +5,9 @@
 #   - declarations the codebase has dropped, and why (a reviewer found -webkit-box-reflect back
 #     in PR #204 after it had been replaced by markup in FlowStage);
 #   - a 1000-line budget per source file, measured against where the branch left master: a file
-#     may not cross it, and a file already past it may grow by at most $allowance lines in a
-#     branch. Splitting such a file is the way to make room. Only files the branch changes are
-#     measured, and a moved file is measured against where it came from.
+#     may not cross it, and a file already past it may grow by at most 50 lines in a branch.
+#     Splitting such a file is the way to make room. Only files the branch changes are measured,
+#     and a file git sees as moved is measured against where it came from.
 #
 # Run from anywhere: bash tools/check-web.sh
 set -u
@@ -15,23 +15,26 @@ set -u
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
 web=src/ReadingTracker.Web
-files=("$web/*.cs" "$web/*.razor" "$web/*.js" "$web/*.css" "$web/*.html")
+paths=("$web/*.cs" "$web/*.razor" "$web/*.js" "$web/*.css" "$web/*.html")
 budget=1000
 allowance=50
 
 failed=0
 fail() { echo "check-web: $*" >&2; failed=1; }
 
-# A declaration the codebase has dropped: its name, an extended regex for using it (the CSS
-# declaration, or the property named in quotes from JS) that a comment naming it does not match,
-# and the reason, said where the check fails.
+# A declaration the codebase has dropped: its name, an extended regex for using it, matched
+# without regard to case, and the reason, said where the check fails. The regex should match the
+# ways code uses the property (in CSS, from JS) but not prose naming it, as the comments that say
+# why it went do.
 dropped() { # name regex reason
     local hits
-    hits=$(git grep -n -E -e "$2" -- "${files[@]}")
+    hits=$(git grep -n -i -E -e "$2" -- "${paths[@]}")
     [ -n "$hits" ] && fail "$1 is dropped: $3"$'\n'"$hits"
 }
 
-dropped -webkit-box-reflect "-webkit-box-reflect([[:space:]]*:|['\"][[:space:]]*[:,])" \
+# The CSS declaration; the property in quotes, as JS names it in setProperty, an object key or a
+# bracketed style; and the camelCase style property.
+dropped -webkit-box-reflect "-webkit-box-reflect([[:space:]]*:|['\"\`])|webkitBoxReflect" \
     'Firefox never implemented it and mobile browsers drop it; the reflection is a flipped copy in Components/FlowStage.razor'
 
 # The line budget.
@@ -45,17 +48,18 @@ else
         if [ -z "$path" ]; then
             IFS= read -r -d '' _ && IFS= read -r -d '' path
         fi
-        [ "$added" = - ] && continue # binary
-        [ -f "$path" ] || continue   # deleted
-        lines=$(wc -l < "$path")
+        [ -f "$path" ] || continue # deleted
+        # Lines as git counts them: a last line with no newline is a line.
+        lines=$(awk 'END { print NR }' "$path")
         [ "$lines" -le "$budget" ] && continue
-        before=$((lines - added + removed))
+        growth=$((added - removed))
+        before=$((lines - growth))
         if [ "$before" -le "$budget" ]; then
             fail "$path is $lines lines, past the $budget-line budget: split it rather than grow it."
-        elif [ $((lines - before)) -gt "$allowance" ]; then
+        elif [ "$growth" -gt "$allowance" ]; then
             fail "$path grew from $before to $lines lines since ${base:0:7}; a file already past $budget may grow by $allowance at most, so move code out of it. (If that growth came from master, not this branch, origin/master is stale: git fetch origin.)"
         fi
-    done < <(git -c core.quotePath=false diff -M --numstat -z "$base" -- "${files[@]}")
+    done < <(git -c core.quotePath=false diff -M --numstat -z "$base" -- "${paths[@]}")
 fi
 
 [ "$failed" -eq 0 ] && echo "check-web: clean."

@@ -7,12 +7,32 @@ There are two halves, and they ship differently.
 | Half | Where | Address | How it ships |
 | --- | --- | --- | --- |
 | Frontend (`ReadingTracker.Web`) | Azure Static Web Apps | https://thankful-bush-00466b40f.6.azurestaticapps.net | `deploy-web.yml`, on its own, on every push to `master`. Merging a PR deploys it |
-| Services, Postgres, broker | A Raspberry Pi, through Tailscale Funnel ([ADR-0012](adr/0012-self-host-on-a-raspberry-pi-behind-tailscale-funnel.md)) | https://readingtracker.tail03af11.ts.net | By hand: the `deploy-to-pi` skill or agent runs `docker-compose.pi.yml` there. Secrets are in an untracked `.env` beside it |
+| Services, Postgres, broker | A Raspberry Pi, through Tailscale Funnel ([ADR-0012](adr/0012-self-host-on-a-raspberry-pi-behind-tailscale-funnel.md)) | https://readingtracker.tail03af11.ts.net | By hand (below). Secrets are in an untracked `.env` beside `docker-compose.pi.yml` on the Pi |
+
+To deploy the services, on the Pi, in the repository's checkout there:
+
+```sh
+git pull
+docker compose -f docker-compose.pi.yml up --build -d
+curl -s https://readingtracker.tail03af11.ts.net/health   # through the Funnel, as visitors reach it
+```
+
+The maintainer's `deploy-to-pi` skill and agent do this, and check the disk and the stack, but
+they live in a personal Claude setup, not in this repository.
+
+What joins the two halves:
+
+- The frontend's `WEB_GATEWAY_BASE_ADDRESS` (a repository variable `deploy-web.yml` reads) is the
+  Pi's address above.
+- The Gateway lets the frontend in through `ALLOWED_ORIGIN` in the Pi's `.env` (the Static Web
+  App's address; see `deploy/pi/.env.example`).
+- Google's OAuth client lists the Static Web App's address among its JavaScript origins, and its
+  `/authentication/login-callback` among its redirect URIs.
 
 So a merge alone puts out only the frontend. "Deploy" means both halves that the change touches:
 
 - **Frontend only:** the merge was the deploy. Watch the `Deploy frontend` run go green, then check the address.
-- **Services only:** run `deploy-to-pi` after the merge.
+- **Services only:** deploy them to the Pi after the merge.
 - **Both, where the frontend reads something new from a service:** deploy the services to the Pi first, then merge. Merging first puts the new frontend live against the old services.
 
 Locally, the stack is `docker-compose.yml`: `bash tools/dev/up.sh` rebuilds it and waits until http://localhost:5200 answers.
@@ -260,8 +280,8 @@ unnoticed in.
 
 Add the Static Web Apps URL to the OAuth client's **Authorised JavaScript origins**, and
 `https://<the-app>/authentication/login-callback` to its **Authorised redirect URIs**. Until this
-is done, sign-in fails from the deployed site while working locally, because the only origin
-currently registered is `http://localhost:5200`.
+is done, sign-in fails from the deployed site while working locally, because the client knows
+only `http://localhost:5200`. (Today's Static Web App is registered: see the top of this page.)
 
 Dev sign-in cannot be turned on in production and needs nothing done to it. It requires both the
 Development environment *and* an explicit flag, independently, on the frontend and on the Gateway
@@ -284,7 +304,7 @@ repository on the `master` branch.
 | `AZURE_SUBSCRIPTION_ID` | the subscription id |
 | `AZURE_RESOURCE_GROUP` | `readingtracker` |
 | `CONTAINER_APP_PREFIX` | `readingtracker` |
-| `WEB_GATEWAY_BASE_ADDRESS` | `https://readingtracker-gateway.<region>.azurecontainerapps.io/` |
+| `WEB_GATEWAY_BASE_ADDRESS` | today the Pi's `https://readingtracker.tail03af11.ts.net/`; on Azure, `https://readingtracker-gateway.<region>.azurecontainerapps.io/` |
 | `WEB_GOOGLE_CLIENT_ID` | only if production uses a different OAuth client from the committed one |
 
 **Secrets**:

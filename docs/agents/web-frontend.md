@@ -45,7 +45,7 @@ Most review findings on `ReadingTracker.Web` PRs are a second copy of something 
 | The reading calendar scrolled to the latest weeks on a phone | `js/calendar.js` |
 | The raw Google ID token | `js/idToken.js`, through `IdTokenProvider` |
 | Recording why a sign-in callback failed | `js/signInDiagnostics.js` |
-| Is this a phone | Two phone widths, by what they hold today. `max-width: 40rem` is the page frame and the shelf: `main`, the header and goal badge, the shelf cards (`.entry`), the Book page's head, form fields and the log form, the filters and the search dock (and `shelfSwipe.js` asks the same query). `max-width: 560px` is what opens over the page and the other pages: the preview and other sheets, the status menu, settings, the pace stripe, stats and calendar, import. Put a rule in the block its neighbours are in, and don't add a third. `900px` is a layout break for stats and import; `480px` is the Devices page. For a phone on its side, use `Orientation` |
+| Is this a phone | Two phone widths, by what they hold today. `max-width: 40rem` is the page frame and the shelf: `main`, the header and goal badge, the shelf cards (`.entry`), the Book page's head, form fields and the log form, the filters and the search dock (and `shelfSwipe.js` asks the same query). `max-width: 560px` is what opens over the page and the other pages: the preview and other sheets, the status menu, settings, the pace stripe, stats and calendar, import. Put a rule in the block its neighbours are in, and don't add a third. `900px` is a layout break for stats and import; `480px` is the Devices page; `min-width: 49rem` places the Book page's back arrow in the margin. For a phone on its side, use `Orientation` |
 
 ## Styles (`wwwroot/css/app.css`)
 
