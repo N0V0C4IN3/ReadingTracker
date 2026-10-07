@@ -3208,8 +3208,9 @@ button.danger:hover:not(:disabled) {
     it back with .is-leaving for as long as one of these takes, so everything goes the way it
     came. A panel in a card fades and folds its height away, so the card closes up with it
     rather than snapping shut after it (where a browser cannot animate a height to nothing, it
-    only fades, and the card closes up at the end). A menu lifts back towards its trigger. On a
-    phone, sheets drop back off the foot of the screen (the max-width: 560px rules).
+    snaps its height halfway through instead). A history's unfolded days fold away the same way.
+    A menu lifts back towards its trigger. On a phone, sheets drop back off the foot of the
+    screen (the max-width: 560px rules).
 */
 @keyframes fold {
     to {
@@ -3232,7 +3233,7 @@ button.danger:hover:not(:disabled) {
     to { transform: translateY(100%); }
 }
 
-/* Coming, the same way backwards: a panel grows its height open (js/motion.js). */
+/* Coming, the same way backwards: a panel, or a day unfolded, grows its height open (js/motion.js). */
 @keyframes grow {
     from {
         opacity: 0;
@@ -3243,7 +3244,8 @@ button.danger:hover:not(:disabled) {
 }
 
 .panel.is-entering,
-.sheet.is-entering {
+.sheet.is-entering,
+.day--more.is-entering {
     interpolate-size: allow-keywords;
     overflow: hidden;
     animation: grow 240ms var(--ease-out) backwards;
@@ -3254,7 +3256,8 @@ button.danger:hover:not(:disabled) {
 }
 
 .panel.is-leaving,
-.sheet.is-leaving {
+.sheet.is-leaving,
+.day--more.is-leaving {
     interpolate-size: allow-keywords;
     overflow: hidden;
     animation: fold 200ms var(--ease) forwards;
@@ -3272,15 +3275,15 @@ button.danger:hover:not(:disabled) {
 }
 
 /*
-    A history's days past its fold, growing open on Show more and folding shut on Show less. As
-    a panel does, with the list's gap and the card's border going too, so twenty days folding
-    together close up as they go rather than leaving their gaps to snap shut at the end.
+    A history's days past its fold, at a panel's timing (above) but with their own keyframes: the
+    list's gap and each card's border go with the height, so many days folding together close up
+    as they go rather than leaving their gaps to snap shut after them.
 */
 @keyframes day-fold {
     to {
         opacity: 0;
         height: 0;
-        margin-top: -0.5rem;
+        margin-top: calc(-1 * var(--days-gap));
         border-width: 0;
     }
 }
@@ -3289,19 +3292,17 @@ button.danger:hover:not(:disabled) {
     from {
         opacity: 0;
         height: 0;
-        margin-top: -0.5rem;
+        margin-top: calc(-1 * var(--days-gap));
         border-width: 0;
     }
 }
 
 .day--more.is-entering {
-    interpolate-size: allow-keywords;
-    animation: day-grow 240ms var(--ease-out) backwards;
+    animation-name: day-grow;
 }
 
 .day--more.is-leaving {
-    interpolate-size: allow-keywords;
-    animation: day-fold 200ms var(--ease) forwards;
+    animation-name: day-fold;
 }
 
 .field {
@@ -3573,9 +3574,11 @@ button.danger:hover:not(:disabled) {
     logs themselves — an e-reader's every few minutes — are not shown; a day is a number.
 */
 .days {
+    --days-gap: 0.5rem;
+
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: var(--days-gap);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -3648,14 +3651,16 @@ button.danger:hover:not(:disabled) {
     day cards lie flat in it, since a box that scrolls cuts off any shadow at its edges; the
     padding, pulled back by the same amount, is room for a focus ring.
 */
-.days--scrolling {
+.days--scrolling,
+.days:has(> .day--more.is-leaving) {
     max-height: min(22rem, 50dvh);
     margin: -0.25rem;
     padding: 0.25rem;
     overflow-y: auto;
 }
 
-.days--scrolling .day {
+.days--scrolling .day,
+.days:has(> .day--more.is-leaving) .day {
     box-shadow: none;
 }
 
@@ -6398,7 +6403,8 @@ main:has(.stats) {
     }
 
     /* A sheet scrolls already: the days unfolded in one are carried by it, not boxed again. */
-    .sheet .days--scrolling {
+    .sheet .days--scrolling,
+    .sheet .days:has(> .day--more.is-leaving) {
         max-height: none;
         overflow-y: visible;
     }

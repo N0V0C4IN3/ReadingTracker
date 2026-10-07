@@ -40,7 +40,7 @@ Most review findings on `ReadingTracker.Web` PRs are a second copy of something 
 
 | Job | Use |
 | --- | --- |
-| Anything leaving or arriving with an animation | `js/motion.js`: add the selector to `LEAVES`; the stylesheet plays `.is-leaving` / `.is-entering` |
+| Anything leaving or arriving with an animation | `js/motion.js`: add the selector to `LEAVES` (put back with `.is-leaving` until its exit ends) and, to grow its height open, to `GROWS` (`.is-entering`) |
 | A phone bottom sheet dragged between heights | `js/sheet.js` |
 | A sheet kept above the phone keyboard | `js/liftSheet.js` |
 | Reduced motion, dark theme, view transitions, waiting for an element or for covers | `window.readingTracker` in `index.html` (`prefersStillness`, `isDark`/`setDark`, `transition`, `arrival`, `coversSettled`) |
