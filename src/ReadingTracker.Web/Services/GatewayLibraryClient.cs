@@ -201,10 +201,15 @@ public sealed record LibraryChange(LibraryChangeProblem? Problem, IReadOnlyList<
 ///
 /// It is also where the shelf is told it changed: the changes that can move the count of finished
 /// books (a status that took, an entry removed) announce themselves, so no caller has to remember
-/// to — the header's goal badge cannot be left stale by a caller that forgot.
+/// to — the header's goal badge cannot be left stale by a caller that forgot. In the same way, a
+/// book that becomes Finished is given the Reader's own day here, so no caller can leave Library
+/// to stamp the UTC date.
 /// </summary>
-public sealed class GatewayLibraryClient(HttpClient httpClient, ShelfChanges shelf)
+/// <param name="clock">Now, and the Reader's zone; the browser's own unless a test says otherwise.</param>
+public sealed class GatewayLibraryClient(HttpClient httpClient, ShelfChanges shelf, TimeProvider? clock = null)
 {
+    private readonly TimeProvider _clock = clock ?? TimeProvider.System;
+
     /// <summary>
     /// The reader's shelf, narrowed to one ReadingStatus when <c>status</c> is given. The filter
     /// is passed through to Library rather than applied here, so "Reading" means whatever Library
@@ -282,7 +287,7 @@ public sealed class GatewayLibraryClient(HttpClient httpClient, ShelfChanges she
         Guid bookId,
         string status,
         CancellationToken cancellationToken,
-        DateOnly? finishedOn = null)
+        FinishedDay? finishedOn = null)
     {
         var (entry, problem) = await AddAsync(bookId, cancellationToken);
 
@@ -296,19 +301,19 @@ public sealed class GatewayLibraryClient(HttpClient httpClient, ShelfChanges she
     }
 
     /// <summary>
-    /// Moves a book to a status. <paramref name="finishedOn"/> goes only with Finished, and says
-    /// which day it was when the reader knows — an import does — rather than today. A status that
-    /// took is announced to the shelf (<see cref="ShelfChanges"/>): it may have moved the count of
-    /// finished books.
+    /// Moves a book to a status. Finished always goes with a day (<see cref="FinishedDay"/>): the
+    /// Reader's own today unless <paramref name="finishedOn"/> says another, or that nobody knows
+    /// it. Any other status goes with none. A status that took is announced to the shelf
+    /// (<see cref="ShelfChanges"/>): it may have moved the count of finished books.
     /// </summary>
     public async Task<LibraryChange<LibraryEntry>> SetStatusAsync(
         Guid entryId,
         string status,
         CancellationToken cancellationToken,
-        DateOnly? finishedOn = null)
+        FinishedDay? finishedOn = null)
     {
         var change = await ChangeAsync<LibraryEntry>(
-            client => client.PutAsJsonAsync($"api/library/{entryId}/status", new { status, finishedOn }, cancellationToken),
+            client => client.PutAsJsonAsync($"api/library/{entryId}/status", StatusBody(status, finishedOn), cancellationToken),
             cancellationToken);
 
         if (change.Ok)
@@ -433,6 +438,35 @@ public sealed class GatewayLibraryClient(HttpClient httpClient, ShelfChanges she
         }
 
         return change;
+    }
+
+    /// <summary>
+    /// What a status change says. Library takes a missing day for today in UTC, which is the
+    /// wrong day for a Reader east or west of it around midnight, so Finished always says one.
+    /// </summary>
+    private Dictionary<string, object> StatusBody(string status, FinishedDay? finishedOn)
+    {
+        var body = new Dictionary<string, object> { ["status"] = status };
+
+        if (status != "Finished")
+        {
+            return body;
+        }
+
+        switch (finishedOn ?? FinishedDay.Today)
+        {
+            case FinishedDay.On on:
+                body["finishedOn"] = on.Day;
+                break;
+            case FinishedDay.NotKnown:
+                body["dayUnknown"] = true;
+                break;
+            default:
+                body["finishedOn"] = ReaderDays.Of(_clock.GetUtcNow(), _clock.LocalTimeZone);
+                break;
+        }
+
+        return body;
     }
 
     /// <summary>

@@ -35,16 +35,19 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
     /// business to know about.
     /// </summary>
     /// <summary>
-    /// Moves a book to <paramref name="status"/>. Arriving at Finished stamps the day — today, or
-    /// <paramref name="finishedOn"/> when the reader says which day it was; saying a day for a
-    /// book already Finished corrects it. Leaving Finished lets the day go: a book being read
-    /// again has not been finished yet.
+    /// Moves a book to <paramref name="status"/>. Arriving at Finished stamps the day:
+    /// <paramref name="finishedOn"/> when the caller says which day it was, none at all when
+    /// <paramref name="dayUnknown"/> (an import can say a book was read without saying when), and
+    /// otherwise today in UTC, for a caller that knows no reader's zone. Saying a day, or that it
+    /// is unknown, for a book already Finished corrects it. Leaving Finished lets the day go: a
+    /// book being read again has not been finished yet.
     /// </summary>
     public async Task<LibraryEntry?> SetStatusAsync(
         string readerId,
         Guid entryId,
         ReadingStatus status,
         DateOnly? finishedOn,
+        bool dayUnknown,
         CancellationToken cancellationToken)
     {
         var entry = await database.LibraryEntries
@@ -59,7 +62,8 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
 
         if (previous == status)
         {
-            if (status == ReadingStatus.Finished && finishedOn is { } corrected && corrected != entry.FinishedOn)
+            var corrected = dayUnknown ? null : finishedOn;
+            if (status == ReadingStatus.Finished && (dayUnknown || finishedOn is not null) && corrected != entry.FinishedOn)
             {
                 entry.FinishedOn = corrected;
                 await database.SaveChangesAsync(cancellationToken);
@@ -70,7 +74,7 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
         }
 
         entry.Status = status;
-        entry.FinishedOn = status == ReadingStatus.Finished
+        entry.FinishedOn = status == ReadingStatus.Finished && !dayUnknown
             ? finishedOn ?? DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime)
             : null;
         await database.SaveChangesAsync(cancellationToken);

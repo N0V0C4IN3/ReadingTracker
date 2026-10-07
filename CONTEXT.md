@@ -49,7 +49,7 @@ The current state of a LibraryEntry: `Want to Read`, `Reading`, `Finished`, `On 
 _Avoid_: State (too generic)
 
 **Finished on**:
-The day a Reader finished a Book, kept on the LibraryEntry: stamped when the ReadingStatus becomes `Finished`, or stated outright by the Reader when they know the real day (an import from elsewhere does), and let go of when the Book is no longer `Finished`. A day, not an instant — it is how a Reader remembers it — and the ReadingGoal counts by the year it falls in.
+The day a Reader finished a Book, kept on the LibraryEntry: the Reader's own day when the ReadingStatus becomes `Finished`, or stated outright when the real day is known (an import from elsewhere does), and let go of when the Book is no longer `Finished`. A day, not an instant — it is how a Reader remembers it — and the ReadingGoal counts by the year it falls in. It may be absent on a `Finished` Book whose day nobody knows (an import that says read but not when); such a Book counts toward no year's ReadingGoal. A caller that names no day and no zone gets today's UTC date as a fallback.
 _Avoid_: Completed, Read date, Date finished (Hardcover's name for it), FinishedAt
 
 **Book page**:

@@ -149,6 +149,14 @@ public static class LibraryEndpoints
                 return UnknownReadingStatus(body.Status);
             }
 
+            if (body.DayUnknown && (status != ReadingStatus.Finished || body.FinishedOn is not null))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["dayUnknown"] = ["An unknown day only goes with the Finished status, and never beside a day."],
+                });
+            }
+
             if (body.FinishedOn is { } finishedOn)
             {
                 if (status != ReadingStatus.Finished)
@@ -169,7 +177,7 @@ public static class LibraryEndpoints
                 }
             }
 
-            var entry = await library.SetStatusAsync(readerId, entryId, status, body.FinishedOn, cancellationToken);
+            var entry = await library.SetStatusAsync(readerId, entryId, status, body.FinishedOn, body.DayUnknown, cancellationToken);
 
             return entry is null
                 ? Results.NotFound()
@@ -667,7 +675,7 @@ public static class LibraryEndpoints
 
     private sealed record AddToLibraryRequest(Guid BookId);
 
-    private sealed record SetStatusRequest(string? Status, DateOnly? FinishedOn);
+    private sealed record SetStatusRequest(string? Status, DateOnly? FinishedOn, bool DayUnknown = false);
 
     private sealed record SetGoalRequest(int? Books);
 

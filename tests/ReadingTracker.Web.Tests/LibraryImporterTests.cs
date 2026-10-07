@@ -41,6 +41,29 @@ public class LibraryImporterTests
         Assert.Empty(waits);
     }
 
+    /// <summary>
+    /// Goodreads leaves Date Read blank for a book shelved as read without a date. It is finished
+    /// on a day nobody knows, not today: it must not count toward this year's goal.
+    /// </summary>
+    [Fact]
+    public async Task A_book_read_on_a_day_the_export_never_said_is_finished_on_an_unknown_day()
+    {
+        var (importer, gateway, _) = Create(request => request.RequestUri!.PathAndQuery switch
+        {
+            var path when path.StartsWith("/api/books/search") => Json($$"""{"results":[{"id":"{{BookId}}","title":"Flowers for Algernon","authors":["Daniel Keyes"],"totalPages":311}],"page":1,"hasMore":false}"""),
+            "/api/library" => Json($$"""{"id":"{{EntryId}}","bookId":"{{BookId}}","status":"WantToRead","trackingMethod":"Pages","addedAt":"2026-09-20T00:00:00Z"}""", HttpStatusCode.Created),
+            var path when path.EndsWith("/status") => Json($$"""{"id":"{{EntryId}}","bookId":"{{BookId}}","status":"Finished","trackingMethod":"Pages","addedAt":"2026-09-20T00:00:00Z"}"""),
+            _ => new HttpResponseMessage(HttpStatusCode.NotFound),
+        });
+
+        await importer.ImportAsync(Algernon with { FinishedOn = null }, CancellationToken.None);
+
+        var status = gateway.Requests.Single(r => r.RequestUri!.PathAndQuery.EndsWith("/status"));
+        var body = JsonDocument.Parse(await status.Content!.ReadAsStringAsync()).RootElement;
+        Assert.True(body.GetProperty("dayUnknown").GetBoolean());
+        Assert.False(body.TryGetProperty("finishedOn", out _));
+    }
+
     [Fact]
     public async Task A_book_nobody_has_heard_of_is_added_by_hand_with_what_hardcover_knew()
     {

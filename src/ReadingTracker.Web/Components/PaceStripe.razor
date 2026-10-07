@@ -54,10 +54,20 @@
             </div>
         }
 
-        <div class="stripe__figure">
-            <dt>@(finished ? (pace.DaysReading == 1 ? "day it took" : "days it took") : (pace.DaysReading == 1 ? "day reading" : "days reading"))</dt>
-            <dd><strong>@pace.DaysReading</strong></dd>
-        </div>
+        @if (pace.DaysReading is { } days)
+        {
+            <div class="stripe__figure">
+                <dt>@(finished ? (days == 1 ? "day it took" : "days it took") : (days == 1 ? "day reading" : "days reading"))</dt>
+                <dd><strong>@days</strong></dd>
+            </div>
+        }
+        else
+        {
+            <div class="stripe__figure stripe__figure--none">
+                <dt>@Because(PaceGap.DayUnknown)</dt>
+                <dd><strong aria-hidden="true">—</strong></dd>
+            </div>
+        }
 
         @if (finished && Entry.FinishedOn is { } finishedOn)
         {
@@ -99,6 +109,7 @@
         PaceGap.NotInPages => "logged in percent",
         PaceGap.NoPageCount => "no page count",
         PaceGap.Finished => "finished",
+        PaceGap.DayUnknown => "day not known",
         _ => "",
     };
 

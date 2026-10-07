@@ -17,6 +17,9 @@ public enum PaceGap
 
     /// <summary>The book is finished; there is nothing left to forecast.</summary>
     Finished,
+
+    /// <summary>The book was finished on a day nobody knows, so how long it took cannot be said.</summary>
+    DayUnknown,
 }
 
 /// <summary>
@@ -29,14 +32,14 @@ public enum PaceGap
 /// and a book not yet finished. A finished book's days and rate are frozen at Finished on.
 /// </summary>
 /// <param name="Started">The day of the earliest session, or the day the book was added when there is none.</param>
-/// <param name="DaysReading">Calendar days from <paramref name="Started"/> to today, or to Finished on; never fewer than one.</param>
+/// <param name="DaysReading">Calendar days from <paramref name="Started"/> to today, or to Finished on; never fewer than one. Null for a book finished on a day nobody knows.</param>
 /// <param name="PagesRead">The amount read, when it is in pages.</param>
 /// <param name="PageCount">The effective page count, when there is one.</param>
 /// <param name="PagesADay">The rate, or null with <paramref name="NoRateBecause"/> saying why.</param>
 /// <param name="FinishOn">The forecast, or null with <paramref name="NoForecastBecause"/> saying why.</param>
 public sealed record ReadingPace(
     DateOnly Started,
-    int DaysReading,
+    int? DaysReading,
     decimal? PagesRead,
     int? PageCount,
     decimal? PagesADay,
@@ -60,15 +63,18 @@ public sealed record ReadingPace(
             : sessions.Min(session => ReaderDays.Of(session.OccurredAt, zone));
 
         var finished = entry.Status == "Finished";
-        var measuredTo = finished ? entry.FinishedOn ?? today : today;
-        var daysGone = Math.Max(0, measuredTo.DayNumber - started.DayNumber);
-        var daysReading = Math.Max(1, daysGone);
+
+        // A book finished on a day nobody knows is measured to no day: not to today, which would
+        // stretch a book read years ago over all the time since.
+        DateOnly? measuredTo = finished ? entry.FinishedOn : today;
+        int? daysGone = measuredTo is { } end ? Math.Max(0, end.DayNumber - started.DayNumber) : null;
+        int? daysReading = daysGone is { } gone ? Math.Max(1, gone) : null;
 
         var pagesRead = entry.AmountRead.PagesRead;
         var pageCount = entry.EffectivePageCount;
 
         var noRate = NoRate(entry, sessions.Count, pagesRead, pageCount, daysGone, finished);
-        var pagesADay = noRate is null ? pagesRead!.Value / daysReading : (decimal?)null;
+        var pagesADay = noRate is null ? pagesRead!.Value / daysReading!.Value : (decimal?)null;
 
         var noForecast = finished ? PaceGap.Finished : noRate;
         var finishOn = noForecast is null ? Forecast(today, pagesRead!.Value, pageCount!.Value, pagesADay!.Value) : (DateOnly?)null;
@@ -76,11 +82,16 @@ public sealed record ReadingPace(
         return new ReadingPace(started, daysReading, pagesRead, pageCount, pagesADay, noRate, finishOn, noForecast);
     }
 
-    private static PaceGap? NoRate(LibraryEntry entry, int sessions, decimal? pagesRead, int? pageCount, int daysGone, bool finished)
+    private static PaceGap? NoRate(LibraryEntry entry, int sessions, decimal? pagesRead, int? pageCount, int? daysGone, bool finished)
     {
         if (sessions == 0 || entry.AmountRead is AmountRead.NotStarted)
         {
             return PaceGap.NotStarted;
+        }
+
+        if (daysGone is null)
+        {
+            return PaceGap.DayUnknown;
         }
 
         if (pagesRead is null)

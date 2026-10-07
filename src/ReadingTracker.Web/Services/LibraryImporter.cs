@@ -43,7 +43,7 @@ public sealed class LibraryImporter(
             return new(book, ImportOutcome.Failed, problem ?? "could not be found or added to the library");
         }
 
-        var (entry, adding, statusRefused) = await library.AddAsAsync(found.Id, book.Status, cancellationToken, book.FinishedOn);
+        var (entry, adding, statusRefused) = await library.AddAsAsync(found.Id, book.Status, cancellationToken, FinishedDay.Of(book.FinishedOn));
         if (adding == AddToLibraryProblem.AlreadyInLibrary)
         {
             return new(book, ImportOutcome.AlreadyOnShelf, null);

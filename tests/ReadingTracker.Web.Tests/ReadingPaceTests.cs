@@ -105,6 +105,25 @@ public class ReadingPaceTests
         Assert.Equal(PaceGap.Finished, pace.NoForecastBecause);
     }
 
+    /// <summary>
+    /// Finished on a day nobody knows: how long it took, and so how fast, cannot be said. Not
+    /// measured up to today, which would stretch a book read years ago over all the time since.
+    /// </summary>
+    [Fact]
+    public void A_book_finished_on_an_unknown_day_has_no_days_and_no_rate()
+    {
+        var pace = ReadingPace.Of(
+            Entry(status: "Finished", finishedOn: null, pageCount: 300, amountRead: 300),
+            [Session(400, 300)],
+            Today,
+            Utc);
+
+        Assert.Null(pace.DaysReading);
+        Assert.Null(pace.PagesADay);
+        Assert.Equal(PaceGap.DayUnknown, pace.NoRateBecause);
+        Assert.Equal(PaceGap.Finished, pace.NoForecastBecause);
+    }
+
     [Fact]
     public void A_book_finished_the_day_it_was_started_took_one_day()
     {

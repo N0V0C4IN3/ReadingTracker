@@ -19,6 +19,7 @@ Most review findings on `ReadingTracker.Web` PRs are a second copy of something 
 | CSV cells, quoted and unquoted, either way | `Csv` (`Read`, `Write`) |
 | An ISBN's shape, and its ten- and thirteen-digit forms | `Isbn` (`Normalise`, `TenOf`, `ThirteenOf`) |
 | The day a book was finished, while it still is | `ShelfOrder.FinishedOn` |
+| Saying which day a book was finished when it becomes Finished: the Reader's today, a stated day, or unknown | `FinishedDay`, passed to `GatewayLibraryClient.SetStatusAsync` / `AddAsAsync`. Leave it out and the client says the Reader's today itself |
 | Goal pace, reading pace | `GoalPace`, `ReadingPace` |
 | "The shelf changed", for the header's goal badge | `ShelfChanges`. `GatewayLibraryClient` already raises it after a status change or a removal |
 | Where the reader was on the shelf, for coming back from another page | `ShelfMemory`, `ShelfPlaceKeeper` |
