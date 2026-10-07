@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using ReadingTracker.Library.Persistence;
 
@@ -30,24 +31,19 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
             .ToListAsync(cancellationToken);
 
     /// <summary>
-    /// Moves an entry to a new ReadingStatus. Returns null when the entry is not in this
+    /// Moves a book to <paramref name="status"/>. Arriving at Finished stamps the day
+    /// <paramref name="finishedOn"/> says: that day, none when nobody knows it, or today in UTC
+    /// when nothing is said, for a caller that knows no reader's zone. Saying a day, or that it is
+    /// unknown, for a book already Finished corrects it. Leaving Finished lets the day go: a book
+    /// being read again has not been finished yet. Returns null when the entry is not in this
     /// reader's library — including when it is in someone else's, which is not this reader's
     /// business to know about.
-    /// </summary>
-    /// <summary>
-    /// Moves a book to <paramref name="status"/>. Arriving at Finished stamps the day:
-    /// <paramref name="finishedOn"/> when the caller says which day it was, none at all when
-    /// <paramref name="dayUnknown"/> (an import can say a book was read without saying when), and
-    /// otherwise today in UTC, for a caller that knows no reader's zone. Saying a day, or that it
-    /// is unknown, for a book already Finished corrects it. Leaving Finished lets the day go: a
-    /// book being read again has not been finished yet.
     /// </summary>
     public async Task<LibraryEntry?> SetStatusAsync(
         string readerId,
         Guid entryId,
         ReadingStatus status,
-        DateOnly? finishedOn,
-        bool dayUnknown,
+        FinishedDay finishedOn,
         CancellationToken cancellationToken)
     {
         var entry = await database.LibraryEntries
@@ -62,10 +58,10 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
 
         if (previous == status)
         {
-            var corrected = dayUnknown ? null : finishedOn;
-            if (status == ReadingStatus.Finished && (dayUnknown || finishedOn is not null) && corrected != entry.FinishedOn)
+            // Saying nothing about a finished book leaves its day as it is; saying anything corrects it.
+            if (status == ReadingStatus.Finished && finishedOn is not FinishedDay.NotSaid && DayOf(finishedOn) != entry.FinishedOn)
             {
-                entry.FinishedOn = corrected;
+                entry.FinishedOn = DayOf(finishedOn);
                 await database.SaveChangesAsync(cancellationToken);
             }
 
@@ -74,9 +70,7 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
         }
 
         entry.Status = status;
-        entry.FinishedOn = status == ReadingStatus.Finished && !dayUnknown
-            ? finishedOn ?? DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime)
-            : null;
+        entry.FinishedOn = status == ReadingStatus.Finished ? DayOf(finishedOn) : null;
         await database.SaveChangesAsync(cancellationToken);
 
         await events.PublishAsync(
@@ -91,6 +85,15 @@ public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents eve
 
         return entry;
     }
+
+    /// <summary>The day a finished book is stamped with, for what was said about it.</summary>
+    private DateOnly? DayOf(FinishedDay finishedOn) => finishedOn switch
+    {
+        FinishedDay.On on => on.Day,
+        FinishedDay.Unknown => null,
+        FinishedDay.NotSaid => DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime),
+        _ => throw new UnreachableException("FinishedDay has three cases."),
+    };
 
     /// <summary>
     /// The reader's goal for a year, if they set one, beside how many books they finished in it.

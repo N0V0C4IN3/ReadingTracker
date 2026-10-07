@@ -149,35 +149,21 @@ public static class LibraryEndpoints
                 return UnknownReadingStatus(body.Status);
             }
 
-            if (body.DayUnknown && (status != ReadingStatus.Finished || body.FinishedOn is not null))
+            if (FinishedDay.From(status, body.FinishedOn, body.DayUnknown, out var refused) is not { } finishedOn)
             {
+                return Results.ValidationProblem(new Dictionary<string, string[]> { [refused.Field] = [refused.Reason] });
+            }
+
+            if (finishedOn is FinishedDay.On { Day: var day } && day > DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime).AddDays(1))
+            {
+                // A day's grace, because the reader's today may already be the server's tomorrow.
                 return Results.ValidationProblem(new Dictionary<string, string[]>
                 {
-                    ["dayUnknown"] = ["An unknown day only goes with the Finished status, and never beside a day."],
+                    ["finishedOn"] = ["That day has not happened yet."],
                 });
             }
 
-            if (body.FinishedOn is { } finishedOn)
-            {
-                if (status != ReadingStatus.Finished)
-                {
-                    return Results.ValidationProblem(new Dictionary<string, string[]>
-                    {
-                        ["finishedOn"] = ["A day finished only goes with the Finished status."],
-                    });
-                }
-
-                if (finishedOn > DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime).AddDays(1))
-                {
-                    // A day's grace, because the reader's today may already be the server's tomorrow.
-                    return Results.ValidationProblem(new Dictionary<string, string[]>
-                    {
-                        ["finishedOn"] = ["That day has not happened yet."],
-                    });
-                }
-            }
-
-            var entry = await library.SetStatusAsync(readerId, entryId, status, body.FinishedOn, body.DayUnknown, cancellationToken);
+            var entry = await library.SetStatusAsync(readerId, entryId, status, finishedOn, cancellationToken);
 
             return entry is null
                 ? Results.NotFound()

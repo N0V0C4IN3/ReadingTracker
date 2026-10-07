@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -201,15 +202,13 @@ public sealed record LibraryChange(LibraryChangeProblem? Problem, IReadOnlyList<
 ///
 /// It is also where the shelf is told it changed: the changes that can move the count of finished
 /// books (a status that took, an entry removed) announce themselves, so no caller has to remember
-/// to — the header's goal badge cannot be left stale by a caller that forgot. In the same way, a
-/// book that becomes Finished is given the Reader's own day here, so no caller can leave Library
-/// to stamp the UTC date.
+/// to — the header's goal badge cannot be left stale by a caller that forgot. In the same way,
+/// finishing a book is its own call that says the day (<see cref="FinishAsync"/>,
+/// <see cref="AddAsFinishedAsync"/>), so no caller can leave Library to stamp the UTC date.
 /// </summary>
-/// <param name="clock">Now, and the Reader's zone; the browser's own unless a test says otherwise.</param>
-public sealed class GatewayLibraryClient(HttpClient httpClient, ShelfChanges shelf, TimeProvider? clock = null)
+/// <param name="clock">Now, and the Reader's zone: in the browser, the browser's own.</param>
+public sealed class GatewayLibraryClient(HttpClient httpClient, ShelfChanges shelf, TimeProvider clock)
 {
-    private readonly TimeProvider _clock = clock ?? TimeProvider.System;
-
     /// <summary>
     /// The reader's shelf, narrowed to one ReadingStatus when <c>status</c> is given. The filter
     /// is passed through to Library rather than applied here, so "Reading" means whatever Library
@@ -278,50 +277,60 @@ public sealed class GatewayLibraryClient(HttpClient httpClient, ShelfChanges she
     }
 
     /// <summary>
-    /// Puts a book on the shelf as <paramref name="status"/>. Library adds only as Want to read,
-    /// so any other status is a second call; the book is on the shelf either way once the first
-    /// has gone through, and <see cref="Shelved.StatusRefused"/> says when the second did not —
-    /// the book is then on Want to read, and the reader should be told so.
+    /// Puts a book on the shelf as <paramref name="status"/>, any but Finished, which says its day
+    /// (<see cref="AddAsFinishedAsync"/>). Library adds only as Want to read, so any other status
+    /// is a second call; the book is on the shelf either way once the first has gone through, and
+    /// <see cref="Shelved.StatusRefused"/> says when the second did not — the book is then on Want
+    /// to read, and the reader should be told so.
     /// </summary>
-    public async Task<Shelved> AddAsAsync(
-        Guid bookId,
-        string status,
-        CancellationToken cancellationToken,
-        FinishedDay? finishedOn = null)
+    public Task<Shelved> AddAsAsync(Guid bookId, string status, CancellationToken cancellationToken) =>
+        ShelveAsync(bookId, NotFinishing(status), cancellationToken);
+
+    /// <summary>Puts a book on the shelf as Finished, on the day <paramref name="finishedOn"/> says.</summary>
+    public Task<Shelved> AddAsFinishedAsync(Guid bookId, FinishedDay finishedOn, CancellationToken cancellationToken) =>
+        ShelveAsync(bookId, Finishing(finishedOn), cancellationToken);
+
+    /// <summary>
+    /// Moves a book to <paramref name="status"/>, any but Finished, which says its day
+    /// (<see cref="FinishAsync"/>). A status that took is announced to the shelf
+    /// (<see cref="ShelfChanges"/>): it may have moved the count of finished books.
+    /// </summary>
+    public Task<LibraryChange<LibraryEntry>> SetStatusAsync(Guid entryId, string status, CancellationToken cancellationToken) =>
+        MoveAsync(entryId, NotFinishing(status), cancellationToken);
+
+    /// <summary>
+    /// Finishes a book on the day <paramref name="finishedOn"/> says: the Reader's today, a day
+    /// they state, or none when nobody knows it. On a book already finished, the day is corrected
+    /// to it — so a caller says today only when today is what it means.
+    /// </summary>
+    public Task<LibraryChange<LibraryEntry>> FinishAsync(Guid entryId, FinishedDay finishedOn, CancellationToken cancellationToken) =>
+        MoveAsync(entryId, Finishing(finishedOn), cancellationToken);
+
+    private async Task<Shelved> ShelveAsync(Guid bookId, StatusChange change, CancellationToken cancellationToken)
     {
         var (entry, problem) = await AddAsync(bookId, cancellationToken);
 
-        if (entry is null || status == entry.Status)
+        if (entry is null || change.Status == entry.Status)
         {
             return new(entry, problem, StatusRefused: false);
         }
 
-        var moved = await SetStatusAsync(entry.Id, status, cancellationToken, finishedOn);
+        var moved = await MoveAsync(entry.Id, change, cancellationToken);
         return new(moved.Value ?? entry, null, StatusRefused: !moved.Ok);
     }
 
-    /// <summary>
-    /// Moves a book to a status. Finished always goes with a day (<see cref="FinishedDay"/>): the
-    /// Reader's own today unless <paramref name="finishedOn"/> says another, or that nobody knows
-    /// it. Any other status goes with none. A status that took is announced to the shelf
-    /// (<see cref="ShelfChanges"/>): it may have moved the count of finished books.
-    /// </summary>
-    public async Task<LibraryChange<LibraryEntry>> SetStatusAsync(
-        Guid entryId,
-        string status,
-        CancellationToken cancellationToken,
-        FinishedDay? finishedOn = null)
+    private async Task<LibraryChange<LibraryEntry>> MoveAsync(Guid entryId, StatusChange change, CancellationToken cancellationToken)
     {
-        var change = await ChangeAsync<LibraryEntry>(
-            client => client.PutAsJsonAsync($"api/library/{entryId}/status", StatusBody(status, finishedOn), cancellationToken),
+        var moved = await ChangeAsync<LibraryEntry>(
+            client => client.PutAsJsonAsync($"api/library/{entryId}/status", change, cancellationToken),
             cancellationToken);
 
-        if (change.Ok)
+        if (moved.Ok)
         {
             shelf.Announce();
         }
 
-        return change;
+        return moved;
     }
 
     public Task<LibraryChange<ReadingGoal>> GetGoalAsync(int year, CancellationToken cancellationToken) =>
@@ -440,20 +449,22 @@ public sealed class GatewayLibraryClient(HttpClient httpClient, ShelfChanges she
         return change;
     }
 
+    /// <summary>Any status but Finished, which goes with no day.</summary>
+    private static StatusChange NotFinishing(string status) => status == "Finished"
+        ? throw new ArgumentException("Finishing a book says its day: use FinishAsync or AddAsFinishedAsync.", nameof(status))
+        : new(status);
+
     /// <summary>
-    /// What a status change says. Library takes a missing day for today in UTC, which is the
-    /// wrong day for a Reader east or west of it around midnight, so Finished always says one;
-    /// no FinishedDay is <see cref="FinishedDay.Today"/>. Any other status says none.
+    /// Finished, with the day said. Library takes a missing day for today in UTC, which is the
+    /// wrong day for a Reader east or west of it around midnight, so Finished always says one.
     /// </summary>
-    private StatusChange StatusBody(string status, FinishedDay? finishedOn) => status != "Finished"
-        ? new(status)
-        : finishedOn switch
-        {
-            FinishedDay.On on => new(status, FinishedOn: on.Day),
-            FinishedDay.Unknown => new(status, DayUnknown: true),
-            FinishedDay.Today or null => new(status, FinishedOn: ReaderDays.Of(_clock.GetUtcNow(), _clock.LocalTimeZone)),
-            _ => throw new ArgumentOutOfRangeException(nameof(finishedOn)),
-        };
+    private StatusChange Finishing(FinishedDay finishedOn) => finishedOn switch
+    {
+        FinishedDay.Today => new("Finished", FinishedOn: ReaderDays.Of(clock.GetUtcNow(), clock.LocalTimeZone)),
+        FinishedDay.On on => new("Finished", FinishedOn: on.Day),
+        FinishedDay.Unknown => new("Finished", DayUnknown: true),
+        _ => throw new UnreachableException("FinishedDay has three cases."),
+    };
 
     /// <summary>A status change as Library reads it; a day, or that it is unknown, only when said.</summary>
     private sealed record StatusChange(

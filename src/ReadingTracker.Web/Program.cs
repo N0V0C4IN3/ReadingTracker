@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.JSInterop;
 using ReadingTracker.Web;
 using ReadingTracker.Web.Services;
@@ -82,6 +83,10 @@ builder.Services.AddScoped<ShelfChanges>();
 builder.Services.AddScoped<ShelfMemory>();
 builder.Services.AddScoped<Orientation>();
 builder.Services.AddScoped<ImportJob>();
+
+// Now, and the Reader's zone: in WebAssembly the system clock is the browser's, so its local
+// zone is where the Reader is. Library's client says a finished book's day by it.
+builder.Services.TryAddSingleton(TimeProvider.System);
 
 AddGatewayClient<GatewayLibraryClient>();
 AddGatewayClient<GatewayCatalogClient>();

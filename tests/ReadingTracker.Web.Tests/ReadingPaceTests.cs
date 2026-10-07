@@ -124,6 +124,17 @@ public class ReadingPaceTests
         Assert.Equal(PaceGap.Finished, pace.NoForecastBecause);
     }
 
+    /// <summary>The usual undated finish: an import, with no reading logged here at all.</summary>
+    [Fact]
+    public void An_imported_book_finished_on_an_unknown_day_with_nothing_logged_says_so()
+    {
+        var pace = ReadingPace.Of(Entry(status: "Finished", finishedOn: null, pageCount: 300), [], Today, Utc);
+
+        Assert.Null(pace.DaysReading);
+        Assert.Equal(PaceGap.NotStarted, pace.NoRateBecause);
+        Assert.Equal(PaceGap.Finished, pace.NoForecastBecause);
+    }
+
     [Fact]
     public void A_book_finished_the_day_it_was_started_took_one_day()
     {

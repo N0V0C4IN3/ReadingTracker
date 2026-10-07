@@ -43,7 +43,10 @@ public sealed class LibraryImporter(
             return new(book, ImportOutcome.Failed, problem ?? "could not be found or added to the library");
         }
 
-        var (entry, adding, statusRefused) = await library.AddAsAsync(found.Id, book.Status, cancellationToken, FinishedDay.Of(book.FinishedOn));
+        // A read book keeps the day its site gave, or none when the site left it blank.
+        var (entry, adding, statusRefused) = book.Status == "Finished"
+            ? await library.AddAsFinishedAsync(found.Id, FinishedDay.FromExport(book.FinishedOn), cancellationToken)
+            : await library.AddAsAsync(found.Id, book.Status, cancellationToken);
         if (adding == AddToLibraryProblem.AlreadyInLibrary)
         {
             return new(book, ImportOutcome.AlreadyOnShelf, null);

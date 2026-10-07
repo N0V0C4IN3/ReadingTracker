@@ -23,7 +23,7 @@ public sealed class GatewayLibraryClientFinishedDayTests
     {
         var (client, statusBodies) = CreateClient();
 
-        await client.SetStatusAsync(EntryId, "Finished", CancellationToken.None);
+        await client.FinishAsync(EntryId, new FinishedDay.Today(), CancellationToken.None);
 
         var body = Assert.Single(statusBodies);
         Assert.Equal("2026-01-01", body.GetProperty("finishedOn").GetString());
@@ -35,7 +35,7 @@ public sealed class GatewayLibraryClientFinishedDayTests
     {
         var (client, statusBodies) = CreateClient();
 
-        await client.SetStatusAsync(EntryId, "Finished", CancellationToken.None, new FinishedDay.On(new DateOnly(2025, 8, 9)));
+        await client.FinishAsync(EntryId, new FinishedDay.On(new DateOnly(2025, 8, 9)), CancellationToken.None);
 
         Assert.Equal("2025-08-09", Assert.Single(statusBodies).GetProperty("finishedOn").GetString());
     }
@@ -45,11 +45,26 @@ public sealed class GatewayLibraryClientFinishedDayTests
     {
         var (client, statusBodies) = CreateClient();
 
-        await client.SetStatusAsync(EntryId, "Finished", CancellationToken.None, new FinishedDay.Unknown());
+        await client.FinishAsync(EntryId, new FinishedDay.Unknown(), CancellationToken.None);
 
         var body = Assert.Single(statusBodies);
         Assert.True(body.GetProperty("dayUnknown").GetBoolean());
         Assert.False(body.TryGetProperty("finishedOn", out _));
+    }
+
+    /// <summary>
+    /// Finishing is its own call, with the day said in it. A status change cannot finish a book,
+    /// so no caller can send today by leaving the day out — which on a book already finished would
+    /// overwrite the day it really was.
+    /// </summary>
+    [Fact]
+    public async Task A_status_change_cannot_finish_a_book_without_saying_the_day()
+    {
+        var (client, statusBodies) = CreateClient();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => client.SetStatusAsync(EntryId, "Finished", CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentException>(() => client.AddAsAsync(BookId, "Finished", CancellationToken.None));
+        Assert.Empty(statusBodies);
     }
 
     [Fact]
@@ -69,7 +84,7 @@ public sealed class GatewayLibraryClientFinishedDayTests
     {
         var (client, statusBodies) = CreateClient();
 
-        await client.AddAsAsync(BookId, "Finished", CancellationToken.None);
+        await client.AddAsFinishedAsync(BookId, new FinishedDay.Today(), CancellationToken.None);
 
         Assert.Equal("2026-01-01", Assert.Single(statusBodies).GetProperty("finishedOn").GetString());
     }
