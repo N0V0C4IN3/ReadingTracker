@@ -20,7 +20,7 @@ public sealed class GatewayLibraryClientAnnounceTests
         var (client, gateway, announced) = CreateClient();
         gateway.Respond = _ => StubHttpMessageHandler.Json(Entry("Finished"));
 
-        var outcome = await client.SetStatusAsync(EntryId, "Finished", CancellationToken.None);
+        var outcome = await client.FinishAsync(EntryId, new FinishedDay.Today(), CancellationToken.None);
 
         Assert.True(outcome.Ok);
         Assert.Equal(1, announced.Value);
@@ -46,7 +46,7 @@ public sealed class GatewayLibraryClientAnnounceTests
             ? StubHttpMessageHandler.Json(Entry("Finished"))
             : StubHttpMessageHandler.Json(Entry("WantToRead"));
 
-        var shelved = await client.AddAsAsync(BookId, "Finished", CancellationToken.None);
+        var shelved = await client.AddAsFinishedAsync(BookId, new FinishedDay.Today(), CancellationToken.None);
 
         Assert.Equal("Finished", shelved.Entry!.Status);
         Assert.Equal(1, announced.Value);
@@ -61,7 +61,7 @@ public sealed class GatewayLibraryClientAnnounceTests
         var (client, gateway, announced) = CreateClient();
         gateway.Respond = _ => new HttpResponseMessage(answer);
 
-        var outcome = await client.SetStatusAsync(EntryId, "Finished", CancellationToken.None);
+        var outcome = await client.FinishAsync(EntryId, new FinishedDay.Today(), CancellationToken.None);
 
         Assert.False(outcome.Ok);
         Assert.Equal(0, announced.Value);
@@ -87,7 +87,7 @@ public sealed class GatewayLibraryClientAnnounceTests
         var (client, gateway, announced) = CreateClient();
         gateway.Respond = _ => throw new HttpRequestException("connection refused");
 
-        await client.SetStatusAsync(EntryId, "Finished", CancellationToken.None);
+        await client.FinishAsync(EntryId, new FinishedDay.Today(), CancellationToken.None);
         await client.RemoveAsync(EntryId, CancellationToken.None);
 
         Assert.Equal(0, announced.Value);
@@ -101,7 +101,7 @@ public sealed class GatewayLibraryClientAnnounceTests
             ? new HttpResponseMessage(HttpStatusCode.BadRequest)
             : StubHttpMessageHandler.Json(Entry("WantToRead"));
 
-        var shelved = await client.AddAsAsync(BookId, "Finished", CancellationToken.None);
+        var shelved = await client.AddAsFinishedAsync(BookId, new FinishedDay.Today(), CancellationToken.None);
 
         Assert.True(shelved.StatusRefused);
         Assert.Equal(0, announced.Value);
@@ -155,7 +155,7 @@ public sealed class GatewayLibraryClientAnnounceTests
         var shelf = new ShelfChanges();
         var announced = new StrongBox<int>();
         shelf.Changed += () => announced.Value++;
-        return (new GatewayLibraryClient(httpClient, shelf), gateway, announced);
+        return (new GatewayLibraryClient(httpClient, shelf, TimeProvider.System), gateway, announced);
     }
 
     private static string Entry(string status) =>
