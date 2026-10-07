@@ -1,6 +1,6 @@
-// Menus, sheets and panels come and go smoothly, at any width.
+// Menus, sheets, panels and a history's unfolded days come and go smoothly, at any width.
 //
-// Going: menus, sheets and panels leave the way they came. Blazor takes an element out of
+// Going: menus, sheets, panels and days leave the way they came. Blazor takes an element out of
 // the page the moment the render that drops it lands, so there is no frame in which a closing
 // animation could play. This watches for those removals and puts the element straight back,
 // inert, with .is-leaving on it, for the stylesheet to play out (app.css, "Leaving"); it goes for
@@ -9,7 +9,13 @@
 //
 // Coming: a panel in a card is marked .is-entering as it arrives, so it grows its height open
 // rather than the card jumping to its full size while the panel fades in; the mark comes off
-// when that is done, and with it the clipping the growth needs.
+// when that is done, and with it the clipping the growth needs. The days a history unfolds
+// past its fold (Show more) grow open the same way.
+//
+// A day still folding away is a stranger to Blazor, which places what it adds by its own record
+// of the list: a day added beside one would land on the wrong side of it, or show twice while
+// both play (Show less, then Show more at once). So when anything arrives in a list, the days
+// still leaving it go at once.
 //
 // The observer runs before the next paint, so the element is never seen gone and come back,
 // nor seen at its full height before it grows.
@@ -24,9 +30,10 @@ const LEAVES = [
     '.goal__menu',
     '.preview',
     '.preview__scrim',
+    '.day--more',
 ].join(',');
 
-const GROWS = '.panel, .sheet';
+const GROWS = '.panel, .sheet, .day--more';
 
 // Longer than any entrance or exit in app.css: if an animation never reports its end, the element still goes.
 const FALLBACK_MS = 600;
@@ -87,7 +94,13 @@ new MutationObserver(records => {
             }
         }
         for (const node of record.addedNodes) {
-            if (node.nodeType === Node.ELEMENT_NODE && !node.classList.contains('is-leaving') && node.matches(GROWS)) {
+            if (node.nodeType !== Node.ELEMENT_NODE || node.classList.contains('is-leaving')) {
+                continue;
+            }
+            for (const ghost of record.target.querySelectorAll(':scope > .day--more.is-leaving')) {
+                ghost.remove();
+            }
+            if (node.matches(GROWS)) {
                 enter(node);
             }
         }
