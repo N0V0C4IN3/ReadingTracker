@@ -5628,6 +5628,30 @@ main:has(.stats) {
         filter: blur(18px) sepia(0.75) saturate(0.7);
     }
 
+    /*
+        On light the band is lifted rather than laid on: a jacket's deep colours at half strength
+        over a pale card come out grey, so they are brightened and saturated into a pastel and
+        laid on thinner. It is blurred further, to colour without shapes, and drawn past the card's
+        edges and clipped back, so the blur does not pale at the border where it reaches for the
+        nothing outside it.
+    */
+    :root[data-theme="light"] .entry:not(.entry--pending)::before {
+        inset: -1.5rem -1.5rem auto;
+        height: calc(var(--band) + 2.5rem);
+        filter: blur(32px) saturate(1.9) brightness(1.45);
+        opacity: 0.38;
+        clip-path: inset(1.5rem 1.5rem 0 round calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0);
+        mask-image: linear-gradient(to bottom, #000 40%, transparent 85%);
+    }
+
+    :root[data-theme="light"] .entry--parked:not(.entry--pending)::before {
+        filter: blur(32px) grayscale(1) brightness(1.3);
+    }
+
+    :root[data-theme="light"] .entry--finished:not(.entry--pending)::before {
+        filter: blur(32px) sepia(0.75) saturate(1.2) brightness(1.35);
+    }
+
     .entry:not(.entry--pending) .entry__body {
         display: contents;
     }
@@ -5669,6 +5693,10 @@ main:has(.stats) {
     .entry:not(.entry--pending) .status__trigger {
         background: var(--card-raised);
         box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
+    }
+
+    :root[data-theme="light"] .entry:not(.entry--pending) .status__trigger {
+        background: rgb(252 253 254 / 88%);
     }
 
     .entry:not(.entry--pending) .entry__head {
