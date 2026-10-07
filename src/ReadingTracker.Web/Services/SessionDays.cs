@@ -33,8 +33,11 @@ public sealed record SessionDay(
 /// </summary>
 public static class SessionDays
 {
-    /// <summary>How many days show before the rest are behind "Show all": three weeks of daily reading, and a bit.</summary>
-    public const int ShownAtFirst = 20;
+    /// <summary>
+    /// How many days show before the rest are behind "Show more": the latest few, so a history
+    /// does not push everything under it down the page or the card.
+    /// </summary>
+    public const int ShownAtFirst = 3;
 
     public static IReadOnlyList<SessionDay> Of(IReadOnlyList<ReadingSessionView> sessions, TimeZoneInfo zone) =>
         sessions
@@ -48,7 +51,7 @@ public static class SessionDays
     /// Whether there is anything to ask for is whether there are more days than that.
     /// </summary>
     public static IReadOnlyList<SessionDay> Shown(IReadOnlyList<SessionDay> days, bool all) =>
-        all || days.Count <= ShownAtFirst ? days : days.Take(ShownAtFirst).ToList();
+        all || !Folded(days) ? days : days.Take(ShownAtFirst).ToList();
 
     public static bool Folded(IReadOnlyList<SessionDay> days) => days.Count > ShownAtFirst;
 
