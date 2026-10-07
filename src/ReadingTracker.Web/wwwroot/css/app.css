@@ -3576,6 +3576,19 @@ button.danger:hover:not(:disabled) {
     font-size: 0.85rem;
 }
 
+/*
+    The Book page's history unfolded: every day, in a box of its own that scrolls, so a long
+    history does not push the page's foot away. Padded out and pulled back by the same amount,
+    so the day cards' shadows are not cut off at the box's edges.
+*/
+.days--scrolling {
+    max-height: 22rem;
+    margin: -0.5rem;
+    padding: 0.5rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
 /* On the page: room above, and the count beside the heading in the eyebrow's quieter voice. */
 .history {
     margin-top: 1.1rem;

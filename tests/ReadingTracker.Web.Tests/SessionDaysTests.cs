@@ -96,4 +96,17 @@ public class SessionDaysTests
         Assert.False(SessionDays.Folded(twenty));
         Assert.Equal(20, SessionDays.Shown(twenty, all: false).Count);
     }
+
+    [Fact]
+    public void The_book_page_shows_the_latest_three_days_until_asked_for_more()
+    {
+        var four = SessionDays.Of([Session(0, 1), Session(2, 1), Session(3, 1), Session(9, 1)], Utc);
+        var three = SessionDays.Of([Session(0, 1), Session(2, 1), Session(3, 1)], Utc);
+
+        Assert.True(SessionDays.Folded(four, SessionDays.ShownOnBookPage));
+        Assert.Equal([Today, Today.AddDays(-2), Today.AddDays(-3)],
+            SessionDays.Shown(four, all: false, SessionDays.ShownOnBookPage).Select(day => day.Day));
+        Assert.Equal(4, SessionDays.Shown(four, all: true, SessionDays.ShownOnBookPage).Count);
+        Assert.False(SessionDays.Folded(three, SessionDays.ShownOnBookPage));
+    }
 }
