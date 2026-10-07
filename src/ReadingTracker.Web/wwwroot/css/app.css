@@ -3271,6 +3271,39 @@ button.danger:hover:not(:disabled) {
     animation: clear 160ms var(--ease) forwards;
 }
 
+/*
+    A history's days past its fold, growing open on Show more and folding shut on Show less. As
+    a panel does, with the list's gap and the card's border going too, so twenty days folding
+    together close up as they go rather than leaving their gaps to snap shut at the end.
+*/
+@keyframes day-fold {
+    to {
+        opacity: 0;
+        height: 0;
+        margin-top: -0.5rem;
+        border-width: 0;
+    }
+}
+
+@keyframes day-grow {
+    from {
+        opacity: 0;
+        height: 0;
+        margin-top: -0.5rem;
+        border-width: 0;
+    }
+}
+
+.day--more.is-entering {
+    interpolate-size: allow-keywords;
+    animation: day-grow 240ms var(--ease-out) backwards;
+}
+
+.day--more.is-leaving {
+    interpolate-size: allow-keywords;
+    animation: day-fold 200ms var(--ease) forwards;
+}
+
 .field {
     display: flex;
     align-items: center;

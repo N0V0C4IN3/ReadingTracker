@@ -9,7 +9,8 @@
 //
 // Coming: a panel in a card is marked .is-entering as it arrives, so it grows its height open
 // rather than the card jumping to its full size while the panel fades in; the mark comes off
-// when that is done, and with it the clipping the growth needs.
+// when that is done, and with it the clipping the growth needs. The days a history unfolds
+// past its fold (Show more, Show less) come and go the same way.
 //
 // The observer runs before the next paint, so the element is never seen gone and come back,
 // nor seen at its full height before it grows.
@@ -24,9 +25,10 @@ const LEAVES = [
     '.goal__menu',
     '.preview',
     '.preview__scrim',
+    '.day--more',
 ].join(',');
 
-const GROWS = '.panel, .sheet';
+const GROWS = '.panel, .sheet, .day--more';
 
 // Longer than any entrance or exit in app.css: if an animation never reports its end, the element still goes.
 const FALLBACK_MS = 600;

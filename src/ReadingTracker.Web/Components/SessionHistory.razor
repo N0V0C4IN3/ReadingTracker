@@ -11,7 +11,8 @@
     The latest three days show at first, since a history is read from the top and a long one
     would push everything under it away. "Show more" unfolds the rest into a list that scrolls in
     its own box (in a phone's sheet, which scrolls already, the sheet carries them), and "Show
-    less" folds them away again. A day being corrected is never folded out of sight: a new day
+    less" folds them away again; the days past the fold grow open and fold shut as they come and
+    go (js/motion.js, as a card's panels do). A day being corrected is never folded out of sight: a new day
     arriving above it unfolds the list, and "Show less" closes the form first.
 *@
 
@@ -28,9 +29,10 @@ else
     var today = DateOnly.FromDateTime(DateTime.Now);
 
     <ol class="days @(Scrolling ? "days--scrolling" : null)" id="@_listId">
-        @foreach (var day in SessionDays.Shown(_days, _all))
+        @foreach (var (day, at) in SessionDays.Shown(_days, _all).Select((day, at) => (day, at)))
         {
-            <li class="day" @key="day.Day">
+            @* Past the fold, a day grows in on Show more and folds away on Show less (js/motion.js). *@
+            <li class="day @(at >= SessionDays.ShownAtFirst ? "day--more" : null)" @key="day.Day">
                 @if (_editing == day.Day)
                 {
                     <div class="day__edit">
