@@ -44,7 +44,7 @@ jobs:
             *) echo "::error::WEB_GATEWAY_BASE_ADDRESS must be https — a page served over https cannot call http"; exit 1 ;;
           esac
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
 
