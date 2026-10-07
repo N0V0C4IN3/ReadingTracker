@@ -58,11 +58,11 @@ public sealed partial record LibraryExport(
             "Under Tools, choose Import and export.",
             "Choose Export Library, wait for the link, then download it.",
         ],
-        AuthorColumn: "Author",
-        IsbnColumns: ["ISBN13", "ISBN"],
-        PagesColumn: "Number of Pages",
-        StatusColumn: "Exclusive Shelf",
-        FinishedColumn: "Date Read");
+        AuthorColumn: GoodreadsCsv.Author,
+        IsbnColumns: [GoodreadsCsv.Isbn13, GoodreadsCsv.Isbn],
+        PagesColumn: GoodreadsCsv.Pages,
+        StatusColumn: GoodreadsCsv.ExclusiveShelf,
+        FinishedColumn: GoodreadsCsv.DateRead);
 
     /// <summary>StoryGraph keeps no page count; the catalogue fills it in when it finds the book.</summary>
     public static readonly LibraryExport StoryGraph = new(
@@ -140,8 +140,8 @@ public sealed partial record LibraryExport(
 
         return said switch
         {
-            "read" => "Finished",
-            "currently-reading" => "Reading",
+            GoodreadsCsv.Read => "Finished",
+            GoodreadsCsv.CurrentlyReading => "Reading",
             _ when words.Intersect(["dnf", "abandoned", "dropped"]).Any() || (words.Contains("not") && words.Contains("finish")) => "Dropped",
             _ when words.Intersect(["paused", "hold"]).Any() => "OnHold",
             _ => "WantToRead",
