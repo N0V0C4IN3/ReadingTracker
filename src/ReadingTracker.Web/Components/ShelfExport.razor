@@ -1,0 +1,83 @@
+@using ReadingTracker.Web.Services
+@inject GatewayLibraryClient Library
+@inject IJSRuntime JS
+
+@*
+    The way back out: the whole shelf as one CSV in Goodreads' layout, which StoryGraph, Hardcover
+    and Goodreads all import, and so does the Import page. ShelfFile decides what the shelf comes
+    to; this only asks for the shelf, saves the file, or says why there is none. The file is made
+    here and saved by the browser; it goes nowhere else.
+*@
+
+<section class="import__export" aria-labelledby="export-heading">
+    <h2 id="export-heading">Export your shelf</h2>
+    <p>Your whole shelf as one CSV in Goodreads' layout. StoryGraph, Hardcover and Goodreads all import it, and so does this page.</p>
+    <p class="hint">It leaves out your reading sessions, bookmarks, reading goals, how you track each book, and page counts you set yourself (the count you read by goes in as the book's).</p>
+    <button type="button" @onclick="ExportAsync" disabled="@_exporting">@(_exporting ? "Making the file…" : "Download the CSV")</button>
+    @if (_note is { } note)
+    {
+        <p class="notice @(note.Failed ? "notice--bad" : "")" role="alert">@note.Text</p>
+    }
+</section>
+
+@code {
+    private bool _exporting;
+    private Note? _note;
+
+    /// <summary>Why no file came: a shelf with nothing on it, or one that failed.</summary>
+    private sealed record Note(string Text, bool Failed);
+
+    private static readonly Note NotLoaded = new("Your shelf could not be loaded, so nothing was downloaded. Try again in a moment.", Failed: true);
+
+    private async Task ExportAsync()
+    {
+        _exporting = true;
+        _note = null;
+
+        try
+        {
+            _note = await ShelfAsync() switch
+            {
+                ShelfFile.Ready file => await SaveAsync(file),
+                ShelfFile.Empty => new("There is nothing on your shelf to export yet.", Failed: false),
+                ShelfFile.SignedOut => new("You have been signed out. Sign in again to export your shelf.", Failed: true),
+                _ => NotLoaded,
+            };
+        }
+        finally
+        {
+            _exporting = false;
+        }
+    }
+
+    /// <summary>
+    /// The shelf as a file, or why not. Asking for it can fail in the browser too, before any
+    /// request goes out: the sign-in token is read from there.
+    /// </summary>
+    private async Task<ShelfFile> ShelfAsync()
+    {
+        try
+        {
+            var (entries, problem) = await Library.GetEntriesAsync(null, CancellationToken.None);
+            return ShelfFile.Of(entries, problem, DateTimeOffset.Now, TimeZoneInfo.Local);
+        }
+        catch (JSException)
+        {
+            return new ShelfFile.NotLoaded();
+        }
+    }
+
+    private async Task<Note?> SaveAsync(ShelfFile.Ready file)
+    {
+        try
+        {
+            await using var download = await JS.InvokeAsync<IJSObjectReference>("import", "./js/download.js");
+            await download.InvokeVoidAsync("save", file.Name, file.Text, "text/csv");
+            return null;
+        }
+        catch (JSException)
+        {
+            return new("The browser would not save the file. Try again in a moment.", Failed: true);
+        }
+    }
+}

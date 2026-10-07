@@ -39,33 +39,39 @@ public sealed class CatalogClient(HttpClient httpClient, ILogger<CatalogClient> 
         return await response.Content.ReadFromJsonAsync<CatalogBook>(cancellationToken);
     }
 
+    /// <summary>The most Books Catalog describes in one request; it refuses more.</summary>
+    private const int BooksPerLookup = 200;
+
     /// <summary>
-    /// Looks up many Books in one request. Best-effort by design: if Catalog cannot be
-    /// reached the result is empty rather than an exception, so a reader still gets their
-    /// shelf with the book details missing. Losing covers is a degraded shelf; losing the
-    /// shelf is a broken application.
+    /// Looks up many Books, in as few requests as Catalog allows: one for a shelf of up to
+    /// <see cref="BooksPerLookup"/>, side by side for a larger one. Best-effort by design: if
+    /// Catalog cannot be reached the result is empty rather than an exception, so a reader still
+    /// gets their shelf with the book details missing. Losing covers is a degraded shelf; losing
+    /// the shelf is a broken application.
     /// </summary>
     public async Task<IReadOnlyDictionary<Guid, CatalogBook>> TryFindBooksAsync(
         IReadOnlyCollection<Guid> bookIds,
         CancellationToken cancellationToken)
     {
-        if (bookIds.Count == 0)
-        {
-            return new Dictionary<Guid, CatalogBook>();
-        }
+        var lookups = await Task.WhenAll(bookIds
+            .Chunk(BooksPerLookup)
+            .Select(chunk => TryFindChunkAsync(chunk, cancellationToken)));
 
+        return lookups.SelectMany(books => books).ToDictionary(book => book.Id);
+    }
+
+    private async Task<IReadOnlyList<CatalogBook>> TryFindChunkAsync(Guid[] bookIds, CancellationToken cancellationToken)
+    {
         try
         {
             var query = string.Join("&", bookIds.Select(id => $"ids={id}"));
-            var books = await httpClient
-                .GetFromJsonAsync<IReadOnlyList<CatalogBook>>($"api/books?{query}", cancellationToken);
-
-            return books?.ToDictionary(book => book.Id) ?? new Dictionary<Guid, CatalogBook>();
+            return await httpClient
+                .GetFromJsonAsync<IReadOnlyList<CatalogBook>>($"api/books?{query}", cancellationToken) ?? [];
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             logger.LogWarning(exception, "Could not reach Catalog for book details; returning entries without them");
-            return new Dictionary<Guid, CatalogBook>();
+            return [];
         }
     }
 }

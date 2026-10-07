@@ -272,6 +272,32 @@ public sealed class GatewayLibraryClientChangeTests
         Assert.Contains("status=WantToRead", gateway.LastRequest!.RequestUri!.Query);
     }
 
+    /// <summary>
+    /// The shelf comes back as a shelf or a problem, never a throw, so no page is left with an
+    /// unhandled error because Library answered badly or not in time.
+    /// </summary>
+    [Theory]
+    [InlineData("refused")]
+    [InlineData("server error")]
+    [InlineData("not a shelf")]
+    [InlineData("timed out")]
+    public async Task A_shelf_that_could_not_be_had_is_unreachable_rather_than_thrown(string how)
+    {
+        var (client, gateway) = CreateClient();
+        gateway.Respond = how switch
+        {
+            "refused" => _ => throw new HttpRequestException("connection refused"),
+            "server error" => _ => new HttpResponseMessage(HttpStatusCode.InternalServerError),
+            "not a shelf" => _ => StubHttpMessageHandler.Json("<html>Bad gateway</html>"),
+            _ => _ => throw new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout"),
+        };
+
+        var (entries, problem) = await client.GetEntriesAsync(null, CancellationToken.None);
+
+        Assert.Null(entries);
+        Assert.Equal(LibraryUnavailable.GatewayUnreachable, problem);
+    }
+
     [Fact]
     public async Task Asks_for_the_whole_shelf_when_no_status_is_given()
     {

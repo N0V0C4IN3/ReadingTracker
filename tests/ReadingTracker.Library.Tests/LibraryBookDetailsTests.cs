@@ -63,6 +63,41 @@ public sealed class LibraryBookDetailsTests(LibraryApiFixture fixture)
         Assert.Null(entry.Book);
     }
 
+    [Fact]
+    public async Task A_shelf_larger_than_one_catalog_lookup_still_gets_every_books_details()
+    {
+        var client = fixture.ClientFor("big-shelf-reader");
+        var titles = new Dictionary<Guid, string>();
+        for (var i = 0; i < 201; i++)
+        {
+            titles[Guid.NewGuid()] = $"Book {i}";
+        }
+
+        // Catalog as it is: it answers the ids asked for, and refuses more than 200 at once.
+        fixture.Catalog.Respond = request =>
+        {
+            var asked = System.Web.HttpUtility.ParseQueryString(request.RequestUri!.Query).GetValues("ids") ?? [];
+            if (asked.Length == 0)
+            {
+                var id = Guid.Parse(request.RequestUri.Segments[^1]);
+                return StubHttpMessageHandler.Json(BookJson(id, titles[id]));
+            }
+
+            return asked.Length > 200
+                ? new HttpResponseMessage(HttpStatusCode.BadRequest)
+                : StubHttpMessageHandler.Json($"[{string.Join(",", asked.Select(Guid.Parse).Select(id => BookJson(id, titles[id])))}]");
+        };
+        foreach (var bookId in titles.Keys)
+        {
+            await client.PostAsJsonAsync("/api/library", new { bookId });
+        }
+
+        var entries = await client.GetFromJsonAsync<IReadOnlyList<Entry>>("/api/library");
+
+        Assert.Equal(201, entries!.Count);
+        Assert.All(entries, entry => Assert.Equal(titles[entry.BookId], entry.Book?.Title));
+    }
+
     /// <summary>
     /// Answers both the single-book lookup used when adding and the batch lookup used when listing.
     /// </summary>

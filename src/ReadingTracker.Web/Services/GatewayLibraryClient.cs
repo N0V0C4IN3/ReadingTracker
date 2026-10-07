@@ -124,7 +124,11 @@ public enum LibraryUnavailable
     /// <summary>There is no session, or it has ended. The Gateway said 401.</summary>
     NotSignedIn,
 
-    /// <summary>The Gateway itself could not be reached — a network failure, not a refusal.</summary>
+    /// <summary>
+    /// The shelf could not be had: the Gateway could not be reached or did not answer in time —
+    /// a network failure, not a refusal — or it answered with an error or with something that is
+    /// not a shelf. To a reader each of these is "try again shortly".
+    /// </summary>
     GatewayUnreachable,
 }
 
@@ -212,28 +216,29 @@ public sealed class GatewayLibraryClient(HttpClient httpClient, ShelfChanges she
     {
         var url = string.IsNullOrWhiteSpace(status) ? "api/library" : $"api/library?status={Uri.EscapeDataString(status)}";
 
-        HttpResponseMessage response;
-
         try
         {
-            response = await httpClient.GetAsync(url, cancellationToken);
+            var response = await httpClient.GetAsync(url, cancellationToken);
+
+            if (response.StatusCode is HttpStatusCode.Unauthorized)
+            {
+                return (null, LibraryUnavailable.NotSignedIn);
+            }
+
+            response.EnsureSuccessStatusCode();
+
+            var entries = await response.Content.ReadFromJsonAsync<IReadOnlyList<LibraryEntry>>(cancellationToken);
+            return (entries ?? [], null);
         }
-        catch (HttpRequestException)
+        catch (Exception problem) when (
+            problem is HttpRequestException or JsonException
+            || (problem is TaskCanceledException && !cancellationToken.IsCancellationRequested))
         {
-            // Distinguishable from an empty shelf: nobody answered at all, as opposed to
-            // somebody answering "you have no books" or "you are not signed in".
+            // Distinguishable from an empty shelf: no shelf came back at all, as opposed to
+            // somebody answering "you have no books" or "you are not signed in". A cancellation
+            // the caller asked for is theirs, and goes back to them.
             return (null, LibraryUnavailable.GatewayUnreachable);
         }
-
-        if (response.StatusCode is HttpStatusCode.Unauthorized)
-        {
-            return (null, LibraryUnavailable.NotSignedIn);
-        }
-
-        response.EnsureSuccessStatusCode();
-
-        var entries = await response.Content.ReadFromJsonAsync<IReadOnlyList<LibraryEntry>>(cancellationToken);
-        return (entries ?? [], null);
     }
 
     public async Task<(LibraryEntry? Entry, AddToLibraryProblem? Problem)> AddAsync(

@@ -8,6 +8,7 @@ export function save(fileName, text, type) {
     document.body.append(link);
     link.click();
     link.remove();
-    // The click has handed the file over by now; the URL only holds the text in memory.
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+    // Let go of the text only once the browser has surely read it: Safari on iOS reads it after
+    // the click returns, and fails the download if the URL is already gone.
+    setTimeout(() => URL.revokeObjectURL(url), 40_000);
 }

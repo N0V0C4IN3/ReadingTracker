@@ -23,5 +23,6 @@ public static class ShelfOrder
         return at < 0 ? Statuses.Count : at;
     }
 
-    private static DateOnly? FinishedOn(LibraryEntry entry) => entry.Status == "Finished" ? entry.FinishedOn : null;
+    /// <summary>The day a book was finished, while it still is; a book no longer Finished has none.</summary>
+    public static DateOnly? FinishedOn(LibraryEntry entry) => entry.Status == "Finished" ? entry.FinishedOn : null;
 }

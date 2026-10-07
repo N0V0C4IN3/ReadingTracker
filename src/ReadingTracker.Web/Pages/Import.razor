@@ -1,10 +1,7 @@
 @page "/import"
-@using System.Globalization
 @using ReadingTracker.Web.Services
 @implements IDisposable
 @inject ImportJob Job
-@inject GatewayLibraryClient Library
-@inject IJSRuntime JS
 
 @*
     Bringing a shelf over from Hardcover, Goodreads or StoryGraph. Each exports a CSV; this reads
@@ -19,9 +16,7 @@
     The Gateway paces searches per reader (ADR-0013), so a shelf of fifty takes a few minutes.
     The page counts up as it goes and counts down while it waits, rather than sitting on a spinner.
 
-    Below it, the way back out: the whole shelf as one CSV in Goodreads' layout (GoodreadsCsv),
-    which all three sites import, and so does this page. It is made here from the shelf as Library
-    gives it, and saved by the browser; it goes nowhere else.
+    Below it, ShelfExport: the way back out, the whole shelf as one CSV.
 *@
 
 <PageTitle>Import and export · ReadingTracker</PageTitle>
@@ -134,16 +129,7 @@
                     }
                 }
 
-                <section class="import__export" aria-labelledby="export-heading">
-                    <h2 id="export-heading">Export your shelf</h2>
-                    <p>Your whole shelf as one CSV in Goodreads' layout. StoryGraph, Hardcover and Goodreads all import it, and so does this page.</p>
-                    <p class="hint">It leaves out your reading sessions, bookmarks, reading goals, how you track each book, and page counts you set yourself (the count you read by goes in as the book's).</p>
-                    <button type="button" @onclick="ExportAsync" disabled="@_exporting">@(_exporting ? "Making the file…" : "Download the CSV")</button>
-                    @if (_exportNote is { } note)
-                    {
-                        <p class="notice @(note.Failed ? "notice--bad" : "")" role="alert">@note.Text</p>
-                    }
-                </section>
+                <ShelfExport />
             </aside>
 
             <div class="import__list">
@@ -193,13 +179,6 @@
     private const long MostBytes = 5 * 1024 * 1024;
 
     private LibraryExport _source = LibraryExport.Hardcover;
-    private bool _exporting;
-    private ExportNote? _exportNote;
-
-    /// <summary>Why no file came: a shelf with nothing on it, or one that failed to load.</summary>
-    private sealed record ExportNote(string Text, bool Failed);
-
-    private static readonly ExportNote NotLoaded = new("Your shelf could not be loaded, so nothing was downloaded. Try again in a moment.", Failed: true);
     private Loaded? _file;
     private string? _readingProblem;
 
@@ -270,54 +249,6 @@
         _file = null;
         _readingProblem = null;
         Job.Clear();
-    }
-
-    /// <summary>
-    /// The whole shelf or nothing: a shelf that cannot be loaded downloads no file, so half a
-    /// shelf is never taken for all of it. When Catalog is down, Library still sends every entry
-    /// but without its book, so one entry with no book is a shelf not loaded, not a short one.
-    /// </summary>
-    private async Task ExportAsync()
-    {
-        _exporting = true;
-        _exportNote = null;
-
-        try
-        {
-            var (entries, problem) = await Library.GetEntriesAsync(null, CancellationToken.None);
-
-            if (problem is LibraryUnavailable.NotSignedIn)
-            {
-                _exportNote = new("You have been signed out. Sign in again to export your shelf.", Failed: true);
-            }
-            else if (problem is not null || entries is null || entries.Any(entry => entry.Book is null))
-            {
-                _exportNote = NotLoaded;
-            }
-            else if (entries.Count == 0)
-            {
-                _exportNote = new("There is nothing on your shelf to export yet.", Failed: false);
-            }
-            else
-            {
-                var text = GoodreadsCsv.Write(entries, TimeZoneInfo.Local);
-                await using var download = await JS.InvokeAsync<IJSObjectReference>("import", "./js/download.js");
-                await download.InvokeVoidAsync("save", $"readingtracker-library-{DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}.csv", text, "text/csv");
-            }
-        }
-        catch (Exception problem) when (problem is HttpRequestException or System.Text.Json.JsonException)
-        {
-            // Library answered with an error, or with something that is not a shelf.
-            _exportNote = NotLoaded;
-        }
-        catch (JSException)
-        {
-            _exportNote = new("The browser would not save the file. Try again in a moment.", Failed: true);
-        }
-        finally
-        {
-            _exporting = false;
-        }
     }
 
     public void Dispose() => Job.Changed -= Redraw;
