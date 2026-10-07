@@ -58,11 +58,11 @@ public sealed partial record LibraryExport(
             "Under Tools, choose Import and export.",
             "Choose Export Library, wait for the link, then download it.",
         ],
-        AuthorColumn: "Author",
-        IsbnColumns: ["ISBN13", "ISBN"],
-        PagesColumn: "Number of Pages",
-        StatusColumn: "Exclusive Shelf",
-        FinishedColumn: "Date Read");
+        AuthorColumn: GoodreadsCsv.Author,
+        IsbnColumns: [GoodreadsCsv.Isbn13, GoodreadsCsv.Isbn10],
+        PagesColumn: GoodreadsCsv.Pages,
+        StatusColumn: GoodreadsCsv.ExclusiveShelf,
+        FinishedColumn: GoodreadsCsv.DateRead);
 
     /// <summary>StoryGraph keeps no page count; the catalogue fills it in when it finds the book.</summary>
     public static readonly LibraryExport StoryGraph = new(
@@ -128,8 +128,9 @@ public sealed partial record LibraryExport(
 
     /// <summary>
     /// The three sites' words for a status, one table: Hardcover's "Currently Reading" is
-    /// StoryGraph's "currently-reading" once it is said the same way. Goodreads has three shelves
-    /// of its own and lets a reader make more; a shelf they made is judged by the words in its
+    /// StoryGraph's "currently-reading" once it is said the same way, and both are Goodreads'
+    /// shelf names, which this app's own export writes (<see cref="GoodreadsCsv.StatusOn"/>).
+    /// Goodreads lets a reader make more shelves; one they made is judged by the words in its
     /// name, whole words only, so "dnf" is given up but "household" is not on hold. Anything
     /// else is Want to read, which claims nothing.
     /// </summary>
@@ -140,8 +141,7 @@ public sealed partial record LibraryExport(
 
         return said switch
         {
-            "read" => "Finished",
-            "currently-reading" => "Reading",
+            _ when GoodreadsCsv.StatusOn(said) is { } status => status,
             _ when words.Intersect(["dnf", "abandoned", "dropped"]).Any() || (words.Contains("not") && words.Contains("finish")) => "Dropped",
             _ when words.Intersect(["paused", "hold"]).Any() => "OnHold",
             _ => "WantToRead",
@@ -152,18 +152,11 @@ public sealed partial record LibraryExport(
     /// An ISBN, if the cell holds one. Goodreads writes its ISBNs as spreadsheet formulas —
     /// <c>="9780156030083"</c> — and StoryGraph's column holds its own ids for books without one.
     /// </summary>
-    private static string? IsbnOf(string cell)
-    {
-        var isbn = cell.Replace("=", "").Replace("\"", "").Replace("-", "").Replace(" ", "").ToUpperInvariant();
-        return IsbnShape().IsMatch(isbn) ? isbn : null;
-    }
+    private static string? IsbnOf(string cell) => Isbn.Normalise(cell.Replace("=", "").Replace("\"", ""));
 
     /// <summary>Hardcover writes 2026-05-15, Goodreads 2026/05/15; these take either, padded or not.</summary>
     private static DateOnly? DayOf(string cell) =>
         DateOnly.TryParseExact(cell, ["yyyy-M-d", "yyyy/M/d"], CultureInfo.InvariantCulture, DateTimeStyles.None, out var day) ? day : null;
-
-    [GeneratedRegex(@"^(\d{9}[\dX]|\d{13})$")]
-    private static partial Regex IsbnShape();
 
     /// <summary>Goodreads puts the series in the title — "The Last Wish (The Witcher, #0.5)" — which a search would trip on.</summary>
     [GeneratedRegex(@"\s*\([^()]*#[\d.]+\)\s*$")]
@@ -178,76 +171,6 @@ public sealed partial record LibraryExport(
                 var at = Header.IndexOf(column);
                 return at >= 0 && at < Cells.Count ? Cells[at].Trim() : "";
             }
-        }
-    }
-
-    /// <summary>RFC 4180, which is what all three write: quoted cells, doubled quotes, newlines inside quotes.</summary>
-    private static class Csv
-    {
-        public static List<List<string>> Read(string text)
-        {
-            var rows = new List<List<string>>();
-            var row = new List<string>();
-            var cell = new System.Text.StringBuilder();
-            var quoted = false;
-
-            for (var i = 0; i < text.Length; i++)
-            {
-                var c = text[i];
-
-                if (quoted)
-                {
-                    if (c == '"')
-                    {
-                        if (i + 1 < text.Length && text[i + 1] == '"')
-                        {
-                            cell.Append('"');
-                            i++;
-                        }
-                        else
-                        {
-                            quoted = false;
-                        }
-                    }
-                    else
-                    {
-                        cell.Append(c);
-                    }
-
-                    continue;
-                }
-
-                switch (c)
-                {
-                    case '"':
-                        quoted = true;
-                        break;
-                    case ',':
-                        row.Add(cell.ToString());
-                        cell.Clear();
-                        break;
-                    case '\r':
-                        break;
-                    case '\n':
-                        row.Add(cell.ToString());
-                        cell.Clear();
-                        rows.Add(row);
-                        row = [];
-                        break;
-                    default:
-                        cell.Append(c);
-                        break;
-                }
-            }
-
-            if (cell.Length > 0 || row.Count > 0)
-            {
-                row.Add(cell.ToString());
-                rows.Add(row);
-            }
-
-            // A trailing newline leaves an empty last row; a blank line anywhere is not a book.
-            return rows.Where(r => r.Count > 1 || (r.Count == 1 && r[0].Length > 0)).ToList();
         }
     }
 }

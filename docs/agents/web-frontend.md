@@ -14,6 +14,11 @@ Most review findings on `ReadingTracker.Web` PRs are a second copy of something 
 | Authors and imprint as a byline, the letter on a cover with no picture | `BookText` |
 | A cover URL inside a `style` attribute | `CoverCss.Url` |
 | Sessions grouped by day, one day's pages, a year of reading | `SessionDays`, `DailyPages`, `ReadingYear` |
+| Another site's export coming in (Hardcover, Goodreads, StoryGraph) | `LibraryExport.Parse` |
+| The shelf going out: whole or not at all, then as Goodreads' CSV | `ShelfFile.Of` (file, empty, not loaded, signed out); `GoodreadsCsv.Write`, whose columns and status-to-shelf table the importer's Goodreads entry reads too |
+| CSV cells, quoted and unquoted, either way | `Csv` (`Read`, `Write`) |
+| An ISBN's shape, and its ten- and thirteen-digit forms | `Isbn` (`Normalise`, `TenOf`, `ThirteenOf`) |
+| The day a book was finished, while it still is | `ShelfOrder.FinishedOn` |
 | Goal pace, reading pace | `GoalPace`, `ReadingPace` |
 | "The shelf changed", for the header's goal badge | `ShelfChanges`. `GatewayLibraryClient` already raises it after a status change or a removal |
 | Where the reader was on the shelf, for coming back from another page | `ShelfMemory`, `ShelfPlaceKeeper` |
@@ -29,6 +34,7 @@ Most review findings on `ReadingTracker.Web` PRs are a second copy of something 
 | Progress bar, pace stripe, pages chart | `ProgressBar`, `PaceStripe`, `PagesChart` |
 | The busy placeholder | `Settling` |
 | Asking before removing a book, prompting to finish one | `RemovePrompt`, `FinishPrompt` |
+| Exporting the shelf as a file (the Import page's foot) | `ShelfExport` |
 
 ## Browser side (`wwwroot/`)
 
@@ -43,6 +49,7 @@ Most review findings on `ReadingTracker.Web` PRs are a second copy of something 
 | Colours taken from a book's jacket (the Book page) | `js/coverPalette.js` |
 | The stop slider's floor (it can't go behind where the reader was) | `js/stopSlider.js` |
 | The reading calendar scrolled to the latest weeks on a phone | `js/calendar.js` |
+| Saving text the page made as a file in the reader's downloads (the shelf's CSV export) | `js/download.js` (`save(fileName, text, type)`) |
 | The raw Google ID token | `js/idToken.js`, through `IdTokenProvider` |
 | Recording why a sign-in callback failed | `js/signInDiagnostics.js` |
 | Is this a phone | Two phone widths, by what they hold today. `max-width: 40rem` is the page frame and the shelf: `main`, the header and goal badge, the shelf cards (`.entry`), the Book page's head, form fields and the log form, the filters and the search dock (and `shelfSwipe.js` asks the same query). `max-width: 560px` is what opens over the page and the other pages: the preview and other sheets, the status menu, settings, the pace stripe, stats and calendar, import. Put a rule in the block its neighbours are in, and don't add a third. `900px` is a layout break for stats and import; `480px` is the Devices page; `min-width: 49rem` places the Book page's back arrow in the margin. For a phone on its side, use `Orientation` |

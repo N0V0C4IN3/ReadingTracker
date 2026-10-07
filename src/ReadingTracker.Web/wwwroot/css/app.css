@@ -5134,6 +5134,29 @@ main:has(.stats) {
     text-align: center;
 }
 
+/* The way back out, under a rule at the foot of the card. */
+.import__export {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding-top: 1.1rem;
+    border-top: 1px solid var(--line);
+}
+
+.import__export h2 {
+    margin: 0;
+    font-size: 1.05rem;
+}
+
+.import__export p {
+    margin: 0;
+}
+
+.import__export button {
+    min-height: 2.6rem;
+    border-radius: 12px;
+}
+
 /* The books: a list that scrolls by itself, down to the foot of the screen and no further. */
 .import__list {
     height: calc(100dvh - var(--import-top) - 1.5rem);

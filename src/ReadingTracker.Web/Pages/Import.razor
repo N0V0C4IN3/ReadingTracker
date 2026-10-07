@@ -15,21 +15,23 @@
 
     The Gateway paces searches per reader (ADR-0013), so a shelf of fifty takes a few minutes.
     The page counts up as it goes and counts down while it waits, rather than sitting on a spinner.
+
+    Below it, ShelfExport: the way back out, the whole shelf as one CSV.
 *@
 
-<PageTitle>Import · ReadingTracker</PageTitle>
+<PageTitle>Import and export · ReadingTracker</PageTitle>
 
 <AuthorizeView>
     <Authorizing>
         <Settling />
     </Authorizing>
     <NotAuthorized>
-        <p class="notice">Sign in to import your books.</p>
+        <p class="notice">Sign in to import or export your books.</p>
     </NotAuthorized>
     <Authorized>
         <section class="import">
             <aside class="import__side">
-                <h1>Import your library</h1>
+                <h1>Import and export</h1>
 
                 @if (!Job.Running && !Job.Done)
                 {
@@ -126,6 +128,8 @@
                         <p class="hint">You can leave this page; the import carries on and the header shows how it is going.</p>
                     }
                 }
+
+                <ShelfExport />
             </aside>
 
             <div class="import__list">
