@@ -33,14 +33,11 @@ public sealed record SessionDay(
 /// </summary>
 public static class SessionDays
 {
-    /// <summary>How many days the shelf's history sheet shows before the rest are behind "Show all": three weeks of daily reading, and a bit.</summary>
-    public const int ShownAtFirst = 20;
-
     /// <summary>
-    /// How many days the Book page shows before the rest are behind "Show more": the latest few,
-    /// so the history does not push everything under it down the page.
+    /// How many days show before the rest are behind "Show more": the latest few, so a history
+    /// does not push everything under it down the page or the card.
     /// </summary>
-    public const int ShownOnBookPage = 3;
+    public const int ShownAtFirst = 3;
 
     public static IReadOnlyList<SessionDay> Of(IReadOnlyList<ReadingSessionView> sessions, TimeZoneInfo zone) =>
         sessions
@@ -50,13 +47,13 @@ public static class SessionDays
             .ToList();
 
     /// <summary>
-    /// The days to show: all of them when asked, otherwise the latest <paramref name="first"/>.
+    /// The days to show: all of them when asked, otherwise the latest <see cref="ShownAtFirst"/>.
     /// Whether there is anything to ask for is whether there are more days than that.
     /// </summary>
-    public static IReadOnlyList<SessionDay> Shown(IReadOnlyList<SessionDay> days, bool all, int first = ShownAtFirst) =>
-        all || days.Count <= first ? days : days.Take(first).ToList();
+    public static IReadOnlyList<SessionDay> Shown(IReadOnlyList<SessionDay> days, bool all) =>
+        all || !Folded(days) ? days : days.Take(ShownAtFirst).ToList();
 
-    public static bool Folded(IReadOnlyList<SessionDay> days, int first = ShownAtFirst) => days.Count > first;
+    public static bool Folded(IReadOnlyList<SessionDay> days) => days.Count > ShownAtFirst;
 
     private static SessionDay Summed(DateOnly day, IReadOnlyList<ReadingSessionView> sessions)
     {

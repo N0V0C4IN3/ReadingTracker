@@ -84,29 +84,15 @@ public class SessionDaysTests
     }
 
     [Fact]
-    public void Folds_past_twenty_days_until_asked_for_all()
-    {
-        var twentyOne = SessionDays.Of(Enumerable.Range(0, 21).Select(daysAgo => Session(daysAgo, 1)).ToList(), Utc);
-        var twenty = SessionDays.Of(Enumerable.Range(0, 20).Select(daysAgo => Session(daysAgo, 1)).ToList(), Utc);
-
-        Assert.True(SessionDays.Folded(twentyOne));
-        Assert.Equal(20, SessionDays.Shown(twentyOne, all: false).Count);
-        Assert.Equal(Today.AddDays(-19), SessionDays.Shown(twentyOne, all: false)[^1].Day);
-        Assert.Equal(21, SessionDays.Shown(twentyOne, all: true).Count);
-        Assert.False(SessionDays.Folded(twenty));
-        Assert.Equal(20, SessionDays.Shown(twenty, all: false).Count);
-    }
-
-    [Fact]
-    public void The_book_page_shows_the_latest_three_days_until_asked_for_more()
+    public void Folds_past_three_days_until_asked_for_all()
     {
         var four = SessionDays.Of([Session(0, 1), Session(2, 1), Session(3, 1), Session(9, 1)], Utc);
         var three = SessionDays.Of([Session(0, 1), Session(2, 1), Session(3, 1)], Utc);
 
-        Assert.True(SessionDays.Folded(four, SessionDays.ShownOnBookPage));
-        Assert.Equal([Today, Today.AddDays(-2), Today.AddDays(-3)],
-            SessionDays.Shown(four, all: false, SessionDays.ShownOnBookPage).Select(day => day.Day));
-        Assert.Equal(4, SessionDays.Shown(four, all: true, SessionDays.ShownOnBookPage).Count);
-        Assert.False(SessionDays.Folded(three, SessionDays.ShownOnBookPage));
+        Assert.True(SessionDays.Folded(four));
+        Assert.Equal([Today, Today.AddDays(-2), Today.AddDays(-3)], SessionDays.Shown(four, all: false).Select(day => day.Day));
+        Assert.Equal(4, SessionDays.Shown(four, all: true).Count);
+        Assert.False(SessionDays.Folded(three));
+        Assert.Equal(3, SessionDays.Shown(three, all: false).Count);
     }
 }

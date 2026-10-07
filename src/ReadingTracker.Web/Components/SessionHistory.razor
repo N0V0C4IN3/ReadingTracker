@@ -8,10 +8,11 @@
     amount, and Delete takes the day off the record. Whether a correction took is the host's to
     say, so the form stays open on a refusal with the host's reasons beside it.
 
-    Twenty days show at first; the rest are behind "Show all", since a history is read from
-    the top. On the Book page (Brief) only the latest three show, so the history does not push
-    the page's foot away; "Show more" unfolds the rest into a list that scrolls in its own box,
-    and "Show less" folds them away again.
+    The latest three days show at first, since a history is read from the top and a long one
+    would push everything under it away. "Show more" unfolds the rest into a list that scrolls in
+    its own box (in a phone's sheet, which scrolls already, the sheet carries them), and "Show
+    less" folds them away again. A day being corrected is never folded out of sight: a new day
+    arriving above it unfolds the list, and "Show less" closes the form first.
 *@
 
 @if (Sessions is null)
@@ -25,11 +26,9 @@ else if (Sessions.Count == 0)
 else
 {
     var today = DateOnly.FromDateTime(DateTime.Now);
-    var days = SessionDays.Of(Sessions, TimeZoneInfo.Local);
 
-    <ol class="days @(Brief && _all ? "days--scrolling" : null)" id="@_listId"
-        tabindex="@(Brief && _all ? "0" : null)" aria-label="@(Brief && _all ? "Every day logged" : null)">
-        @foreach (var day in SessionDays.Shown(days, _all, First))
+    <ol class="days @(Scrolling ? "days--scrolling" : null)" id="@_listId">
+        @foreach (var day in SessionDays.Shown(_days, _all))
         {
             <li class="day" @key="day.Day">
                 @if (_editing == day.Day)
@@ -68,17 +67,11 @@ else
         }
     </ol>
 
-    @if (Brief && SessionDays.Folded(days, First))
+    @if (SessionDays.Folded(_days))
     {
-        <button type="button" class="link-button days__all" aria-expanded="@(_all ? "true" : "false")" aria-controls="@_listId"
+        <button type="button" class="link-button book__more days__all" aria-expanded="@(_all ? "true" : "false")" aria-controls="@_listId"
                 @onclick="ToggleAllAsync">
             @(_all ? "Show less" : "Show more")
-        </button>
-    }
-    else if (!Brief && !_all && SessionDays.Folded(days, First))
-    {
-        <button type="button" class="link-button days__all" @onclick="() => _all = true">
-            Show all @days.Count days
         </button>
     }
 }
@@ -111,25 +104,38 @@ else
     [Parameter]
     public EventCallback<bool> OnEditingChanged { get; set; }
 
-    /// <summary>
-    /// The Book page's history: the latest three days, and the rest behind "Show more" in a list
-    /// that scrolls, folded away again by "Show less". The shelf's sheet scrolls already, so there
-    /// it is twenty days and "Show all".
-    /// </summary>
-    [Parameter]
-    public bool Brief { get; set; }
-
-    private int First => Brief ? SessionDays.ShownOnBookPage : SessionDays.ShownAtFirst;
-
     private readonly string _listId = $"days-{Guid.NewGuid():N}";
 
+    /// <summary>The sessions as days, worked out once each time they arrive.</summary>
+    private IReadOnlyList<SessionDay> _days = [];
+
+    /// <summary>Whether every day is showing, rather than the latest few.</summary>
     private bool _all;
+
+    /// <summary>Unfolded, with something that was folded: the list scrolls in its own box.</summary>
+    private bool Scrolling => _all && SessionDays.Folded(_days);
+
+    protected override void OnParametersSet()
+    {
+        _days = Sessions is null ? [] : SessionDays.Of(Sessions, TimeZoneInfo.Local);
+
+        // Nothing left to fold (days were deleted): folded, so a fourth day arrives folded rather
+        // than already open. A day being corrected that a new day has pushed past the fold:
+        // unfolded, so the form being typed into is not hidden while it is open.
+        if (!SessionDays.Folded(_days))
+        {
+            _all = false;
+        }
+        else if (_editing is { } editing && !SessionDays.Shown(_days, all: false).Any(day => day.Day == editing))
+        {
+            _all = true;
+        }
+    }
 
     /// <summary>A day being corrected that folding would hide is put back first, so no form is left open out of sight.</summary>
     private async Task ToggleAllAsync()
     {
-        if (_all && _editing is { } editing && Sessions is { } sessions
-            && !SessionDays.Shown(SessionDays.Of(sessions, TimeZoneInfo.Local), all: false, First).Any(day => day.Day == editing))
+        if (_all && _editing is { } editing && !SessionDays.Shown(_days, all: false).Any(day => day.Day == editing))
         {
             await CancelAsync();
         }

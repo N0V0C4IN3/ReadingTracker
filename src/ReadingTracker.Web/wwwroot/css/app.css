@@ -3571,22 +3571,27 @@ button.danger:hover:not(:disabled) {
     font-size: 0.9rem;
 }
 
+/* Show more / Show less: the Book page's "Read more" pill (.book__more), under the days. */
 .days__all {
-    margin: 0.6rem 0 0 -0.6rem;
-    font-size: 0.85rem;
+    margin-top: 0.6rem;
 }
 
 /*
-    The Book page's history unfolded: every day, in a box of its own that scrolls, so a long
-    history does not push the page's foot away. Padded out and pulled back by the same amount,
-    so the day cards' shadows are not cut off at the box's edges.
+    A history unfolded: every day, in a box of its own that scrolls, so a long one does not push
+    what is under it away. No taller than half the screen, so with a phone's keyboard up there is
+    still page to take hold of, and a swipe that reaches the box's end goes on to the page. The
+    day cards lie flat in it, since a box that scrolls cuts off any shadow at its edges; the
+    padding, pulled back by the same amount, is room for a focus ring.
 */
 .days--scrolling {
-    max-height: 22rem;
-    margin: -0.5rem;
-    padding: 0.5rem;
+    max-height: min(22rem, 50dvh);
+    margin: -0.25rem;
+    padding: 0.25rem;
     overflow-y: auto;
-    overscroll-behavior: contain;
+}
+
+.days--scrolling .day {
+    box-shadow: none;
 }
 
 /* On the page: room above, and the count beside the heading in the eyebrow's quieter voice. */
@@ -6322,6 +6327,12 @@ main:has(.stats) {
         backdrop-filter: var(--blur-soft);
         box-shadow: var(--shadow-lifted);
         animation: dock 260ms var(--ease-out) backwards;
+    }
+
+    /* A sheet scrolls already: the days unfolded in one are carried by it, not boxed again. */
+    .sheet .days--scrolling {
+        max-height: none;
+        overflow-y: visible;
     }
 
     .sheet::before {
