@@ -47,6 +47,20 @@
     /* The account menu: frosted glass. Sheer enough that the shelf under it shows as shapes, and
        blurred (--blur-soft) enough that none of it can be read. */
     --card-frosted: rgb(252 253 254 / 74%);
+    /* The phone card's band: its jacket blurred across the top (see .entry::before). Deep jacket
+       colours laid thinly on a card this pale read as grey, so on light the jacket is veiled
+       toward white and saturated into a pastel, blurred to colour without shapes, and drawn
+       --band-bleed past the card's edges so the blur is clipped before it can pale at them.
+       The fade is measured down the card. --card-on-band is the status pill on it. */
+    --band-blur: 32px;
+    --band-saturate: 1.9;
+    --band-warm-saturate: 1.2;
+    --band-veil: rgb(255 255 255 / 40%);
+    --band-opacity: 0.38;
+    --band-bleed: 4rem;
+    --band-fade-from: 3.4rem;
+    --band-fade-to: 8.9rem;
+    --card-on-band: rgb(252 253 254 / 88%);
     --line: rgb(20 30 50 / 7%);
     --line-strong: rgb(20 30 50 / 14%);
     --fill: rgb(20 30 50 / 5%);
@@ -184,6 +198,15 @@
         --card-sheer: rgb(35 39 41 / 42%);
         --card-raised: rgb(28 31 33 / 72%);
         --card-frosted: rgb(28 31 33 / 50%);
+        --band-blur: 18px;
+        --band-saturate: 1.3;
+        --band-warm-saturate: 0.7;
+        --band-veil: transparent;
+        --band-opacity: 0.5;
+        --band-bleed: 0rem;
+        --band-fade-from: 4.875rem;
+        --band-fade-to: 9.75rem;
+        --card-on-band: rgb(28 31 33 / 72%);
         --line: rgb(255 255 255 / 8%);
         --line-strong: rgb(255 255 255 / 16%);
         --fill: rgb(255 255 255 / 8%);
@@ -221,6 +244,15 @@
     --card-sheer: rgb(35 39 41 / 42%);
     --card-raised: rgb(28 31 33 / 72%);
     --card-frosted: rgb(28 31 33 / 50%);
+    --band-blur: 18px;
+    --band-saturate: 1.3;
+    --band-warm-saturate: 0.7;
+    --band-veil: transparent;
+    --band-opacity: 0.5;
+    --band-bleed: 0rem;
+    --band-fade-from: 4.875rem;
+    --band-fade-to: 9.75rem;
+    --card-on-band: rgb(28 31 33 / 72%);
     --line: rgb(255 255 255 / 8%);
     --line-strong: rgb(255 255 255 / 16%);
     --fill: rgb(255 255 255 / 8%);
@@ -5577,7 +5609,8 @@ main:has(.stats) {
         status on the band at the right, and the cover overlapping it at the left with the title
         and authors beside it, all inside the band's colour. The figure, the bar and the actions
         run full width beneath, so nothing is left empty under the cover. --cover is the jacket's
-        address, set on the card by ShelfEntry.
+        address, set on the card by ShelfEntry. How the band is drawn is the theme's (--band-*
+        on :root). The Devices page's cards are entries too, and have no jacket to band with.
 
         The body is display: contents so every piece sits on the card's own grid. Spacing is
         margins rather than row gaps, so a row with nothing in it (no device line) costs nothing.
@@ -5589,8 +5622,6 @@ main:has(.stats) {
         themselves; nothing else reaches the band, and the sheets the card opens are left alone.
     */
     .entry:not(.entry--pending) {
-        --band: 9.75rem;
-
         position: relative;
         display: grid;
         grid-template-columns: 4.75rem minmax(0, 1fr);
@@ -5606,50 +5637,30 @@ main:has(.stats) {
         padding: 0.7rem 0.9rem 0.9rem;
     }
 
-    .entry:not(.entry--pending)::before {
+    .entry:not(.entry--pending, .device)::before {
         content: "";
         position: absolute;
-        inset: 0 0 auto 0;
-        height: var(--band);
-        background: var(--cover, var(--accent-soft)) center / cover;
-        filter: blur(18px) saturate(1.3);
-        opacity: 0.5;
-        clip-path: inset(0 round calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0);
-        mask-image: linear-gradient(to bottom, #000 50%, transparent);
+        inset: calc(-1 * var(--band-bleed)) calc(-1 * var(--band-bleed)) auto;
+        height: calc(var(--band-bleed) + var(--band-fade-to));
+        background:
+            linear-gradient(var(--band-veil), var(--band-veil)),
+            var(--cover, var(--accent-soft)) center / cover;
+        filter: blur(var(--band-blur)) saturate(var(--band-saturate));
+        opacity: var(--band-opacity);
+        clip-path: inset(var(--band-bleed) var(--band-bleed) 0 round calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0);
+        mask-image: linear-gradient(to bottom,
+            #000 calc(var(--band-bleed) + var(--band-fade-from)),
+            transparent calc(var(--band-bleed) + var(--band-fade-to)));
         pointer-events: none;
     }
 
     /* The band takes the card's standing, as the cover does: grey set aside, warm read. */
     .entry--parked:not(.entry--pending)::before {
-        filter: blur(18px) grayscale(1);
+        filter: blur(var(--band-blur)) grayscale(1);
     }
 
     .entry--finished:not(.entry--pending)::before {
-        filter: blur(18px) sepia(0.75) saturate(0.7);
-    }
-
-    /*
-        On light the band is lifted rather than laid on: a jacket's deep colours at half strength
-        over a pale card come out grey, so they are brightened and saturated into a pastel and
-        laid on thinner. It is blurred further, to colour without shapes, and drawn past the card's
-        edges and clipped back, so the blur does not pale at the border where it reaches for the
-        nothing outside it.
-    */
-    :root[data-theme="light"] .entry:not(.entry--pending)::before {
-        inset: -1.5rem -1.5rem auto;
-        height: calc(var(--band) + 2.5rem);
-        filter: blur(32px) saturate(1.9) brightness(1.45);
-        opacity: 0.38;
-        clip-path: inset(1.5rem 1.5rem 0 round calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0);
-        mask-image: linear-gradient(to bottom, #000 40%, transparent 85%);
-    }
-
-    :root[data-theme="light"] .entry--parked:not(.entry--pending)::before {
-        filter: blur(32px) grayscale(1) brightness(1.3);
-    }
-
-    :root[data-theme="light"] .entry--finished:not(.entry--pending)::before {
-        filter: blur(32px) sepia(0.75) saturate(1.2) brightness(1.35);
+        filter: blur(var(--band-blur)) sepia(0.75) saturate(var(--band-warm-saturate));
     }
 
     .entry:not(.entry--pending) .entry__body {
@@ -5691,12 +5702,8 @@ main:has(.stats) {
 
     /* On the band rather than on the card, so frosted enough to read against any jacket. */
     .entry:not(.entry--pending) .status__trigger {
-        background: var(--card-raised);
+        background: var(--card-on-band);
         box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
-    }
-
-    :root[data-theme="light"] .entry:not(.entry--pending) .status__trigger {
-        background: rgb(252 253 254 / 88%);
     }
 
     .entry:not(.entry--pending) .entry__head {
