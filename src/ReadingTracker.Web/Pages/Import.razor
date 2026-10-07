@@ -274,7 +274,8 @@
 
     /// <summary>
     /// The whole shelf or nothing: a shelf that cannot be loaded downloads no file, so half a
-    /// shelf is never taken for all of it.
+    /// shelf is never taken for all of it. When Catalog is down, Library still sends every entry
+    /// but without its book, so one entry with no book is a shelf not loaded, not a short one.
     /// </summary>
     private async Task ExportAsync()
     {
@@ -289,26 +290,29 @@
             {
                 _exportNote = new("You have been signed out. Sign in again to export your shelf.", Failed: true);
             }
-            else if (problem is not null || entries is null)
+            else if (problem is not null || entries is null || entries.Any(entry => entry.Book is null))
             {
                 _exportNote = NotLoaded;
             }
-            else if (!entries.Any(entry => entry.Book is not null))
+            else if (entries.Count == 0)
             {
                 _exportNote = new("There is nothing on your shelf to export yet.", Failed: false);
             }
             else
             {
                 var text = GoodreadsCsv.Write(entries, TimeZoneInfo.Local);
-                var download = await JS.InvokeAsync<IJSObjectReference>("import", "./js/download.js");
+                await using var download = await JS.InvokeAsync<IJSObjectReference>("import", "./js/download.js");
                 await download.InvokeVoidAsync("save", $"readingtracker-library-{DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}.csv", text, "text/csv");
-                await download.DisposeAsync();
             }
         }
-        catch (HttpRequestException)
+        catch (Exception problem) when (problem is HttpRequestException or System.Text.Json.JsonException)
         {
-            // Library answered with an error rather than the shelf.
+            // Library answered with an error, or with something that is not a shelf.
             _exportNote = NotLoaded;
+        }
+        catch (JSException)
+        {
+            _exportNote = new("The browser would not save the file. Try again in a moment.", Failed: true);
         }
         finally
         {

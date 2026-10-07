@@ -205,7 +205,7 @@ public class GoodreadsCsvTests
     {
         var undescribed = Entry("Gone", ["Nobody"], null, null, "Reading") with { Book = null };
 
-        Assert.Equal(1, GoodreadsCsv.Write([undescribed], Utc).Split("\r\n", StringSplitOptions.RemoveEmptyEntries).Length);
+        Assert.Single(GoodreadsCsv.Write([undescribed], Utc).Split("\r\n", StringSplitOptions.RemoveEmptyEntries));
     }
 
     /// <summary>One cell of the first book's row, by its column. Only for rows with no quoted cells.</summary>

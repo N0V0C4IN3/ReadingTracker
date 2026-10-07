@@ -142,6 +142,8 @@ public sealed partial record LibraryExport(
         {
             GoodreadsCsv.Read => "Finished",
             GoodreadsCsv.CurrentlyReading => "Reading",
+            GoodreadsCsv.Paused => "OnHold",
+            GoodreadsCsv.DidNotFinish => "Dropped",
             _ when words.Intersect(["dnf", "abandoned", "dropped"]).Any() || (words.Contains("not") && words.Contains("finish")) => "Dropped",
             _ when words.Intersect(["paused", "hold"]).Any() => "OnHold",
             _ => "WantToRead",
