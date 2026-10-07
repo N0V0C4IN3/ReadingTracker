@@ -45,7 +45,7 @@ public sealed class GatewayLibraryClientFinishedDayTests
     {
         var (client, statusBodies) = CreateClient();
 
-        await client.SetStatusAsync(EntryId, "Finished", CancellationToken.None, FinishedDay.Unknown);
+        await client.SetStatusAsync(EntryId, "Finished", CancellationToken.None, new FinishedDay.Unknown());
 
         var body = Assert.Single(statusBodies);
         Assert.True(body.GetProperty("dayUnknown").GetBoolean());

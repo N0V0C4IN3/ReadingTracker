@@ -73,6 +73,8 @@ public sealed record ReadingPace(
         var pagesRead = entry.AmountRead.PagesRead;
         var pageCount = entry.EffectivePageCount;
 
+        // No reason for no rate means NoRate found pages read, a page count and a day measured
+        // to, so each of them is there to divide with.
         var noRate = NoRate(entry, sessions.Count, pagesRead, pageCount, daysGone, finished);
         var pagesADay = noRate is null ? pagesRead!.Value / daysReading!.Value : (decimal?)null;
 

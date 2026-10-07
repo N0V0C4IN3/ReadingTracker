@@ -442,32 +442,24 @@ public sealed class GatewayLibraryClient(HttpClient httpClient, ShelfChanges she
 
     /// <summary>
     /// What a status change says. Library takes a missing day for today in UTC, which is the
-    /// wrong day for a Reader east or west of it around midnight, so Finished always says one.
+    /// wrong day for a Reader east or west of it around midnight, so Finished always says one;
+    /// no FinishedDay is <see cref="FinishedDay.Today"/>. Any other status says none.
     /// </summary>
-    private Dictionary<string, object> StatusBody(string status, FinishedDay? finishedOn)
-    {
-        var body = new Dictionary<string, object> { ["status"] = status };
-
-        if (status != "Finished")
+    private StatusChange StatusBody(string status, FinishedDay? finishedOn) => status != "Finished"
+        ? new(status)
+        : finishedOn switch
         {
-            return body;
-        }
+            FinishedDay.On on => new(status, FinishedOn: on.Day),
+            FinishedDay.Unknown => new(status, DayUnknown: true),
+            FinishedDay.Today or null => new(status, FinishedOn: ReaderDays.Of(_clock.GetUtcNow(), _clock.LocalTimeZone)),
+            _ => throw new ArgumentOutOfRangeException(nameof(finishedOn)),
+        };
 
-        switch (finishedOn ?? FinishedDay.Today)
-        {
-            case FinishedDay.On on:
-                body["finishedOn"] = on.Day;
-                break;
-            case FinishedDay.NotKnown:
-                body["dayUnknown"] = true;
-                break;
-            default:
-                body["finishedOn"] = ReaderDays.Of(_clock.GetUtcNow(), _clock.LocalTimeZone);
-                break;
-        }
-
-        return body;
-    }
+    /// <summary>A status change as Library reads it; a day, or that it is unknown, only when said.</summary>
+    private sealed record StatusChange(
+        string Status,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateOnly? FinishedOn = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? DayUnknown = null);
 
     /// <summary>
     /// Every change to something already on the shelf fails in the same four ways, so they are

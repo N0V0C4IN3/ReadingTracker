@@ -42,12 +42,20 @@ public class LibraryImporterTests
     }
 
     /// <summary>
-    /// Goodreads leaves Date Read blank for a book shelved as read without a date. It is finished
-    /// on a day nobody knows, not today: it must not count toward this year's goal.
+    /// Goodreads leaves Date Read blank for a book shelved as read without a date, and so does
+    /// this app's own export for a book finished on a day nobody knows. Brought back, it is
+    /// finished on a day nobody knows, not today: it must not count toward this year's goal.
     /// </summary>
     [Fact]
     public async Task A_book_read_on_a_day_the_export_never_said_is_finished_on_an_unknown_day()
     {
+        var undated = new LibraryEntry(
+            EntryId, BookId, "Finished", "Pages", new DateTimeOffset(2026, 9, 20, 0, 0, 0, TimeSpan.Zero),
+            FinishedOn: null, PageCountOverride: null, EffectivePageCount: 311,
+            Book: new BookDetails(Algernon.Title, Algernon.Authors, Algernon.Isbn, CoverUrl: null, TotalPages: 311),
+            Progress: null, Bookmark: null);
+        var exported = Assert.Single(LibraryExport.Parse(GoodreadsCsv.Write([(undated, undated.Book!)], TimeZoneInfo.Utc)).Books);
+
         var (importer, gateway, _) = Create(request => request.RequestUri!.PathAndQuery switch
         {
             var path when path.StartsWith("/api/books/search") => Json($$"""{"results":[{"id":"{{BookId}}","title":"Flowers for Algernon","authors":["Daniel Keyes"],"totalPages":311}],"page":1,"hasMore":false}"""),
@@ -56,7 +64,7 @@ public class LibraryImporterTests
             _ => new HttpResponseMessage(HttpStatusCode.NotFound),
         });
 
-        await importer.ImportAsync(Algernon with { FinishedOn = null }, CancellationToken.None);
+        await importer.ImportAsync(exported, CancellationToken.None);
 
         var status = gateway.Requests.Single(r => r.RequestUri!.PathAndQuery.EndsWith("/status"));
         var body = JsonDocument.Parse(await status.Content!.ReadAsStringAsync()).RootElement;
