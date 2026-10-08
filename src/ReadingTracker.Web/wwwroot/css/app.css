@@ -3584,7 +3584,13 @@ button.danger:hover:not(:disabled) {
     list-style: none;
 }
 
+/*
+    Never shrunk to fit: a day clips what overflows it, which lets a flex item go below its
+    content's height, so in the capped box (.days--scrolling) every day was squeezed to fit
+    rather than the box scrolling. Its height changes only when it folds or grows (motion.js).
+*/
 .day {
+    flex-shrink: 0;
     border: 1px solid var(--line);
     border-radius: var(--radius-sm);
     background: var(--card-shelf);
