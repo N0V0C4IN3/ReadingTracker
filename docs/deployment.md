@@ -99,8 +99,9 @@ figure is now worth measuring again. Ahead-of-time compilation is the lever, at 
 substantially larger download. Unmeasured against this deployment; worth doing before it is
 worth arguing about.
 
-**No smoke test of the whole path.** Each deploy checks the thing it deployed — the settings file
-for the frontend, `/health` for the services — and none signs in and loads a shelf. That
+**No smoke test of the whole path.** A deploy checks nothing on its own beyond the image refusing
+a bad `PUBLIC_ORIGIN`: `/health` is the `curl` above, run by hand, and nothing signs in and loads
+a shelf. That
 gap is the deployment-shaped version of the one [#59](https://github.com/N0V0C4IN3/ReadingTracker/issues/59)
 describes.
 
