@@ -99,14 +99,14 @@ services:
       # we want: a misconfigured gateway should fail loudly rather than serve nothing useful.
       ASPNETCORE_ENVIRONMENT: Production
       Google__ClientId: ${GOOGLE_CLIENT_ID:?set GOOGLE_CLIENT_ID in .env}
-      # The frontend origin. The frontend stays on Azure Static Web Apps (ADR-0012), so this is
-      # the one address in the deployed system that is still somewhere else.
-      AllowedOrigins__0: ${ALLOWED_ORIGIN:?set ALLOWED_ORIGIN in .env}
+      # The frontend's origin. It is this same address now (ADR-0016), so the browser sends no
+      # cross-origin requests at all; the Gateway still refuses to start without one named.
+      AllowedOrigins__0: https://${FUNNEL_HOST:-readingtracker.tail03af11.ts.net}
       ReverseProxy__Clusters__catalog__Destinations__primary__Address: "http://catalog:8080/"
       ReverseProxy__Clusters__library__Destinations__primary__Address: "http://library:8080/"
       # The Gateway's own schema, for DeviceTokens (ADR-0014).
       ConnectionStrings__GatewayDb: "Host=postgres;Port=5432;Database=readingtracker;Username=readingtracker;Password=${POSTGRES_PASSWORD};Gss Encryption Mode=Disable"
-    # Loopback only. The internet reaches the Gateway through the tailscale sidecar below, never
+    # Loopback only. The internet reaches the Gateway through the tailscale sidecar and web below, never
     # through a published port; this one exists so a human on the Pi can curl /health.
     ports:
       - "127.0.0.1:5100:8080"
@@ -118,7 +118,21 @@ services:
       library:
         condition: service_started
 
-  # The node that puts the Gateway on the public internet. It joins the tailnet as its own device
+  # The frontend, and the front door: nginx serves the published app and passes /api/ and /health
+  # on to the Gateway, so both are one origin (ADR-0016). The address visitors use is baked in at
+  # build time, because a WebAssembly app has no environment to read.
+  web:
+    build:
+      context: .
+      dockerfile: deploy/pi/web/Dockerfile
+      args:
+        PUBLIC_ORIGIN: https://${FUNNEL_HOST:-readingtracker.tail03af11.ts.net}
+    restart: unless-stopped
+    depends_on:
+      gateway:
+        condition: service_started
+
+  # The node that puts the app and the Gateway on the public internet. It joins the tailnet as its own device
   # named `readingtracker`, which is what gives it its own hostname and its own :443 -- the Pi
   # host tailscaled already serves another project on the host node :443, and Funnel allows only
   # 443, 8443 and 10000. A second node is cleaner than sharing a port, and the Personal plan
@@ -139,7 +153,7 @@ services:
       - tailscale-state:/var/lib/tailscale
       - ./deploy/pi/tailscale-serve.json:/config/serve.json:ro
     depends_on:
-      gateway:
+      web:
         condition: service_started
 
   # The Funnel ingress can quietly stop forwarding to the node after the sidecar loses its

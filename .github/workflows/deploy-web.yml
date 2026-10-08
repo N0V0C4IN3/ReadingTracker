@@ -2,6 +2,11 @@ name: Deploy frontend
 
 # The Blazor WebAssembly app to Azure Static Web Apps (ADR-0005).
 #
+# The Pi serves the frontend now (ADR-0016; deploy/pi/web/ does what this did), so this runs only
+# by hand. It is kept, like deploy-services.yml, as the way back. Azure stopped serving the app
+# when the subscription's free trial ended, so running it does nothing until the subscription is
+# upgraded.
+#
 # The important step is the one that writes appsettings.Production.json. A WebAssembly app is
 # static files running in someone else's browser: it has no environment variables to read at
 # start-up, so every deployment-specific value has to be baked into a file that ships with it.
@@ -13,8 +18,6 @@ name: Deploy frontend
 # application, it does not authenticate it — which is why it is a variable rather than a secret.
 
 on:
-  push:
-    branches: [master]
   workflow_dispatch:
 
 permissions:

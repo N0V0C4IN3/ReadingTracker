@@ -4,6 +4,9 @@ The services, Postgres and RabbitMQ run as the existing `docker-compose.yml` sta
 Pi 5 we already own, reached from the internet through Tailscale Funnel. The Blazor WebAssembly
 frontend stays on Azure Static Web Apps.
 
+*The frontend half is superseded by [ADR-0016](0016-the-pi-serves-the-frontend-too.md): Azure
+stopped serving it when the subscription's free trial ended, and the Pi serves it now.*
+
 This supersedes [ADR-0005](0005-deployment-stack.md) for compute, the database and the broker, and
 keeps its choice of frontend hosting. It also retires [ADR-0011](0011-rabbitmq-runs-as-a-managed-shared-instance.md):
 the broker no longer needs a home of its own, because it now has one.

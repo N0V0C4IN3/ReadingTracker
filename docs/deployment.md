@@ -2,14 +2,13 @@
 
 ## What is deployed today
 
-There are two halves, and they ship differently.
+Everything runs on a Raspberry Pi, reached through Tailscale Funnel at
+**https://readingtracker.tail03af11.ts.net**: the frontend, the services, Postgres and the broker
+([ADR-0012](adr/0012-self-host-on-a-raspberry-pi-behind-tailscale-funnel.md),
+[ADR-0016](adr/0016-the-pi-serves-the-frontend-too.md)). It ships by hand. Secrets are in an
+untracked `.env` beside `docker-compose.pi.yml` on the Pi.
 
-| Half | Where | Address | How it ships |
-| --- | --- | --- | --- |
-| Frontend (`ReadingTracker.Web`) | Azure Static Web Apps | https://thankful-bush-00466b40f.6.azurestaticapps.net | `deploy-web.yml`, on its own, on every push to `master`. Merging a PR deploys it |
-| Services, Postgres, broker | A Raspberry Pi, through Tailscale Funnel ([ADR-0012](adr/0012-self-host-on-a-raspberry-pi-behind-tailscale-funnel.md)) | https://readingtracker.tail03af11.ts.net | By hand (below). Secrets are in an untracked `.env` beside `docker-compose.pi.yml` on the Pi |
-
-To deploy the services, on the Pi, in the repository's checkout there:
+To deploy, on the Pi, in the repository's checkout there:
 
 ```sh
 git pull
@@ -17,23 +16,23 @@ docker compose -f docker-compose.pi.yml up --build -d
 curl -s https://readingtracker.tail03af11.ts.net/health   # through the Funnel, as visitors reach it
 ```
 
+Funnel sends every request to the `web` service. That is nginx: it serves the published frontend
+and passes `/api/` and `/health` on to the Gateway, so the app and the API share one origin. Its
+configuration is in `deploy/pi/web/`.
+
+If a deploy changes `deploy/pi/tailscale-serve.json`, also run
+`docker compose -f docker-compose.pi.yml restart tailscale`. The sidecar reads that file when it
+starts.
+
 The maintainer's `deploy-to-pi` skill and agent do this, and check the disk and the stack, but
 they live in a personal Claude setup, not in this repository.
 
-What joins the two halves:
+The one address is set in one place: `FUNNEL_HOST` in the Pi's `.env`, defaulting to the address
+above. The compose file builds it into the frontend as its Gateway address and gives it to the
+Gateway as its allowed origin. Outside the repository, Google's OAuth client lists the address
+among its JavaScript origins, and its `/authentication/login-callback` among its redirect URIs.
 
-- The frontend's `WEB_GATEWAY_BASE_ADDRESS` (a repository variable `deploy-web.yml` reads) is the
-  Pi's address above.
-- The Gateway lets the frontend in through `ALLOWED_ORIGIN` in the Pi's `.env` (the Static Web
-  App's address; see `deploy/pi/.env.example`).
-- Google's OAuth client lists the Static Web App's address among its JavaScript origins, and its
-  `/authentication/login-callback` among its redirect URIs.
-
-So a merge alone puts out only the frontend. "Deploy" means both halves that the change touches:
-
-- **Frontend only:** the merge was the deploy. Watch the `Deploy frontend` run go green, then check the address.
-- **Services only:** deploy them to the Pi after the merge.
-- **Both, where the frontend reads something new from a service:** deploy the services to the Pi first, then merge. Merging first puts the new frontend live against the old services.
+A merge deploys nothing. Frontend and services go out together, in the one `up --build`.
 
 Locally, the stack is `docker-compose.yml`: `bash tools/dev/up.sh` rebuilds it and waits until http://localhost:5200 answers.
 
@@ -45,22 +44,21 @@ ships alongside it. `wwwroot/appsettings.json` carries the local gateway address
 `http://localhost:5100/` — and a published build with nothing overriding it loads perfectly and
 then cannot reach a single service.
 
-`deploy-web.yml` writes `wwwroot/appsettings.Production.json` from repository variables before
-publishing, and then greps the published output to make sure the result does not still say
-localhost. Nothing secret goes in it, because nothing there can be: the file is served to every
+`deploy/pi/web/Dockerfile` writes `wwwroot/appsettings.Production.json` before publishing, from
+the `PUBLIC_ORIGIN` build argument the compose file passes it, and refuses to build if that is not
+an `https` address. Nothing secret goes in it, because nothing there can be: the file is served to every
 visitor. The Google client id is public by design — it identifies the application, it does not
 authenticate it.
 
-## The Content-Security-Policy, and why the workflow finishes it
+## The Content-Security-Policy, and why the build finishes it
 
-`wwwroot/staticwebapp.config.json` sends a Content-Security-Policy with every page. It is
-committed with two blanks — `{gateway}` and `{inline-script-hashes}` — that `deploy-web.yml` fills
-in after `dotnet publish`, because neither is known before it: the Gateway's origin is the
-deployment's, and the inline scripts' hashes change whenever the page does. Blazor writes the
-import map into `index.html` at publish time, fingerprinted, so its hash changes with every build
-that touches a framework file. The workflow hashes every inline `<script>` it finds rather than
-pinning hashes in the config, so editing one of the page's own scripts cannot silently break the
-deployed site. (A local `dotnet run` sends no policy at all; the config is Static Web Apps' alone.)
+nginx sends a Content-Security-Policy with every page. `deploy/pi/web/csp.py` writes it while the
+image builds, after `dotnet publish`, because the inline scripts' hashes are not known before
+then: Blazor writes the import map into `index.html` at publish time, fingerprinted, so its hash
+changes with every build that touches a framework file. The script hashes every inline `<script>`
+it finds rather than pinning hashes, so editing one of the page's own scripts cannot silently break
+the deployed site. (A local `dotnet run` sends no policy at all.) The other headers are in
+`deploy/pi/web/headers.conf` and `nginx.conf`.
 
 What each source is for, so the next origin goes in the right place:
 
@@ -72,7 +70,7 @@ What each source is for, so the next origin goes in the right place:
   class; inline *style* is a far smaller risk than inline script, so it is allowed.
 - `img-src 'self' https:` — book jackets come from whichever provider had the book, and from
   hand-entered cover URLs, so any `https` origin; never `http`, never `data:`.
-- `connect-src` — the Gateway, and Google's two endpoints the sign-in library fetches
+- `connect-src` — `'self'`, which is the Gateway too, and Google's two endpoints the sign-in library fetches
   (discovery at `accounts.google.com`, signing keys at `www.googleapis.com`).
 - `frame-src 'self' https://accounts.google.com` — the hidden iframe that asks Google whether a
   session already exists, which Google answers by redirecting back to this origin.
@@ -124,17 +122,18 @@ on Azure Container Apps, Postgres on Neon and the broker on CloudAMQP, as
 nothing rebuilds a deployment nobody is using. To return, run it and point
 `WEB_GATEWAY_BASE_ADDRESS` at the Container Apps gateway again.
 
-Some of the setup below is still the frontend's today: the Static Web App in **3. Azure**, the
-OAuth client's origins in **4. Google**, and the `WEB_*` variables and
-`AZURE_STATIC_WEB_APPS_API_TOKEN` in **5. This repository**. The rest (Neon, the broker, the
-container apps, and **Order**) is the way back only.
+The frontend was on Azure Static Web Apps until [ADR-0016](adr/0016-the-pi-serves-the-frontend-too.md),
+and `deploy-web.yml`, now also run only by hand, is the way back for it. Azure stopped serving
+the app when the subscription's free trial ended on 8 October 2026, so neither way back works
+until the subscription is upgraded to pay-as-you-go. Of the setup below, only the OAuth client in
+**4. Google** is still in use.
 
 The two workflows:
 
 - `.github/workflows/deploy-services.yml`, run by hand. It builds the Catalog, Library and Gateway
   images, pushes them to this repository's GHCR namespace, updates the container apps, then asks
   each one's `/health` endpoint from outside before calling it done.
-- `.github/workflows/deploy-web.yml`, on every push to `master`. It writes
+- `.github/workflows/deploy-web.yml`, run by hand. It writes
   `appsettings.Production.json`, publishes the frontend and uploads it.
 
 Neither runs to completion until the resources below exist and the repository is configured. Both
@@ -278,10 +277,10 @@ unnoticed in.
 
 ### 4. Google
 
-Add the Static Web Apps URL to the OAuth client's **Authorised JavaScript origins**, and
+Add the frontend's URL to the OAuth client's **Authorised JavaScript origins**, and
 `https://<the-app>/authentication/login-callback` to its **Authorised redirect URIs**. Until this
 is done, sign-in fails from the deployed site while working locally, because the client knows
-only `http://localhost:5200`. (Today's Static Web App is registered: see the top of this page.)
+only `http://localhost:5200`. Today that URL is the Pi's, at the top of this page.
 
 Dev sign-in cannot be turned on in production and needs nothing done to it. It requires both the
 Development environment *and* an explicit flag, independently, on the frontend and on the Gateway
