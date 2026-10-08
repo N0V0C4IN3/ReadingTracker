@@ -14,11 +14,7 @@ Before adding a helper, component, script or style to `ReadingTracker.Web`, chec
 
 ### Looking at a change
 
-A change to what the web frontend shows is looked at before it is called reviewed, verified or ready to check: `/verify` drives the app, and `tools/dev/shot.mjs` takes phone and desktop screenshots when the Chrome DevTools server is not connected.
-
-### Reviewing a change to a phone text field
-
-A change that touches a text field on a phone, or what decides a phone's screen (search, sheets, orientation), is checked for the keyboard in the browser before it is called reviewed or verified. Read `docs/agents/mobile-keyboard-check.md`; `/verify` has the handle for driving the app.
+A change to what the web frontend shows is looked at before it is called reviewed, verified or ready to check: `/verify` drives the app. One that touches a text field on a phone, or what decides a phone's screen (search, sheets, orientation), also passes the keyboard check in `docs/agents/mobile-keyboard-check.md`.
 
 ### Pop-ups, menus and sheets
 

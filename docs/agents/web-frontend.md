@@ -62,7 +62,7 @@ Most review findings on `ReadingTracker.Web` PRs are a second copy of something 
 
   Add a new list's class to the first group's selectors (and to the ring rule under it). Don't write the colours again.
 - **Pop-ups, menus and sheets.** See `ui-overlays.md`.
-- **A clipped flex item shrinks.** An item with `overflow` other than visible (`.day`, a card) may be squeezed below its content in a flex column with a capped height, rather than the column scrolling. Give the items of a capped, scrolling list `flex-shrink: 0`.
+- **A capped, scrolling list.** An item whose `overflow` is not visible may be squeezed below its content in a flex column with a capped height, rather than the column scrolling: give the list's items `flex-shrink: 0`.
 - **Show more / Show less.** A fold toggle is the pill `.book__more` on a `link-button`: the book's description uses it ("Read more"), and so does the history (`SessionHistory`, which unfolds into `.days--scrolling` and says which way it is with `aria-expanded`). Use the same pill, not a plain link, and give a new one `aria-expanded` too.
 - **Size.** `tools/check-web.sh` holds every file to 1000 lines, and lets a branch grow one already past that (today `app.css` and `Home.razor`) by 50 lines at most. When a stylesheet is full, a feature gets one of its own in `wwwroot/css/`, linked from `index.html` after `app.css` and using the same tokens. When a page is full, move code out into a component.
 - **Dropped patterns.** These live in `tools/check-web.sh`, which fails a commit that brings one back. When you replace a pattern for good, add it there.

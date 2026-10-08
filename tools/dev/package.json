@@ -1,7 +1,7 @@
 {
   "name": "readingtracker-dev-tools",
   "private": true,
-  "description": "Local-only tooling: tools/dev/shot.mjs screenshots the running app. Install with npm ci --prefix tools/dev.",
+  "description": "Local-only tooling for tools/dev/shot.mjs; see its header.",
   "type": "module",
   "dependencies": {
     "playwright-core": "1.64.0"
