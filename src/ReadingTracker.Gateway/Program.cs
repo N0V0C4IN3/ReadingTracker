@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using DotNetEnv;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.IdentityModel.Tokens;
@@ -48,8 +49,9 @@ var googleClientId = builder.Configuration["Google:ClientId"]
         "No Google client id is configured, so tokens could not be checked against this " +
         "application. Set Google__ClientId.");
 
-// The browser calls the Gateway across origins, so this is required for the frontend to work at
-// all — but a wildcard would let any site on the internet ride a signed-in reader's browser to
+// Locally the browser calls the Gateway across origins (5200 to 5100), so this is what lets the
+// frontend work there. On the Pi the two share an origin (ADR-0016) and it is never consulted.
+// Never a wildcard: that would let any site on the internet ride a signed-in reader's browser to
 // make requests here. Named origins only, and a missing setting fails startup rather than
 // silently accepting everything or nothing.
 var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>();
@@ -90,6 +92,23 @@ var devSignInEnabled = builder.Environment.IsDevelopment()
 var devSigningKey = devSignInEnabled
     ? new SymmetricSecurityKey(RandomNumberGenerator.GetBytes(32))
     : null;
+
+// Behind the Pi's nginx (ADR-0016) every request arrives from that one container, so without
+// this every signed-out visitor would share one allowance (ReaderPace). Only a proxy on the named
+// network is believed: anyone else could write X-Forwarded-For themselves. Unset, as locally,
+// the connection's own address is the visitor's.
+var trustedProxyNetwork = builder.Configuration["ForwardedHeaders:TrustedNetwork"];
+
+if (trustedProxyNetwork is not null)
+{
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor;
+        options.KnownProxies.Clear();
+        options.KnownIPNetworks.Clear();
+        options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(trustedProxyNetwork));
+    });
+}
 
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy => policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod()));
@@ -197,6 +216,11 @@ if (devSignInEnabled)
         "with no Google account required. Development-only, never for a deployed environment.");
 
     app.MapDevSignIn(devSigningKey!, googleClientId);
+}
+
+if (trustedProxyNetwork is not null)
+{
+    app.UseForwardedHeaders();
 }
 
 app.UseCors();
