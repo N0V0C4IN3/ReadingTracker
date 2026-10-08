@@ -151,10 +151,6 @@ services:
   tailscale:
     image: tailscale/tailscale:latest
     hostname: readingtracker
-
-# The one address the app and the API are served from (ADR-0016), for the two places below that
-# need it whole. FUNNEL_HOST is a hostname, without the scheme.
-x-public-origin: &public-origin https://${FUNNEL_HOST:-readingtracker.tail03af11.ts.net}
     restart: unless-stopped
     environment:
       TS_AUTHKEY: ${TS_AUTHKEY:?set TS_AUTHKEY in .env}
