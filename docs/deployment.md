@@ -123,11 +123,9 @@ on is the fix, if this ever bites.
 
 ## Google sign-in
 
-The OAuth client lists the frontend's address, `https://readingtracker.tail03af11.ts.net`, among
-its **Authorised JavaScript origins**, and `https://readingtracker.tail03af11.ts.net/authentication/login-callback`
-among its **Authorised redirect URIs**, beside `http://localhost:5200` for the local stack. A new
-address for the app needs both added, or sign-in fails from it with `redirect_uri_mismatch` while
-working locally.
+Beside the address at the top of this page, the OAuth client lists `http://localhost:5200` for
+the local stack. A new address for the app needs both its entries added, or sign-in fails from it
+with `redirect_uri_mismatch` while still working locally.
 
 Dev sign-in cannot be turned on in production and needs nothing done to it. It requires both the
 Development environment *and* an explicit flag, independently, on the frontend and on the Gateway
@@ -142,9 +140,10 @@ The services ran on Azure Container Apps, with Postgres on Neon and the broker o
 [ADR-0012](adr/0012-self-host-on-a-raspberry-pi-behind-tailscale-funnel.md). The frontend was on
 Azure Static Web Apps until [ADR-0016](adr/0016-the-pi-serves-the-frontend-too.md). The
 subscription's free trial ended on 8 October 2026, and everything left in Azure was deleted the
-same day: the resource group, the identity GitHub Actions signed in with, the repository's
-variables and secret for it, and the two workflows, `deploy-services.yml` and `deploy-web.yml`.
+same day: the resource group, the identity GitHub Actions signed in with and the repository's
+`AZURE_*` variables for it, the Static Web Apps deploy token secret, and the two workflows,
+`deploy-services.yml` and `deploy-web.yml`.
 
 There is no way back to keep working. Should one be wanted, the workflows and the setup this page
 used to walk through (provider registration, the container apps' settings, Neon's direct
-endpoint, the OIDC credential) are in git history at `006b2ea`.
+endpoint, the OIDC credential) are in git history at `83a868c`, the last commit with both.
