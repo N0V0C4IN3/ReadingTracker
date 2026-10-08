@@ -18,7 +18,14 @@ curl -s https://readingtracker.tail03af11.ts.net/health   # through the Funnel, 
 
 Funnel sends every request to the `web` service. That is nginx: it serves the published frontend
 and passes `/api/` and `/health` on to the Gateway, so the app and the API share one origin. Its
-configuration is in `deploy/pi/web/`.
+configuration is in `deploy/pi/web/`. `tools/dev/up.sh` never runs it (the local `web` is
+`dotnet run`), so to try a change to it, build it beside the running local stack and open
+http://localhost:5300:
+
+```sh
+docker build -f deploy/pi/web/Dockerfile --build-arg PUBLIC_ORIGIN=http://localhost:5300 -t readingtracker-web-pi .
+docker run --rm --network readingtracker_default -p 5300:80 readingtracker-web-pi
+```
 
 If a deploy changes `deploy/pi/tailscale-serve.json`, also run
 `docker compose -f docker-compose.pi.yml restart tailscale`. The sidecar reads that file when it
@@ -46,7 +53,7 @@ then cannot reach a single service.
 
 `deploy/pi/web/Dockerfile` writes `wwwroot/appsettings.Production.json` before publishing, from
 the `PUBLIC_ORIGIN` build argument the compose file passes it, and refuses to build if that is not
-an `https` address. Nothing secret goes in it, because nothing there can be: the file is served to every
+an `https` address (or `http://localhost:<port>`, to try the image locally). Nothing secret goes in it, because nothing there can be: the file is served to every
 visitor. The Google client id is public by design — it identifies the application, it does not
 authenticate it.
 
@@ -86,8 +93,9 @@ payment, none of which this application has any use for.
 ## Known rough edges
 
 **Cold start.** The frontend takes around eight seconds to first paint on a published Release
-build, and it is not the download — the framework arrives in about 250ms and the rest is the
-WebAssembly runtime starting. Ahead-of-time compilation is the lever, at the cost of a
+build, and it was not the download — on Azure's CDN the framework arrived in about 250ms and the
+rest was the WebAssembly runtime starting. The Pi serves it over its home upload link, so that
+figure is now worth measuring again. Ahead-of-time compilation is the lever, at the cost of a
 substantially larger download. Unmeasured against this deployment; worth doing before it is
 worth arguing about.
 
@@ -119,26 +127,18 @@ Until [ADR-0012](adr/0012-self-host-on-a-raspberry-pi-behind-tailscale-funnel.md
 on Azure Container Apps, Postgres on Neon and the broker on CloudAMQP, as
 [ADR-0005](adr/0005-deployment-stack.md) set out. The rest of this page is kept as the way back.
 `deploy-services.yml` still works and is still configured, but it runs only by hand now, so
-nothing rebuilds a deployment nobody is using. To return, run it and point
-`WEB_GATEWAY_BASE_ADDRESS` at the Container Apps gateway again.
+nothing rebuilds a deployment nobody is using. It builds the Catalog, Library and Gateway images,
+pushes them to this repository's GHCR namespace, updates the container apps, then asks each one's
+`/health` endpoint from outside before calling it done. It fails on its first step, naming what
+is missing, until the resources below exist and the repository is configured.
 
-The frontend was on Azure Static Web Apps until [ADR-0016](adr/0016-the-pi-serves-the-frontend-too.md),
-and `deploy-web.yml`, now also run only by hand, is the way back for it. Azure stopped serving
-the app when the subscription's free trial ended on 8 October 2026, so neither way back works
-until the subscription is upgraded to pay-as-you-go. Of the setup below, only the OAuth client in
-**4. Google** is still in use.
-
-The two workflows:
-
-- `.github/workflows/deploy-services.yml`, run by hand. It builds the Catalog, Library and Gateway
-  images, pushes them to this repository's GHCR namespace, updates the container apps, then asks
-  each one's `/health` endpoint from outside before calling it done.
-- `.github/workflows/deploy-web.yml`, run by hand. It writes
-  `appsettings.Production.json`, publishes the frontend and uploads it.
-
-Neither runs to completion until the resources below exist and the repository is configured. Both
-fail on their first step with a message naming what is missing, rather than deploying something
-half-configured.
+Azure stopped serving anything when the subscription's free trial ended on 8 October 2026, so
+this way back first needs the subscription upgraded to pay-as-you-go. The frontend has no way
+back to Azure: it was on Static Web Apps until
+[ADR-0016](adr/0016-the-pi-serves-the-frontend-too.md), and `deploy-web.yml` and
+`staticwebapp.config.json` are in git history from before it. A frontend on another origin would
+need that origin added to the Gateway's `AllowedOrigins` and to the Google OAuth client. Of the
+setup below, only the OAuth client in **4. Google** is still in use.
 
 Container Apps scale to zero, so the first request after an idle period also paid for a container
 starting. The health check in the services workflow is patient about this on purpose.
@@ -208,7 +208,6 @@ background, so start it before anything else:
 
 ```
 az provider register -n Microsoft.App --wait
-az provider register -n Microsoft.Web --wait
 az provider register -n Microsoft.ContainerRegistry --wait
 az provider register -n Microsoft.OperationalInsights --wait
 ```
@@ -223,14 +222,6 @@ A resource group, a Container Apps environment, and three container apps named
 internal on the other two, which is what makes
 [ADR-0007](adr/0007-services-trust-a-reader-identity-header-from-the-gateway.md) safe — Catalog
 and Library trust a reader-identity header, so nothing but the gateway may be able to set it.
-
-Then a Static Web App for the frontend. It cannot go in the same region as everything else: Static
-Web Apps exists in five regions only — Central US, East US 2, West US 2, West Europe, East Asia —
-and no amount of matching will put it next to the services. This does not matter. The region is
-where the resource record lives; the files are served from a CDN edge near the visitor, and a
-WebAssembly app calls the gateway from the reader's browser, so nothing a reader waits for passes
-through the Static Web App's region at all. West Europe against services in Germany West Central
-is fine.
 
 Set each service's own configuration **on the container app in Azure**, not in the workflow. The
 pipeline only ever changes the image, deliberately, so that a deployment cannot revert a setting
@@ -303,24 +294,13 @@ repository on the `master` branch.
 | `AZURE_SUBSCRIPTION_ID` | the subscription id |
 | `AZURE_RESOURCE_GROUP` | `readingtracker` |
 | `CONTAINER_APP_PREFIX` | `readingtracker` |
-| `WEB_GATEWAY_BASE_ADDRESS` | today the Pi's `https://readingtracker.tail03af11.ts.net/`; on Azure, `https://readingtracker-gateway.<region>.azurecontainerapps.io/` |
-| `WEB_GOOGLE_CLIENT_ID` | only if production uses a different OAuth client from the committed one |
-
-**Secrets**:
-
-| Name | Where it comes from |
-| --- | --- |
-| `AZURE_STATIC_WEB_APPS_API_TOKEN` | the Static Web App's deployment token |
 
 ## Order
-
-The frontend needs the gateway's address, so the services go first.
 
 1. Register the Azure resource providers, and — while they propagate — create the Neon database
    and the CloudAMQP instance.
 2. Create the Azure resources and set each container app's configuration.
-3. Set the variables and the secret here.
+3. Set the variables here.
 4. Run **Deploy services**. It ends by checking `/health` from outside.
-5. Put the gateway's URL in `WEB_GATEWAY_BASE_ADDRESS`, and the Static Web App's URL in the
-   Gateway's `AllowedOrigins__0` and in the Google OAuth client.
-6. Run **Deploy frontend**.
+5. Point the frontend at the gateway's URL, and put the frontend's origin in the Gateway's
+   `AllowedOrigins__0` and in the Google OAuth client.

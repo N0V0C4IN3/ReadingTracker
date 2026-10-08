@@ -13,8 +13,7 @@ name: Deploy services
 # deployment alive, and makes it look from the Actions tab as though Azure is still where this
 # application lives. Run it by hand from the Actions tab if you need it.
 #
-# The frontend is not here. The Pi serves it now (ADR-0016), and deploy-web.yml, which put it on
-# Azure Static Web Apps, also runs only by hand.
+# The frontend is not here. The Pi serves it (ADR-0016), whichever Gateway it talks to.
 #
 # All three are built and deployed together on every run rather than filtered by path. A
 # Container Apps revision is cheap, and "which services did this commit touch" is exactly the

@@ -24,13 +24,20 @@ What Static Web Apps did, nginx now does (`deploy/pi/web/`): it falls back to `i
 the app's routes, sends the security headers with `X-Frame-Options` per route, sends the
 Content-Security-Policy with every inline script allowed by hash (the hashes are computed at image
 build time, as the workflow used to compute them), marks `_framework/` immutable, and serves the
-`.gz` files the publish already wrote.
+`.br` and `.gz` files the publish already wrote.
 
 ## Consequences
 
 - **Merging no longer deploys the frontend.** It ships with the services, by hand, on the Pi.
-  `deploy-web.yml` now runs only by hand, so that a merge does not upload to an app Azure no
-  longer serves.
+  `deploy-web.yml` and `staticwebapp.config.json` are deleted rather than kept as a way back: the
+  way back needs a paid subscription, and a second copy of the security policy that nothing runs
+  would only drift. Git history has them.
+- Signed-out visitors are now counted one by one. Funnel passes on each visitor's address,
+  nginx keeps only the entry Funnel wrote, and the Gateway believes `X-Forwarded-For` only from
+  the Docker network (`ForwardedHeaders__TrustedNetwork`). Before, every request reached the
+  Gateway from the tailscale container, so every signed-out visitor shared one allowance.
+- The download is served from the Pi's upload link, Brotli-compressed as on Azure (Alpine's
+  nginx and its brotli module, not the nginx image, which has none).
 - One host now serves everything, so the Pi or its Funnel going down takes the app down with the
   API. With the API down the app was no use anyway.
 - Google's OAuth client has to list the Pi's address as a JavaScript origin, and its
