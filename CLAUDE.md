@@ -12,9 +12,9 @@ Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/do
 
 Before adding a helper, component, script or style to `ReadingTracker.Web`, check `docs/agents/web-frontend.md`. It maps each job to the piece that already does it.
 
-### Reviewing a change to a phone text field
+### Looking at a change
 
-A change that touches a text field on a phone, or what decides a phone's screen (search, sheets, orientation), is checked for the keyboard in the browser before it is called reviewed or verified. Read `docs/agents/mobile-keyboard-check.md`; `/verify` has the handle for driving the app.
+A change to what the web frontend shows is looked at before it is called reviewed, verified or ready to check: `/verify` drives the app. One that touches a text field on a phone, or what decides a phone's screen (search, sheets, orientation), also passes the keyboard check in `docs/agents/mobile-keyboard-check.md`.
 
 ### Pop-ups, menus and sheets
 
