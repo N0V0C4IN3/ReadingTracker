@@ -121,157 +121,13 @@ broker connection is invisible to every automated check there is. Adding a book 
 reach the shelf is the manual test; a `degraded` health status that nothing acts
 on is the fix, if this ever bites.
 
-## The old deployment, kept as the way back
+## Google sign-in
 
-Until [ADR-0012](adr/0012-self-host-on-a-raspberry-pi-behind-tailscale-funnel.md), the services ran
-on Azure Container Apps, Postgres on Neon and the broker on CloudAMQP, as
-[ADR-0005](adr/0005-deployment-stack.md) set out. The rest of this page is kept as the way back.
-`deploy-services.yml` still works and is still configured, but it runs only by hand now, so
-nothing rebuilds a deployment nobody is using. It builds the Catalog, Library and Gateway images,
-pushes them to this repository's GHCR namespace, updates the container apps, then asks each one's
-`/health` endpoint from outside before calling it done. It fails on its first step, naming what
-is missing, until the resources below exist and the repository is configured.
-
-Azure stopped serving anything when the subscription's free trial ended on 8 October 2026, so
-this way back first needs the subscription upgraded to pay-as-you-go. The frontend has no way
-back to Azure: it was on Static Web Apps until
-[ADR-0016](adr/0016-the-pi-serves-the-frontend-too.md), and `deploy-web.yml` and
-`staticwebapp.config.json` are in git history from before it. A frontend on another origin would
-need that origin added to the Gateway's `AllowedOrigins` and to the Google OAuth client. Of the
-setup below, only the OAuth client in **4. Google** is still in use.
-
-Container Apps scale to zero, so the first request after an idle period also paid for a container
-starting. The health check in the services workflow is patient about this on purpose.
-
-## What to create
-
-### 1. Neon
-
-One project, one database. Both Catalog and Library use the same instance and keep to their own
-schema ([ADR-0004](adr/0004-schema-per-service-shared-postgres.md)), so one connection string
-serves both.
-
-Choose the Azure region first and put Neon in whichever of its regions is geographically nearest.
-Every query crosses from Azure to whichever cloud Neon sits in, and a region is the one decision
-here that is expensive to revisit — moving a project later means a dump and restore, while
-everything else is a connection string. Neon ran in Azure regions until April 2026 and no longer
-does, so this really is cross-cloud; Frankfurt to Frankfurt (Azure Germany West Central against
-Neon's AWS `eu-central-1`) is about as close as the two get in Europe, and Germany West Central
-is confirmed available for Container Apps. Each service migrates itself on boot under an advisory lock
-([ADR-0006](adr/0006-serialize-migrations-with-an-advisory-lock.md)) — there is no migration step
-in the pipeline and there should not be one.
-
-> **Use the direct endpoint, not the pooled one.** Neon offers both; the pooled host has
-> `-pooler` in its name and is PgBouncer in transaction pooling mode. `pg_advisory_lock` is a
-> *session* lock, and the migration code deliberately pins the lock and the migration to one
-> connection because of that. Under transaction pooling a client connection is only tied to a
-> backend for the length of a transaction, so the lock would be taken on one backend, the
-> migration would run on another without holding it, and the unlock would quietly fail on a
-> third — leaving the lock stranded until that backend's session ends.
->
-> Nothing would error. Two replicas cold-starting together would simply both migrate, which is
-> the exact race ADR-0006 exists to prevent, and the failure would surface later as a corrupted
-> migration history rather than as a connection problem.
-
-Two further things on the connection string:
-
-- `SSL Mode=Require` — Neon will not accept a plaintext connection. Its certificate chains to a
-  public CA, so there is no need to disable verification with `Trust Server Certificate`.
-- `Maximum Pool Size=10` or thereabouts. Npgsql defaults to **100 connections per pool**, and
-  that is per service, per replica. Two services cold-starting a few replicas each will exhaust
-  a free-tier Neon compute long before they need that many.
-
-### 2. The broker
-
-A managed shared instance — CloudAMQP's free tier — rather than a RabbitMQ container we run
-ourselves ([ADR-0011](adr/0011-rabbitmq-runs-as-a-managed-shared-instance.md)). Create an
-instance and copy its URL.
-
-It will be an `amqps://` URL, and that needs nothing done to it. Both services build their
-connection from a URI and RabbitMQ.Client enables TLS from the scheme on its own, so the whole
-change is the connection string. The same value goes to both Catalog and Library: one publishes
-book events, the other consumes them, and they have to be on the same broker to be talking at
-all.
-
-If it is wrong or missing, nothing crashes. Publishing is wrapped, so an unreachable broker is
-logged and stepped over and every synchronous path keeps working — which is precisely why it is
-worth checking rather than assuming. After deploying, add a book and confirm it appears on the
-shelf; that is the path the events carry.
-
-### 3. Azure
-
-A fresh subscription has none of the resource providers registered, and the failure is not
-obvious — `az containerapp list` reports the subscription "is not registered for the
-Microsoft.App resource provider" rather than saying anything about the resource you were trying
-to create. Registration is free, creates nothing and is permanent, but it propagates in the
-background, so start it before anything else:
-
-```
-az provider register -n Microsoft.App --wait
-az provider register -n Microsoft.ContainerRegistry --wait
-az provider register -n Microsoft.OperationalInsights --wait
-```
-
-`Microsoft.OperationalInsights` is the one nobody expects: a Container Apps environment creates a
-Log Analytics workspace for itself, and without the provider the environment fails to create at
-all.
-
-A resource group, a Container Apps environment, and three container apps named
-`<prefix>-catalog`, `<prefix>-library`, `<prefix>-gateway` — the workflow builds those names from
-`CONTAINER_APP_PREFIX`, so they have to follow that shape. Ingress: external on the gateway,
-internal on the other two, which is what makes
-[ADR-0007](adr/0007-services-trust-a-reader-identity-header-from-the-gateway.md) safe — Catalog
-and Library trust a reader-identity header, so nothing but the gateway may be able to set it.
-
-Set each service's own configuration **on the container app in Azure**, not in the workflow. The
-pipeline only ever changes the image, deliberately, so that a deployment cannot revert a setting
-someone changed in the portal to put out a fire.
-
-| Service | Needs |
-| --- | --- |
-| Catalog | `ConnectionStrings__CatalogDb`, `RabbitMq__ConnectionString`, `GOOGLE_BOOKS_API_KEY` |
-| Library | `ConnectionStrings__LibraryDb`, `RabbitMq__ConnectionString`, `Catalog__BaseAddress` |
-| Gateway | `ConnectionStrings__GatewayDb`, `Google__ClientId`, `AllowedOrigins__0`, `ReverseProxy__Clusters__catalog__Destinations__primary__Address`, `ReverseProxy__Clusters__library__Destinations__primary__Address` |
-
-Three of the Gateway's are easy to miss and all stop it starting rather than letting it come up
-half-configured:
-
-- `ConnectionStrings__GatewayDb` is new with DeviceTokens (ADR-0014): the Gateway keeps a schema
-  of its own in the same Postgres as Catalog and Library, and migrates it on boot. Without it the
-  Gateway would come up, pass its health check, and fail on the first device that called.
-
-- `Google__ClientId` lives only in `appsettings.Development.json`, because a deployment was
-  always meant to supply its own. Without it the Gateway would have nothing to check a token's
-  audience against, and would accept tokens issued to any Google application in the world — so
-  it refuses to start instead. Unless you have made a separate OAuth client for production, this
-  is the same client id already committed in that file.
-- `AllowedOrigins` has no default either, rather than coming up with CORS no browser can pass.
-
-The two `ReverseProxy` addresses are the internal FQDNs of the Catalog and Library container apps,
-with a trailing slash. Routing itself is committed in `appsettings.json`; only the addresses are
-environmental.
-
-`Catalog__BaseAddress` on Library is the one to be careful about, because it is the opposite: it
-has a default, and the default is `http://localhost:5103/`. Library calls Catalog directly for
-book details rather than going back out through the Gateway, so left unset it starts cleanly,
-passes its health check, and fails only when a reader opens a shelf. Its own internal FQDN, with
-a trailing slash.
-
-`GOOGLE_BOOKS_API_KEY` is the flat spelling container platforms and `.env` files conventionally
-use; Catalog accepts it as an alias for `GoogleBooks__ApiKey`, and either works.
-
-One thing every connection string to Postgres needs on these images: `Gss Encryption Mode=Disable`.
-Npgsql 10 attempts GSSAPI first, and the .NET runtime images have shipped without Kerberos
-libraries since .NET 8, so without it every start logs a `libgssapi_krb5.so.2: cannot open shared
-object file` before falling back. Harmless, and exactly the sort of noise a real error goes
-unnoticed in.
-
-### 4. Google
-
-Add the frontend's URL to the OAuth client's **Authorised JavaScript origins**, and
-`https://<the-app>/authentication/login-callback` to its **Authorised redirect URIs**. Until this
-is done, sign-in fails from the deployed site while working locally, because the client knows
-only `http://localhost:5200`. Today that URL is the Pi's, at the top of this page.
+The OAuth client lists the frontend's address, `https://readingtracker.tail03af11.ts.net`, among
+its **Authorised JavaScript origins**, and `https://readingtracker.tail03af11.ts.net/authentication/login-callback`
+among its **Authorised redirect URIs**, beside `http://localhost:5200` for the local stack. A new
+address for the app needs both added, or sign-in fails from it with `redirect_uri_mismatch` while
+working locally.
 
 Dev sign-in cannot be turned on in production and needs nothing done to it. It requires both the
 Development environment *and* an explicit flag, independently, on the frontend and on the Gateway
@@ -279,28 +135,16 @@ Development environment *and* an explicit flag, independently, on the frontend a
 [ADR-0009](adr/0009-the-frontend-swaps-google-out-for-dev-sign-in.md)) — configuration alone
 cannot reach it.
 
-### 5. This repository
+## Azure, retired
 
-Azure is reached by OIDC federated login, so there is no long-lived Azure secret. Create an app
-registration, give it Contributor on the resource group, and add a federated credential for this
-repository on the `master` branch.
+The services ran on Azure Container Apps, with Postgres on Neon and the broker on CloudAMQP
+([ADR-0005](adr/0005-deployment-stack.md)), until
+[ADR-0012](adr/0012-self-host-on-a-raspberry-pi-behind-tailscale-funnel.md). The frontend was on
+Azure Static Web Apps until [ADR-0016](adr/0016-the-pi-serves-the-frontend-too.md). The
+subscription's free trial ended on 8 October 2026, and everything left in Azure was deleted the
+same day: the resource group, the identity GitHub Actions signed in with, the repository's
+variables and secret for it, and the two workflows, `deploy-services.yml` and `deploy-web.yml`.
 
-**Variables** (Settings → Secrets and variables → Actions → Variables):
-
-| Name | Example |
-| --- | --- |
-| `AZURE_CLIENT_ID` | the app registration's client id |
-| `AZURE_TENANT_ID` | the directory id |
-| `AZURE_SUBSCRIPTION_ID` | the subscription id |
-| `AZURE_RESOURCE_GROUP` | `readingtracker` |
-| `CONTAINER_APP_PREFIX` | `readingtracker` |
-
-## Order
-
-1. Register the Azure resource providers, and — while they propagate — create the Neon database
-   and the CloudAMQP instance.
-2. Create the Azure resources and set each container app's configuration.
-3. Set the variables here.
-4. Run **Deploy services**. It ends by checking `/health` from outside.
-5. Point the frontend at the gateway's URL, and put the frontend's origin in the Gateway's
-   `AllowedOrigins__0` and in the Google OAuth client.
+There is no way back to keep working. Should one be wanted, the workflows and the setup this page
+used to walk through (provider registration, the container apps' settings, Neon's direct
+endpoint, the OIDC credential) are in git history at `006b2ea`.
