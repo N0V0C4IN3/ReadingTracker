@@ -858,8 +858,10 @@ header > a:first-child:hover {
     overflow: hidden;
     interpolate-size: allow-keywords;
     height: auto;
+    /* --ease, not --ease-out: a long description travels a screen or more, and a curve that
+       front-loads the move covers most of it in the first frames, which reads as a jump. */
     transition:
-        height 420ms var(--ease-out),
+        height 560ms var(--ease),
         -webkit-line-clamp 0s allow-discrete,
         line-clamp 0s allow-discrete;
 }
@@ -869,9 +871,9 @@ header > a:first-child:hover {
     line-clamp: 7;
     height: 7lh;
     transition:
-        height 360ms var(--ease-out),
-        -webkit-line-clamp 0s 360ms allow-discrete,
-        line-clamp 0s 360ms allow-discrete;
+        height 460ms var(--ease),
+        -webkit-line-clamp 0s 460ms allow-discrete,
+        line-clamp 0s 460ms allow-discrete;
 }
 
 .book__about--folded p {
