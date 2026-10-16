@@ -13,6 +13,10 @@ public sealed partial class ReadingLibrary
     /// way an edit made on the device reaches the tracker, so no note on the device is no note
     /// here. The passage, where it is and when it was first saved stand as first sent: the Book's
     /// words do not change, and a retried request must not be able to move them.
+    ///
+    /// A save that meets the Reader deleting the same Quote, or taking the book off the shelf, at
+    /// the same moment is never a failure: whichever got there first stands, and this save is
+    /// what it would have been a moment later — the Quote sent again, or no such entry.
     /// </summary>
     public async Task<(SavedQuote? Saved, QuoteProblem? Problem)> SaveQuoteAsync(
         string readerId,
@@ -30,7 +34,11 @@ public sealed partial class ReadingLibrary
             return (null, QuoteProblem.NotAHighlightId);
         }
 
-        if (string.IsNullOrWhiteSpace(passage))
+        passage = Kept(passage);
+        note = Kept(note);
+        chapter = Kept(chapter);
+
+        if (passage is null)
         {
             return (null, QuoteProblem.NoPassage);
         }
@@ -48,45 +56,60 @@ public sealed partial class ReadingLibrary
             return (null, QuoteProblem.NoSuchEntry);
         }
 
-        if (await FindQuoteByHighlightAsync(entry.Id, highlightId, cancellationToken) is { } sent)
+        // UTC for the same reason as a session's time: see LogSessionAsync. To the microsecond,
+        // which is all the database keeps, so the save answers with the moment it kept.
+        var saved = (savedAt ?? clock.GetUtcNow()).ToUniversalTime();
+        saved = saved.AddTicks(-(saved.Ticks % TimeSpan.TicksPerMicrosecond));
+
+        // Round again only when another request changed things between looking and writing; the
+        // second look sees what it did. Twice is plenty: each round lost is a request that won.
+        for (var round = 0; ; round++)
         {
-            return (await SentAgainAsync(sent, note, cancellationToken), null);
+            if (await FindQuoteByHighlightAsync(entry.Id, highlightId, cancellationToken) is { } sent
+                && await ReplaceNoteAsync(sent, note, cancellationToken) is { } again)
+            {
+                return (new SavedQuote(again, QuoteSaveOutcome.Updated), null);
+            }
+
+            // Not sent before, or deleted as this changed its note: then the delete came first,
+            // and the highlight still on the device makes it a new Quote (ADR-0017).
+            var quote = new Quote
+            {
+                Id = Guid.CreateVersion7(),
+                LibraryEntryId = entry.Id,
+                HighlightId = highlightId,
+                Passage = passage,
+                Note = note,
+                Percent = position,
+                Chapter = chapter,
+                SavedAt = saved,
+            };
+
+            database.Quotes.Add(quote);
+
+            try
+            {
+                await database.SaveChangesAsync(cancellationToken);
+
+                return (new SavedQuote(quote, QuoteSaveOutcome.Created), null);
+            }
+            catch (DbUpdateException exception)
+                when (round < 2 && exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+            {
+                // The same highlight arrived twice at once — a device retrying a request that had
+                // not actually failed — and the other got there first; the unique index said so.
+                // This one is the resend it would have been a moment later.
+                database.Entry(quote).State = EntityState.Detached;
+            }
+            catch (DbUpdateException exception)
+                when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.ForeignKeyViolation })
+            {
+                // The book left the shelf after it was found: there is no entry to keep it on.
+                database.Entry(quote).State = EntityState.Detached;
+
+                return (null, QuoteProblem.NoSuchEntry);
+            }
         }
-
-        var quote = new Quote
-        {
-            Id = Guid.CreateVersion7(),
-            LibraryEntryId = entry.Id,
-            HighlightId = highlightId,
-            Passage = passage,
-            Note = note,
-            Percent = position,
-            Chapter = chapter,
-            // UTC for the same reason as a session's time: see LogSessionAsync.
-            SavedAt = (savedAt ?? clock.GetUtcNow()).ToUniversalTime(),
-        };
-
-        database.Quotes.Add(quote);
-
-        try
-        {
-            await database.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException exception)
-            when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
-        {
-            // The same highlight arrived twice at once — a device retrying a request that had not
-            // actually failed — and the other got there first; the unique index said so. This one
-            // is the resend it would have been a moment later.
-            database.Entry(quote).State = EntityState.Detached;
-
-            var first = await FindQuoteByHighlightAsync(entry.Id, highlightId, cancellationToken)
-                ?? throw new InvalidOperationException("A Quote refused as a duplicate could not be found.");
-
-            return (await SentAgainAsync(first, note, cancellationToken), null);
-        }
-
-        return (new SavedQuote(quote, QuoteSaveOutcome.Created), null);
     }
 
     /// <summary>
@@ -119,8 +142,9 @@ public sealed partial class ReadingLibrary
                 .ToDictionaryAsync(counted => counted.EntryId, counted => counted.Count, cancellationToken);
 
     /// <summary>
-    /// Changes the Reader's note on a Quote, or takes it away with null. The note is the only
-    /// thing about a Quote that can change: the passage is the Book's words.
+    /// Changes the Reader's note on a Quote, or takes it away with null or blank. The note is the
+    /// only thing about a Quote that can change: the passage is the Book's words. Null when there
+    /// is no such Quote — including one deleted while this was on its way.
     /// </summary>
     public async Task<Quote?> ChangeQuoteNoteAsync(
         string readerId,
@@ -129,12 +153,13 @@ public sealed partial class ReadingLibrary
         string? note,
         CancellationToken cancellationToken) =>
         await FindQuoteAsync(readerId, entryId, quoteId, cancellationToken) is { } quote
-            ? await ReplaceNoteAsync(quote, note, cancellationToken)
+            ? await ReplaceNoteAsync(quote, Kept(note), cancellationToken)
             : null;
 
     /// <summary>
     /// Removes a Quote, at once, as deleting a ReadingSession does. It can come back only if its
-    /// highlight is still on the device to send again (ADR-0017).
+    /// highlight is still on the device to send again (ADR-0017). False when there is no such
+    /// Quote, including one another request deleted first.
     /// </summary>
     public async Task<bool> DeleteQuoteAsync(
         string readerId,
@@ -150,7 +175,17 @@ public sealed partial class ReadingLibrary
         }
 
         database.Quotes.Remove(quote);
-        await database.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            database.Entry(quote).State = EntityState.Detached;
+
+            return false;
+        }
 
         return true;
     }
@@ -162,16 +197,16 @@ public sealed partial class ReadingLibrary
     /// full of them, and an escaped one is left escaped by one hop and decoded by another. The
     /// device hashes or encodes what it builds the identity from. At most 200 characters, which is
     /// far more than an identity needs and well inside what the index keeping a highlight one
-    /// Quote can hold.
+    /// Quote can hold. \z rather than $, which would let a line break through at the end.
     /// </summary>
-    [GeneratedRegex("^[A-Za-z0-9._~-]{1,200}$")]
+    [GeneratedRegex(@"^[A-Za-z0-9._~-]{1,200}\z")]
     private static partial Regex HighlightIdentity();
 
     /// <summary>
     /// Finds one Quote, but only through its own entry and only for the reader who owns it.
     /// Another reader's Quote is not found rather than forbidden: it is not theirs to know about.
     /// </summary>
-    private Task<Quote?> FindQuoteAsync(
+    public Task<Quote?> FindQuoteAsync(
         string readerId,
         Guid entryId,
         Guid quoteId,
@@ -187,15 +222,34 @@ public sealed partial class ReadingLibrary
             quote => quote.LibraryEntryId == entryId && quote.HighlightId == highlightId,
             cancellationToken);
 
-    /// <summary>A highlight the device had already sent: the same Quote, with the note it has now.</summary>
-    private async Task<SavedQuote> SentAgainAsync(Quote quote, string? note, CancellationToken cancellationToken) =>
-        new(await ReplaceNoteAsync(quote, note, cancellationToken), QuoteSaveOutcome.Updated);
-
-    private async Task<Quote> ReplaceNoteAsync(Quote quote, string? note, CancellationToken cancellationToken)
+    /// <summary>The Quote with its new note, or null when it was deleted between being found and changed.</summary>
+    private async Task<Quote?> ReplaceNoteAsync(Quote quote, string? note, CancellationToken cancellationToken)
     {
         quote.Note = note;
-        await database.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            database.Entry(quote).State = EntityState.Detached;
+
+            return null;
+        }
 
         return quote;
+    }
+
+    /// <summary>
+    /// Text as Library keeps it: without null characters, which are not text and which the
+    /// database cannot hold — refused, a device's queue would send them again forever — and none
+    /// at all when nothing is left to show.
+    /// </summary>
+    private static string? Kept(string? text)
+    {
+        var kept = text?.Replace("\0", "", StringComparison.Ordinal);
+
+        return string.IsNullOrWhiteSpace(kept) ? null : kept;
     }
 }

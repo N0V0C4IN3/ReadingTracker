@@ -29,9 +29,9 @@ public static class QuoteEndpoints
                 entryId,
                 highlightId,
                 body.Passage,
-                NoneIfBlank(body.Note),
+                body.Note,
                 body.Percent,
-                NoneIfBlank(body.Chapter),
+                body.Chapter,
                 body.SavedAt,
                 cancellationToken);
 
@@ -76,6 +76,25 @@ public static class QuoteEndpoints
         })
         .WithName("ListQuotes");
 
+        // One Quote: where a save's Location points.
+        endpoints.MapGet("/api/library/{entryId:guid}/quotes/{quoteId:guid}", async (
+            Guid entryId,
+            Guid quoteId,
+            HttpRequest request,
+            ReadingLibrary library,
+            CancellationToken cancellationToken) =>
+        {
+            if (Reader.From(request) is not { } readerId)
+            {
+                return LibraryProblems.NotSaidWhoIsAsking();
+            }
+
+            var quote = await library.FindQuoteAsync(readerId, entryId, quoteId, cancellationToken);
+
+            return quote is null ? Results.NotFound() : Results.Ok(QuoteResponse.From(quote));
+        })
+        .WithName("GetQuote");
+
         // The Reader's note, and only that: a PATCH because it changes one part of the Quote and
         // leaves the rest, which no request can reach.
         endpoints.MapPatch("/api/library/{entryId:guid}/quotes/{quoteId:guid}", async (
@@ -91,7 +110,7 @@ public static class QuoteEndpoints
                 return LibraryProblems.NotSaidWhoIsAsking();
             }
 
-            var quote = await library.ChangeQuoteNoteAsync(readerId, entryId, quoteId, NoneIfBlank(body.Note), cancellationToken);
+            var quote = await library.ChangeQuoteNoteAsync(readerId, entryId, quoteId, body.Note, cancellationToken);
 
             return quote is null ? Results.NotFound() : Results.Ok(QuoteResponse.From(quote));
         })
@@ -115,9 +134,6 @@ public static class QuoteEndpoints
         })
         .WithName("DeleteQuote");
     }
-
-    /// <summary>A blank note or chapter is none: there is nothing in it to show.</summary>
-    private static string? NoneIfBlank(string? text) => string.IsNullOrWhiteSpace(text) ? null : text;
 
     private static IResult QuoteRejected(string field, string detail) =>
         Results.ValidationProblem(new Dictionary<string, string[]> { [field] = [detail] });

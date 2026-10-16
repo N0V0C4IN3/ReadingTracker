@@ -185,6 +185,8 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
     [Theory]
     [InlineData("/body/DocFragment[12]/p[3]")]
     [InlineData("2026-10-12 21:40:00")]
+    // A line break at the end is still a character that is not allowed, not the end of the identity.
+    [InlineData("hl-7\n")]
     public async Task Refuses_a_highlight_identity_that_does_not_travel_safely_in_an_address(string highlightId)
     {
         var client = fixture.ClientFor("unsafe-identity-reader");
@@ -437,6 +439,165 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
         // Nothing left pointing at the entry that went, and nothing carried over to the new one.
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/library/{entryId}/quotes")).StatusCode);
         Assert.Empty(await QuotesAsync(client, again));
+    }
+
+    [Fact]
+    public async Task A_saved_quote_can_be_read_back_where_its_save_said_it_is()
+    {
+        var client = fixture.ClientFor("location-following-quoter");
+        var entryId = await fixture.AddBookAsync(client);
+        var response = await SaveAsync(client, entryId, "hl-here", note: "Mine.");
+        var saved = (await response.Content.ReadFromJsonAsync<Saved>())!;
+
+        var followed = await client.GetAsync(response.Headers.Location);
+
+        Assert.Equal(HttpStatusCode.OK, followed.StatusCode);
+        Assert.Equal(saved.Quote, await followed.Content.ReadFromJsonAsync<Quote>());
+    }
+
+    [Fact]
+    public async Task Reading_back_a_quote_that_is_not_there_or_not_mine_is_not_found()
+    {
+        var owner = fixture.ClientFor("quote-reading-owner");
+        var entryId = await fixture.AddBookAsync(owner);
+        var saved = (await SaveAndReadAsync(owner, entryId, "hl-private")).Quote;
+        var other = fixture.ClientFor("quote-reading-stranger");
+
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync($"/api/library/{entryId}/quotes/{saved.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync($"/api/library/{entryId}/quotes/{Guid.NewGuid()}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task The_time_a_save_answers_with_is_the_time_kept()
+    {
+        var client = fixture.ClientFor("fine-clock-quoter");
+        var entryId = await fixture.AddBookAsync(client);
+
+        // Finer than the database keeps: the save must not answer with a moment it then forgets.
+        var saved = (await SaveAndReadAsync(client, entryId, "hl-fine", savedAt: SavedAt.AddTicks(1234567))).Quote;
+        var unsaid = (await SaveAndReadAsync(client, entryId, "hl-now")).Quote;
+
+        var listed = await QuotesAsync(client, entryId);
+        Assert.Equal(saved, listed.Single(quote => quote.HighlightId == "hl-fine"));
+        Assert.Equal(unsaid, listed.Single(quote => quote.HighlightId == "hl-now"));
+    }
+
+    [Theory]
+    [InlineData("passage")]
+    [InlineData("note")]
+    [InlineData("chapter")]
+    public async Task A_null_character_from_the_device_is_dropped_and_the_rest_kept(string field)
+    {
+        var client = fixture.ClientFor("nul-sending-quoter-" + field);
+        var entryId = await fixture.AddBookAsync(client);
+        var fields = new Dictionary<string, object> { ["passage"] = "The words.", ["percent"] = 10 };
+        fields[field] = "before\u0000after";
+
+        // It is not text and the database cannot hold it; refused, the device would send it forever.
+        var response = await client.PutAsJsonAsync($"/api/library/{entryId}/quotes/hl-nul", fields);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var kept = Assert.Single(await QuotesAsync(client, entryId));
+        Assert.Equal("beforeafter", field switch { "passage" => kept.Passage, "note" => kept.Note, _ => kept.Chapter });
+    }
+
+    [Fact]
+    public async Task A_null_character_in_a_note_written_on_the_page_is_dropped()
+    {
+        var client = fixture.ClientFor("nul-noting-quoter");
+        var entryId = await fixture.AddBookAsync(client);
+        var saved = (await SaveAndReadAsync(client, entryId, "hl-nul-note")).Quote;
+
+        var response = await NoteAsync(client, entryId, saved.Id, "a\u0000b");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("ab", (await response.Content.ReadFromJsonAsync<Quote>())!.Note);
+    }
+
+    [Fact]
+    public async Task A_resend_arriving_as_the_quote_is_deleted_is_either_one_never_a_failure()
+    {
+        var client = fixture.ClientFor("resend-delete-racer");
+        var entryId = await fixture.AddBookAsync(client);
+
+        for (var round = 0; round < 30; round++)
+        {
+            var saved = (await SaveAndReadAsync(client, entryId, "hl-race")).Quote;
+
+            var (resent, deleted) = await BothAsync(
+                SaveAsync(client, entryId, "hl-race", note: "Changed on the device."),
+                client.DeleteAsync($"/api/library/{entryId}/quotes/{saved.Id}"));
+
+            Assert.Contains(resent, new[] { HttpStatusCode.OK, HttpStatusCode.Created });
+            Assert.Contains(deleted, new[] { HttpStatusCode.NoContent, HttpStatusCode.NotFound });
+            foreach (var left in await QuotesAsync(client, entryId))
+            {
+                await client.DeleteAsync($"/api/library/{entryId}/quotes/{left.Id}");
+            }
+        }
+    }
+
+    [Fact]
+    public async Task A_note_written_as_the_quote_is_deleted_is_not_found_never_a_failure()
+    {
+        var client = fixture.ClientFor("note-delete-racer");
+        var entryId = await fixture.AddBookAsync(client);
+
+        for (var round = 0; round < 30; round++)
+        {
+            var saved = (await SaveAndReadAsync(client, entryId, $"hl-race-{round}")).Quote;
+
+            var (noted, deleted) = await BothAsync(
+                NoteAsync(client, entryId, saved.Id, "Too late."),
+                client.DeleteAsync($"/api/library/{entryId}/quotes/{saved.Id}"));
+
+            Assert.Contains(noted, new[] { HttpStatusCode.OK, HttpStatusCode.NotFound });
+            Assert.Contains(deleted, new[] { HttpStatusCode.NoContent, HttpStatusCode.NotFound });
+        }
+    }
+
+    [Fact]
+    public async Task Deleting_a_quote_twice_at_once_deletes_it_once()
+    {
+        var client = fixture.ClientFor("double-delete-racer");
+        var entryId = await fixture.AddBookAsync(client);
+
+        for (var round = 0; round < 30; round++)
+        {
+            var saved = (await SaveAndReadAsync(client, entryId, $"hl-twice-{round}")).Quote;
+            var url = $"/api/library/{entryId}/quotes/{saved.Id}";
+
+            var (first, second) = await BothAsync(client.DeleteAsync(url), client.DeleteAsync(url));
+
+            Assert.Equal(
+                [HttpStatusCode.NoContent, HttpStatusCode.NotFound],
+                new[] { first, second }.Order());
+        }
+    }
+
+    [Fact]
+    public async Task A_save_arriving_as_the_book_leaves_the_shelf_is_not_found_never_a_failure()
+    {
+        var client = fixture.ClientFor("save-remove-racer");
+
+        for (var round = 0; round < 25; round++)
+        {
+            var entryId = await fixture.AddBookAsync(client);
+
+            var (saved, _) = await BothAsync(
+                SaveAsync(client, entryId, "hl-leaving"),
+                client.DeleteAsync($"/api/library/{entryId}"));
+
+            Assert.Contains(saved, new[] { HttpStatusCode.Created, HttpStatusCode.NotFound });
+        }
+    }
+
+    private static async Task<(HttpStatusCode, HttpStatusCode)> BothAsync(
+        Task<HttpResponseMessage> first,
+        Task<HttpResponseMessage> second)
+    {
+        await Task.WhenAll(first, second);
+        return ((await first).StatusCode, (await second).StatusCode);
     }
 
     private static Task<HttpResponseMessage> NoteAsync(HttpClient client, Guid entryId, Guid quoteId, string? note) =>
