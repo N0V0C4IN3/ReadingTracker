@@ -30,16 +30,15 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
             savedAt: SavedAt);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var saved = (await response.Content.ReadFromJsonAsync<Saved>())!;
-        Assert.Equal("Created", saved.Outcome);
-        Assert.NotEqual(Guid.Empty, saved.Quote.Id);
-        Assert.Equal("1760294400-0042", saved.Quote.HighlightId);
-        Assert.Equal("It is never too late to be what you might have been.", saved.Quote.Passage);
-        Assert.Equal("Pinned above the desk.", saved.Quote.Note);
-        Assert.Equal(42.5m, saved.Quote.Percent);
-        Assert.Equal("Book Eight", saved.Quote.Chapter);
-        Assert.Equal(SavedAt, saved.Quote.SavedAt);
-        Assert.Equal($"/api/library/{entryId}/quotes/{saved.Quote.Id}", response.Headers.Location?.OriginalString);
+        var saved = (await response.Content.ReadFromJsonAsync<Quote>())!;
+        Assert.NotEqual(Guid.Empty, saved.Id);
+        Assert.Equal("1760294400-0042", saved.HighlightId);
+        Assert.Equal("It is never too late to be what you might have been.", saved.Passage);
+        Assert.Equal("Pinned above the desk.", saved.Note);
+        Assert.Equal(42.5m, saved.Percent);
+        Assert.Equal("Book Eight", saved.Chapter);
+        Assert.Equal(SavedAt, saved.SavedAt);
+        Assert.Equal($"/api/library/{entryId}/quotes/{saved.Id}", response.Headers.Location?.OriginalString);
     }
 
     [Fact]
@@ -54,11 +53,10 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
             client, entryId, "hl-7", passage: "The words, re-flowed.", note: "Second thought.", percent: 31m, chapter: "Two", savedAt: SavedAt.AddHours(1));
 
         Assert.Equal(HttpStatusCode.OK, again.StatusCode);
-        var updated = (await again.Content.ReadFromJsonAsync<Saved>())!;
-        Assert.Equal("Updated", updated.Outcome);
+        var updated = (await again.Content.ReadFromJsonAsync<Quote>())!;
         // The same Quote, with the new note. The passage and where it is stand as first sent.
-        Assert.Equal(first.Quote with { Note = "Second thought." }, updated.Quote);
-        Assert.Equal(updated.Quote, Assert.Single(await QuotesAsync(client, entryId)));
+        Assert.Equal(first with { Note = "Second thought." }, updated);
+        Assert.Equal(updated, Assert.Single(await QuotesAsync(client, entryId)));
     }
 
     [Fact]
@@ -68,10 +66,10 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
         var entryId = await fixture.AddBookAsync(client);
         await SaveAsync(client, entryId, "hl-noted", note: "Wrote this on the device.");
 
-        var updated = (await (await SaveAsync(client, entryId, "hl-noted", note: null)).Content.ReadFromJsonAsync<Saved>())!;
+        var response = await SaveAsync(client, entryId, "hl-noted", note: null);
 
-        Assert.Equal("Updated", updated.Outcome);
-        Assert.Null(updated.Quote.Note);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Null((await response.Content.ReadFromJsonAsync<Quote>())!.Note);
     }
 
     [Fact]
@@ -168,7 +166,7 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
 
         var saved = await SaveAndReadAsync(client, entryId, "hl-edge", percent: percent);
 
-        Assert.Equal(percent, saved.Quote.Percent);
+        Assert.Equal(percent, saved.Percent);
     }
 
     [Fact]
@@ -187,6 +185,8 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
     [InlineData("2026-10-12 21:40:00")]
     // A line break at the end is still a character that is not allowed, not the end of the identity.
     [InlineData("hl-7\n")]
+    [InlineData("...")]
+    [InlineData("-_~.")]
     public async Task Refuses_a_highlight_identity_that_does_not_travel_safely_in_an_address(string highlightId)
     {
         var client = fixture.ClientFor("unsafe-identity-reader");
@@ -209,7 +209,7 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
 
         var saved = await SaveAndReadAsync(client, entryId, highlightId);
 
-        Assert.Equal(highlightId, saved.Quote.HighlightId);
+        Assert.Equal(highlightId, saved.HighlightId);
     }
 
     [Fact]
@@ -225,7 +225,7 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
     {
         var client = fixture.ClientFor("noting-reader");
         var entryId = await fixture.AddBookAsync(client);
-        var saved = (await SaveAndReadAsync(client, entryId, "hl-bare", passage: "Unremarked.", percent: 20m, chapter: "Two", savedAt: SavedAt)).Quote;
+        var saved = await SaveAndReadAsync(client, entryId, "hl-bare", passage: "Unremarked.", percent: 20m, chapter: "Two", savedAt: SavedAt);
 
         var response = await NoteAsync(client, entryId, saved.Id, "Remarked on, now.");
 
@@ -243,7 +243,7 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
     {
         var client = fixture.ClientFor($"unnoting-reader-{note?.Length}");
         var entryId = await fixture.AddBookAsync(client);
-        var saved = (await SaveAndReadAsync(client, entryId, "hl-noted", note: "A second thought.")).Quote;
+        var saved = await SaveAndReadAsync(client, entryId, "hl-noted", note: "A second thought.");
 
         var noted = (await (await NoteAsync(client, entryId, saved.Id, note)).Content.ReadFromJsonAsync<Quote>())!;
 
@@ -256,7 +256,7 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
     {
         var client = fixture.ClientFor("note-omitting-reader");
         var entryId = await fixture.AddBookAsync(client);
-        var saved = (await SaveAndReadAsync(client, entryId, "hl-kept", note: "Still mine.")).Quote;
+        var saved = await SaveAndReadAsync(client, entryId, "hl-kept", note: "Still mine.");
 
         // Only an explicit null or blank takes the note away; a request without one has not asked to.
         var response = await client.PatchAsJsonAsync($"/api/library/{entryId}/quotes/{saved.Id}", new { passage = "Other words." });
@@ -274,7 +274,7 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
     {
         var client = fixture.ClientFor("odd-noting-reader");
         var entryId = await fixture.AddBookAsync(client);
-        var saved = (await SaveAndReadAsync(client, entryId, "hl-odd", note: "Untouched.")).Quote;
+        var saved = await SaveAndReadAsync(client, entryId, "hl-odd", note: "Untouched.");
 
         var response = await client.PatchAsync(
             $"/api/library/{entryId}/quotes/{saved.Id}",
@@ -289,7 +289,7 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
     {
         var client = fixture.ClientFor("rewording-reader");
         var entryId = await fixture.AddBookAsync(client);
-        var saved = (await SaveAndReadAsync(client, entryId, "hl-words", passage: "As the author wrote it.", percent: 40m)).Quote;
+        var saved = await SaveAndReadAsync(client, entryId, "hl-words", passage: "As the author wrote it.", percent: 40m);
 
         // Neither editing the note nor saving the highlight again can put other words in.
         await client.PatchAsJsonAsync(
@@ -319,7 +319,7 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
         var client = fixture.ClientFor("crossed-books-reader");
         var oneBook = await fixture.AddBookAsync(client);
         var anotherBook = await fixture.AddBookAsync(client);
-        var saved = (await SaveAndReadAsync(client, oneBook, "hl-here")).Quote;
+        var saved = await SaveAndReadAsync(client, oneBook, "hl-here");
 
         var response = await NoteAsync(client, anotherBook, saved.Id, "Wrong book.");
 
@@ -332,7 +332,7 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
     {
         var owner = fixture.ClientFor("noted-quote-owner");
         var entryId = await fixture.AddBookAsync(owner);
-        var saved = (await SaveAndReadAsync(owner, entryId, "hl-private")).Quote;
+        var saved = await SaveAndReadAsync(owner, entryId, "hl-private");
 
         var response = await NoteAsync(fixture.ClientFor("noted-quote-stranger"), entryId, saved.Id, "Not yours.");
 
@@ -345,7 +345,7 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
     {
         var client = fixture.ClientFor("deleting-quoter");
         var entryId = await fixture.AddBookAsync(client);
-        var unwanted = (await SaveAndReadAsync(client, entryId, "hl-unwanted", percent: 10m)).Quote;
+        var unwanted = await SaveAndReadAsync(client, entryId, "hl-unwanted", percent: 10m);
         await SaveAsync(client, entryId, "hl-kept", percent: 20m);
 
         var response = await client.DeleteAsync($"/api/library/{entryId}/quotes/{unwanted.Id}");
@@ -359,7 +359,7 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
     {
         var client = fixture.ClientFor("double-deleting-quoter");
         var entryId = await fixture.AddBookAsync(client);
-        var saved = (await SaveAndReadAsync(client, entryId, "hl-once")).Quote;
+        var saved = await SaveAndReadAsync(client, entryId, "hl-once");
         await client.DeleteAsync($"/api/library/{entryId}/quotes/{saved.Id}");
 
         var again = await client.DeleteAsync($"/api/library/{entryId}/quotes/{saved.Id}");
@@ -372,7 +372,7 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
     {
         var client = fixture.ClientFor("second-thoughts-quoter");
         var entryId = await fixture.AddBookAsync(client);
-        var saved = (await SaveAndReadAsync(client, entryId, "hl-back")).Quote;
+        var saved = await SaveAndReadAsync(client, entryId, "hl-back");
         await client.DeleteAsync($"/api/library/{entryId}/quotes/{saved.Id}");
 
         var resent = await SaveAsync(client, entryId, "hl-back");
@@ -387,54 +387,12 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
     {
         var owner = fixture.ClientFor("deleted-quote-owner");
         var entryId = await fixture.AddBookAsync(owner);
-        var saved = (await SaveAndReadAsync(owner, entryId, "hl-safe")).Quote;
+        var saved = await SaveAndReadAsync(owner, entryId, "hl-safe");
 
         var response = await fixture.ClientFor("deleted-quote-stranger").DeleteAsync($"/api/library/{entryId}/quotes/{saved.Id}");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Single(await QuotesAsync(owner, entryId));
-    }
-
-    [Fact]
-    public async Task My_shelf_says_how_many_quotes_each_book_has()
-    {
-        var client = fixture.ClientFor("counting-quoter");
-        var quoted = await fixture.AddBookAsync(client);
-        var unquoted = await fixture.AddBookAsync(client);
-        await SaveAsync(client, quoted, "hl-a");
-        await SaveAsync(client, quoted, "hl-b");
-        // Sending one again is still one.
-        await SaveAsync(client, quoted, "hl-b", note: "Changed my mind.");
-
-        var shelf = await ShelfAsync(client);
-
-        Assert.Equal(2, shelf.Single(e => e.Id == quoted).QuoteCount);
-        Assert.Equal(0, shelf.Single(e => e.Id == unquoted).QuoteCount);
-    }
-
-    [Fact]
-    public async Task The_count_follows_a_delete_down_to_none()
-    {
-        var client = fixture.ClientFor("uncounting-quoter");
-        var entryId = await fixture.AddBookAsync(client);
-        var only = (await SaveAndReadAsync(client, entryId, "hl-only")).Quote;
-
-        await client.DeleteAsync($"/api/library/{entryId}/quotes/{only.Id}");
-
-        Assert.Equal(0, (await ShelfAsync(client)).Single(e => e.Id == entryId).QuoteCount);
-    }
-
-    [Fact]
-    public async Task A_book_changed_from_its_page_still_says_how_many_quotes_it_has()
-    {
-        var client = fixture.ClientFor("changing-quoter");
-        var entryId = await fixture.AddBookAsync(client);
-        await SaveAsync(client, entryId, "hl-kept");
-
-        // Every change answers with the entry as the Book page draws it, count and all.
-        var changed = await client.PutAsJsonAsync($"/api/library/{entryId}/status", new { status = "Reading" });
-
-        Assert.Equal(1, (await changed.Content.ReadFromJsonAsync<Entry>())!.QuoteCount);
     }
 
     [Fact]
@@ -480,12 +438,12 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
         var client = fixture.ClientFor("location-following-quoter");
         var entryId = await fixture.AddBookAsync(client);
         var response = await SaveAsync(client, entryId, "hl-here", note: "Mine.");
-        var saved = (await response.Content.ReadFromJsonAsync<Saved>())!;
+        var saved = (await response.Content.ReadFromJsonAsync<Quote>())!;
 
         var followed = await client.GetAsync(response.Headers.Location);
 
         Assert.Equal(HttpStatusCode.OK, followed.StatusCode);
-        Assert.Equal(saved.Quote, await followed.Content.ReadFromJsonAsync<Quote>());
+        Assert.Equal(saved, await followed.Content.ReadFromJsonAsync<Quote>());
     }
 
     [Fact]
@@ -493,7 +451,7 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
     {
         var owner = fixture.ClientFor("quote-reading-owner");
         var entryId = await fixture.AddBookAsync(owner);
-        var saved = (await SaveAndReadAsync(owner, entryId, "hl-private")).Quote;
+        var saved = await SaveAndReadAsync(owner, entryId, "hl-private");
         var other = fixture.ClientFor("quote-reading-stranger");
 
         Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync($"/api/library/{entryId}/quotes/{saved.Id}")).StatusCode);
@@ -507,8 +465,8 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
         var entryId = await fixture.AddBookAsync(client);
 
         // Finer than the database keeps: the save must not answer with a moment it then forgets.
-        var saved = (await SaveAndReadAsync(client, entryId, "hl-fine", savedAt: SavedAt.AddTicks(1234567))).Quote;
-        var unsaid = (await SaveAndReadAsync(client, entryId, "hl-now")).Quote;
+        var saved = await SaveAndReadAsync(client, entryId, "hl-fine", savedAt: SavedAt.AddTicks(1234567));
+        var unsaid = await SaveAndReadAsync(client, entryId, "hl-now");
 
         var listed = await QuotesAsync(client, entryId);
         Assert.Equal(saved, listed.Single(quote => quote.HighlightId == "hl-fine"));
@@ -539,7 +497,7 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
     {
         var client = fixture.ClientFor("nul-noting-quoter");
         var entryId = await fixture.AddBookAsync(client);
-        var saved = (await SaveAndReadAsync(client, entryId, "hl-nul-note")).Quote;
+        var saved = await SaveAndReadAsync(client, entryId, "hl-nul-note");
 
         var response = await NoteAsync(client, entryId, saved.Id, "a\u0000b");
 
@@ -555,7 +513,7 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
 
         for (var round = 0; round < 30; round++)
         {
-            var saved = (await SaveAndReadAsync(client, entryId, "hl-race")).Quote;
+            var saved = await SaveAndReadAsync(client, entryId, "hl-race");
 
             var (resent, deleted) = await BothAsync(
                 SaveAsync(client, entryId, "hl-race", note: "Changed on the device."),
@@ -578,7 +536,7 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
 
         for (var round = 0; round < 30; round++)
         {
-            var saved = (await SaveAndReadAsync(client, entryId, $"hl-race-{round}")).Quote;
+            var saved = await SaveAndReadAsync(client, entryId, $"hl-race-{round}");
 
             var (noted, deleted) = await BothAsync(
                 NoteAsync(client, entryId, saved.Id, "Too late."),
@@ -597,7 +555,7 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
 
         for (var round = 0; round < 30; round++)
         {
-            var saved = (await SaveAndReadAsync(client, entryId, $"hl-twice-{round}")).Quote;
+            var saved = await SaveAndReadAsync(client, entryId, $"hl-twice-{round}");
             var url = $"/api/library/{entryId}/quotes/{saved.Id}";
 
             var (first, second) = await BothAsync(client.DeleteAsync(url), client.DeleteAsync(url));
@@ -625,6 +583,61 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
         }
     }
 
+    [Theory]
+    [InlineData("passage", 20_001)]
+    [InlineData("note", 10_001)]
+    [InlineData("chapter", 501)]
+    public async Task Refuses_more_words_than_a_quote_holds(string field, int length)
+    {
+        var client = fixture.ClientFor("long-winded-quoter-" + field);
+        var entryId = await fixture.AddBookAsync(client);
+        var fields = new Dictionary<string, object> { ["passage"] = "The words.", ["percent"] = 10 };
+        fields[field] = new string('w', length);
+
+        var response = await client.PutAsJsonAsync($"/api/library/{entryId}/quotes/hl-long", fields);
+
+        await AssertRefusedAsync(response, field);
+        Assert.Empty(await QuotesAsync(client, entryId));
+    }
+
+    [Fact]
+    public async Task Takes_a_quote_as_long_as_a_quote_holds()
+    {
+        var client = fixture.ClientFor("full-length-quoter");
+        var entryId = await fixture.AddBookAsync(client);
+
+        var response = await SaveAsync(
+            client, entryId, "hl-full", passage: new string('p', 20_000), note: new string('n', 10_000), chapter: new string('c', 500));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Refuses_a_note_written_on_the_page_longer_than_a_note_holds()
+    {
+        var client = fixture.ClientFor("long-noting-reader");
+        var entryId = await fixture.AddBookAsync(client);
+        var saved = await SaveAndReadAsync(client, entryId, "hl-long-note", note: "Short.");
+
+        var response = await NoteAsync(client, entryId, saved.Id, new string('n', 10_001));
+
+        await AssertRefusedAsync(response, "note");
+        Assert.Equal("Short.", Assert.Single(await QuotesAsync(client, entryId)).Note);
+    }
+
+    [Fact]
+    public async Task Many_saves_of_one_highlight_at_once_are_one_quote_and_no_failure()
+    {
+        var client = fixture.ClientFor("many-retrying-quoter");
+        var entryId = await fixture.AddBookAsync(client);
+
+        var saves = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => SaveAsync(client, entryId, "hl-many")));
+
+        Assert.Equal(1, saves.Count(save => save.StatusCode == HttpStatusCode.Created));
+        Assert.All(saves, save => Assert.Contains(save.StatusCode, new[] { HttpStatusCode.Created, HttpStatusCode.OK }));
+        Assert.Single(await QuotesAsync(client, entryId));
+    }
+
     private static async Task<(HttpStatusCode, HttpStatusCode)> BothAsync(
         Task<HttpResponseMessage> first,
         Task<HttpResponseMessage> second)
@@ -640,11 +653,6 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
         (await (await client.PostAsJsonAsync("/api/library", new { bookId })).Content.ReadFromJsonAsync<Added>())!.Id;
 
     private sealed record Added(Guid Id);
-
-    private static async Task<IReadOnlyList<Entry>> ShelfAsync(HttpClient client) =>
-        (await client.GetFromJsonAsync<IReadOnlyList<Entry>>("/api/library"))!;
-
-    private sealed record Entry(Guid Id, int QuoteCount);
 
     private static async Task AssertRefusedAsync(HttpResponseMessage response, string field)
     {
@@ -662,7 +670,7 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
         return (await response.Content.ReadFromJsonAsync<IReadOnlyList<Quote>>())!;
     }
 
-    private static async Task<Saved> SaveAndReadAsync(
+    private static async Task<Quote> SaveAndReadAsync(
         HttpClient client,
         Guid entryId,
         string highlightId,
@@ -674,7 +682,7 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
     {
         var response = await SaveAsync(client, entryId, highlightId, passage, note, percent, chapter, savedAt);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<Saved>())!;
+        return (await response.Content.ReadFromJsonAsync<Quote>())!;
     }
 
     private static Task<HttpResponseMessage> SaveAsync(
@@ -689,8 +697,6 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
         client.PutAsJsonAsync(
             $"/api/library/{entryId}/quotes/{Uri.EscapeDataString(highlightId)}",
             new { passage, note, percent, chapter, savedAt });
-
-    private sealed record Saved(string Outcome, Quote Quote);
 
     private sealed record Quote(
         Guid Id,

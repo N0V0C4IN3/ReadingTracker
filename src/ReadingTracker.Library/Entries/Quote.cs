@@ -51,11 +51,17 @@ public enum QuoteSaveOutcome
 /// <summary>A Quote as a device's save left it, and whether the save made it or found it already there.</summary>
 public sealed record SavedQuote(Quote Quote, QuoteSaveOutcome Outcome);
 
-/// <summary>Why a device's save could not be kept as a Quote.</summary>
+/// <summary>A new note for a Quote: words, or null or blank to take the note away.</summary>
+public sealed record NoteChange(string? Note);
+
+/// <summary>Why a Quote could not be kept, or changed, as asked.</summary>
 public enum QuoteProblem
 {
     /// <summary>The reader has no such entry — including because it is someone else's.</summary>
     NoSuchEntry,
+
+    /// <summary>The reader has no such Quote — including because it is someone else's, or has gone.</summary>
+    NoSuchQuote,
 
     /// <summary>The highlight's identity is not one that travels safely in an address, or is far too long to be one.</summary>
     NotAHighlightId,
@@ -65,4 +71,13 @@ public enum QuoteProblem
 
     /// <summary>A position in a book is somewhere between its start and its end.</summary>
     NotAPercentage,
+
+    /// <summary>More words than any highlight: <see cref="ReadingLibrary.LongestPassage"/>.</summary>
+    PassageTooLong,
+
+    /// <summary>A note longer than <see cref="ReadingLibrary.LongestNote"/>.</summary>
+    NoteTooLong,
+
+    /// <summary>A chapter name longer than <see cref="ReadingLibrary.LongestChapter"/>.</summary>
+    ChapterTooLong,
 }

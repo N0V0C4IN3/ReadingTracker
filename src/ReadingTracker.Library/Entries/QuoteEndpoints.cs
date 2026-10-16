@@ -37,22 +37,12 @@ public static class QuoteEndpoints
                 body.SavedAt,
                 cancellationToken);
 
-            return problem switch
-            {
-                QuoteProblem.NoSuchEntry => Results.NotFound(),
-                QuoteProblem.NotAHighlightId => QuoteRejected(
-                    "highlightId",
-                    "A highlight's identity is up to 200 letters, digits, '.', '_', '~' or '-'. Hash or encode what it is made from."),
-                QuoteProblem.NoPassage => QuoteRejected(
-                    "passage",
-                    "Say which words to keep. A Quote is a passage of the book."),
-                QuoteProblem.NotAPercentage => QuoteRejected(
-                    "percent",
-                    "Say where in the book the passage is, between 0 and 100 percent."),
-                _ => saved!.Outcome is QuoteSaveOutcome.Created
-                    ? Results.Created($"/api/library/{entryId}/quotes/{saved.Quote.Id}", SavedQuoteResponse.From(saved))
-                    : Results.Ok(SavedQuoteResponse.From(saved)),
-            };
+            // Created or found already there is the status, 201 or 200: what the device tells the
+            // Reader ("Saved" or "Updated").
+            return problem is { } refused ? Refusal(refused)
+                : saved!.Outcome is QuoteSaveOutcome.Created
+                    ? Results.Created($"/api/library/{entryId}/quotes/{saved.Quote.Id}", QuoteResponse.From(saved.Quote))
+                    : Results.Ok(QuoteResponse.From(saved.Quote));
         })
         .WithName("SaveQuote");
 
@@ -91,9 +81,9 @@ public static class QuoteEndpoints
                 return LibraryProblems.NotSaidWhoIsAsking();
             }
 
-            var quote = await library.FindQuoteAsync(readerId, entryId, quoteId, cancellationToken);
+            var found = await library.FindQuoteAsync(readerId, entryId, quoteId, cancellationToken);
 
-            return quote is null ? Results.NotFound() : Results.Ok(QuoteResponse.From(quote));
+            return found is null ? Results.NotFound() : Results.Ok(QuoteResponse.From(found));
         })
         .WithName("GetQuote");
 
@@ -119,21 +109,21 @@ public static class QuoteEndpoints
                 return QuoteRejected("note", "Send the change as an object, with the new note as \"note\".");
             }
 
-            if (!body.TryGetProperty("note", out var note))
-            {
-                var unchanged = await library.FindQuoteAsync(readerId, entryId, quoteId, cancellationToken);
+            NoteChange? change = null;
 
-                return unchanged is null ? Results.NotFound() : Results.Ok(QuoteResponse.From(unchanged));
+            if (body.TryGetProperty("note", out var note))
+            {
+                if (note.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
+                {
+                    return QuoteRejected("note", "A note is words, or null to take it away.");
+                }
+
+                change = new NoteChange(note.GetString());
             }
 
-            if (note.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
-            {
-                return QuoteRejected("note", "A note is words, or null to take it away.");
-            }
+            var (quote, problem) = await library.ChangeQuoteNoteAsync(readerId, entryId, quoteId, change, cancellationToken);
 
-            var quote = await library.ChangeQuoteNoteAsync(readerId, entryId, quoteId, note.GetString(), cancellationToken);
-
-            return quote is null ? Results.NotFound() : Results.Ok(QuoteResponse.From(quote));
+            return problem is { } refused ? Refusal(refused) : Results.Ok(QuoteResponse.From(quote!));
         })
         .WithName("ChangeQuoteNote");
 
@@ -156,6 +146,31 @@ public static class QuoteEndpoints
         .WithName("DeleteQuote");
     }
 
+    private static IResult Refusal(QuoteProblem problem) => problem switch
+    {
+        QuoteProblem.NotAHighlightId => QuoteRejected(
+            "highlightId",
+            "A highlight's identity is up to 200 letters, digits, '.', '_', '~' or '-', with at least one letter or digit. Hash or encode what it is made from."),
+        QuoteProblem.NoPassage => QuoteRejected(
+            "passage",
+            "Say which words to keep. A Quote is a passage of the book."),
+        QuoteProblem.PassageTooLong => QuoteRejected(
+            "passage",
+            $"A passage is at most {ReadingLibrary.LongestPassage} characters."),
+        QuoteProblem.NotAPercentage => QuoteRejected(
+            "percent",
+            "Say where in the book the passage is, between 0 and 100 percent."),
+        QuoteProblem.NoteTooLong => QuoteRejected(
+            "note",
+            $"A note is at most {ReadingLibrary.LongestNote} characters."),
+        QuoteProblem.ChapterTooLong => QuoteRejected(
+            "chapter",
+            $"A chapter's name is at most {ReadingLibrary.LongestChapter} characters."),
+
+        // NoSuchEntry and NoSuchQuote: not there, or not this reader's to know about.
+        _ => Results.NotFound(),
+    };
+
     private static IResult QuoteRejected(string field, string detail) =>
         Results.ValidationProblem(new Dictionary<string, string[]> { [field] = [detail] });
 
@@ -170,16 +185,6 @@ public static class QuoteEndpoints
         decimal? Percent,
         string? Chapter,
         DateTimeOffset? SavedAt);
-
-    /// <summary>
-    /// The Quote as it now stands, and whether this save made it or found it already there —
-    /// "Created" or "Updated", which is what the device tells the Reader.
-    /// </summary>
-    private sealed record SavedQuoteResponse(string Outcome, QuoteResponse Quote)
-    {
-        public static SavedQuoteResponse From(SavedQuote saved) =>
-            new(saved.Outcome.ToString(), QuoteResponse.From(saved.Quote));
-    }
 
     private sealed record QuoteResponse(
         Guid Id,
