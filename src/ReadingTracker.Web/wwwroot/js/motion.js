@@ -31,6 +31,7 @@ const LEAVES = [
     '.preview',
     '.preview__scrim',
     '.day--more',
+    '.quotes__row',
 ].join(',');
 
 const GROWS = '.panel, .sheet, .day--more';

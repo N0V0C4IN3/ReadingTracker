@@ -18,6 +18,8 @@ public sealed class LibraryDbContext(DbContextOptions<LibraryDbContext> options)
 
     public DbSet<ReadingGoal> ReadingGoals => Set<ReadingGoal>();
 
+    public DbSet<Quote> Quotes => Set<Quote>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema(Schema);
@@ -61,6 +63,24 @@ public sealed class LibraryDbContext(DbContextOptions<LibraryDbContext> options)
             // Reading a book's history, and finding its latest session, are the two things
             // ever asked of this table.
             session.HasIndex(s => new { s.LibraryEntryId, s.OccurredAt });
+        });
+
+        modelBuilder.Entity<Quote>(quote =>
+        {
+            quote.HasKey(q => q.Id);
+
+            // Quotes belong to an entry and go when it goes.
+            quote.HasOne<LibraryEntry>()
+                .WithMany()
+                .HasForeignKey(q => q.LibraryEntryId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            quote.Property(q => q.HighlightId).IsRequired();
+            quote.Property(q => q.Passage).IsRequired();
+
+            // A highlight is one Quote on its entry, however many times it is sent (ADR-0017). It
+            // leads with the entry, so it also serves listing an entry's Quotes and counting them.
+            quote.HasIndex(q => new { q.LibraryEntryId, q.HighlightId }).IsUnique();
         });
     }
 }

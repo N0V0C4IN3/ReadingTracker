@@ -1,16 +1,16 @@
 namespace ReadingTracker.Web.Pages;
 
 /// <summary>Something someone said about reading, and who.</summary>
-public sealed record Quote(string Text, string Author);
+public sealed record Saying(string Text, string Author);
 
 /// <summary>
 /// What the welcome screen says under the way in: not what the app does — the card above
 /// already says that in a line — but something a reader would want to have read. One each
 /// visit, at random, so the page is never quite the same twice.
 /// </summary>
-public static class Quotes
+public static class Sayings
 {
-    public static readonly Quote[] All =
+    public static readonly Saying[] All =
     [
         new("Reading is to the mind what exercise is to the body.", "Joseph Addison"),
         new("Some books are to be tasted, others to be swallowed, and some few to be chewed and digested.", "Francis Bacon"),
@@ -34,5 +34,5 @@ public static class Quotes
         new("A house without books is like a room without windows.", "Horace Mann"),
     ];
 
-    public static Quote Pick(Random random) => All[random.Next(All.Length)];
+    public static Saying Pick(Random random) => All[random.Next(All.Length)];
 }

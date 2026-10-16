@@ -1,0 +1,56 @@
+@using ReadingTracker.Web.Services
+
+@*
+    One Quote on its timeline: where it falls in the book, and its words folded to two lines until
+    it is open. The Book page's taste of the Quotes and the Quotes sheet both draw it, so the two
+    look alike (css/quotes.css). Open, the whole passage shows, and whatever the sheet offers for
+    it comes after (ChildContent).
+*@
+
+<li class="quotes__row @(Open ? "quotes__row--open" : null)" @ref="Element">
+    <span class="quotes__at">@Figures.Trim(Quote.Percent)%</span>
+    <div class="quotes__body">
+        @if (Open)
+        {
+            <p class="quotes__text">@Quote.Passage.Trim()</p>
+            @ChildContent
+        }
+        else
+        {
+            <button type="button"
+                    class="quotes__pick"
+                    id="@PickId"
+                    aria-haspopup="@(OpensSheet ? "dialog" : null)"
+                    aria-expanded="@(OpensSheet ? null : "false")"
+                    @onclick="OnPick">
+                <p class="quotes__text">@Quote.Passage.Trim()</p>
+            </button>
+        }
+    </div>
+</li>
+
+@code {
+    [Parameter, EditorRequired]
+    public required QuoteView Quote { get; set; }
+
+    /// <summary>Drawn whole, with what can be done with it, rather than folded.</summary>
+    [Parameter]
+    public bool Open { get; set; }
+
+    /// <summary>Picking it opens the Quotes sheet (the Book page) rather than unfolding it in place (the sheet).</summary>
+    [Parameter]
+    public bool OpensSheet { get; set; }
+
+    /// <summary>The folded row's id, for focus to come back to once the sheet it opened has closed.</summary>
+    [Parameter]
+    public string? PickId { get; set; }
+
+    [Parameter]
+    public EventCallback OnPick { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>The row, for the sheet to bring into view (js/reveal.js).</summary>
+    public ElementReference Element { get; private set; }
+}
