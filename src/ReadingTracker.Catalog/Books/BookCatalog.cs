@@ -262,11 +262,8 @@ public sealed class BookCatalog(
               && book.Source == result.Source
               && book.ExternalId == result.ExternalId;
 
-    private Book ToBook(BookSearchResult result)
-    {
-        var now = clock.GetUtcNow();
-
-        var book = new Book
+    private Book ToBook(BookSearchResult result) =>
+        new()
         {
             Id = Guid.CreateVersion7(),
             Title = result.Title,
@@ -276,17 +273,8 @@ public sealed class BookCatalog(
             TotalPages = result.TotalPages,
             Source = result.Source,
             ExternalId = result.ExternalId,
-            CreatedAt = now,
+            CreatedAt = clock.GetUtcNow(),
         };
-
-        // A search that carried the details has answered the question a later lookup would ask.
-        if (result.Details is { } details)
-        {
-            book.Fill(details, now);
-        }
-
-        return book;
-    }
 }
 
 /// <summary>

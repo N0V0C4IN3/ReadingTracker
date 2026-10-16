@@ -113,10 +113,10 @@ public sealed class GoogleBooksProvider(HttpClient httpClient, IOptions<GoogleBo
             // Google says 0 when it does not know; that is no page count, not a short book.
             TotalPages: info?.PageCount is > 0 and var pages ? pages : null,
             Source: BookSource.GoogleBooks,
-            ExternalId: item.Id,
-            // A volume list carries the same details as the volume itself, so a Book cached
-            // from a search never needs to be asked about again.
-            Details: DetailsOf(info));
+            // Not the details, though a volume list has a description: it is the volume's with the
+            // markup taken out and the paragraph breaks with it, every paragraph run into one. The
+            // Book asks for the volume itself the first time somebody looks (BookCatalog.FindAsync).
+            ExternalId: item.Id);
     }
 
     private static BookDetails DetailsOf(VolumeInfo? info) =>
