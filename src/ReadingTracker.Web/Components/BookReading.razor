@@ -42,13 +42,28 @@
         </p>
     }
 
-    @if (Logging)
+    @* The Quotes sit beside the log, as the other thing done with a book in hand; a book with
+       none has no button, since there is nothing here to open (ADR-0017: they come from a device). *@
+    @if (Logging || QuoteCount > 0)
     {
         <div class="reading__actions">
-            <LogButton Open="_panel == Panel.Log"
-                       Starting="NotBegun"
-                       Disabled="Working"
-                       OnClick="() => Toggle(Panel.Log)" />
+            @if (Logging)
+            {
+                <LogButton Open="_panel == Panel.Log"
+                           Starting="NotBegun"
+                           Disabled="Working"
+                           OnClick="() => Toggle(Panel.Log)" />
+            }
+            @if (QuoteCount > 0)
+            {
+                <button type="button"
+                        class="link-button reading__quotes"
+                        aria-haspopup="dialog"
+                        aria-expanded="@(_quotesOpen ? "true" : "false")"
+                        @onclick="OpenQuotes">
+                    Quotes <span>· @QuoteCount</span>
+                </button>
+            }
         </div>
     }
 
@@ -131,6 +146,16 @@
     }
 </div>
 
+@* Beside the reading rather than in it: the reading fades while a change is in flight, and a
+   sheet inside something faded is laid out against it instead of the screen. *@
+@if (_quotesOpen)
+{
+    <QuoteSheet Entry="Entry"
+                OnClose="CloseQuotes"
+                OnCountChanged="KeepQuoteCount"
+                OnSignedOut="OnSignedOut" />
+}
+
 @code {
     /// <summary>The page's head — the cover and the title — drawn here so the status can stand beside it.</summary>
     [Parameter, EditorRequired]
@@ -144,6 +169,18 @@
 
     private Panel _panel = Panel.None;
 
+    private bool _quotesOpen;
+
+    /// <summary>
+    /// How many Quotes are left after one was deleted in the sheet. A delete does not send the
+    /// entry back, so the count is kept here until the next change that does.
+    /// </summary>
+    private int? _quotesLeft;
+
+    private LibraryEntry? _countedFrom;
+
+    private int QuoteCount => _quotesLeft ?? Entry.QuoteCount;
+
     /// <summary>Whether a correction form is open in the history, which then shows the reasons itself.</summary>
     private bool _correcting;
 
@@ -156,6 +193,22 @@
     private string? Standing => Parked ? "entry--parked" : Finished ? "entry--finished" : null;
 
     protected override Task OnInitializedAsync() => LoadSessionsAsync();
+
+    /// <summary>A fresh entry from Library carries its own count, which is the one to believe.</summary>
+    protected override void OnParametersSet()
+    {
+        if (!ReferenceEquals(_countedFrom, Entry))
+        {
+            _countedFrom = Entry;
+            _quotesLeft = null;
+        }
+    }
+
+    private void OpenQuotes() => _quotesOpen = true;
+
+    private void CloseQuotes() => _quotesOpen = false;
+
+    private void KeepQuoteCount(int left) => _quotesLeft = left;
 
     private void Toggle(Panel panel)
     {

@@ -1,0 +1,318 @@
+/*
+    A book's Quotes (QuoteSheet.razor): the passages the reader sent from their device, in a
+    sheet over the Book page. The sheet itself is the search result's (.preview): from the right
+    on a wide screen, up from the foot on a phone, with its glass, scrim, layers, grip, close and
+    arrive/leave motion. Only what is inside it is here, in the same tokens as app.css, which is
+    too long to take another feature.
+
+    A map of the book heads it: a line from the start to the end, a pin where each Quote falls,
+    and a faint mark where the device last said the reader is. Under it the Quotes run down a
+    timeline by where they fall, each folded to two lines. The one open — picked by its row or
+    its pin — shows the whole passage, the reader's note, the chapter and the day, and what can
+    be done with it.
+*/
+
+/* The way in, beside Log reading on the Book page: a quiet button with the count in a quieter voice. */
+.reading__quotes span {
+    margin-left: 0.15rem;
+    font-weight: 500;
+    color: var(--ink-faint);
+}
+
+.reading__quotes[aria-expanded="true"] {
+    background: var(--fill);
+    color: var(--ink);
+}
+
+.preview--quotes .preview__body {
+    padding-top: 0;
+}
+
+.quotes__head {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0 0 0.9rem;
+    border-bottom: 1px solid var(--line);
+}
+
+/* The title shares the close button's row: the bar's, which on a phone is laid flat (display:
+   contents) so the title sits under the grip and Close at the strip's right end. */
+.preview--quotes .preview__bar {
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding-left: 1.5rem;
+}
+
+.quotes__title {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+}
+
+.quotes__title .group {
+    margin: 0;
+}
+
+.quotes__caption {
+    font-size: 0.8rem;
+    color: var(--ink-faint);
+}
+
+/* The map: a line the width of the book, with room above and below it for a finger. */
+.quotes__map {
+    position: relative;
+    height: 2.75rem;
+    margin-top: 0.1rem;
+}
+
+.quotes__map::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(50% - 1px);
+    height: 2px;
+    border-radius: 999px;
+    background: var(--fill-hover);
+}
+
+/* Where the device last said the reader is: the Bookmark, as a mark quieter than any pin. */
+.quotes__you {
+    position: absolute;
+    top: 1rem;
+    width: 2px;
+    height: 0.75rem;
+    margin-left: -1px;
+    background: var(--ink-soft);
+    opacity: 0.5;
+}
+
+.quotes__pin,
+.quotes__pin:hover:not(:disabled) {
+    position: absolute;
+    top: 0;
+    display: grid;
+    place-items: center;
+    /* A finger's width, though the mark is a few pixels: pins close together overlap, and the
+       later one in the book takes the tap. */
+    width: 2.75rem;
+    height: 2.75rem;
+    margin-left: -1.375rem;
+    padding: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+}
+
+.quotes__pin::before {
+    content: "";
+    width: 4px;
+    height: 0.9rem;
+    border-radius: 2px;
+    background: var(--ink-faint);
+    transition:
+        height var(--quick) var(--ease),
+        width var(--quick) var(--ease),
+        background-color var(--quick) var(--ease);
+}
+
+.quotes__pin:hover:not(:disabled)::before {
+    background: var(--ink-soft);
+}
+
+/* The open one, under the finger too: hover is not allowed to grey it back. */
+.quotes__pin[aria-current="true"]::before,
+.quotes__pin[aria-current="true"]:hover:not(:disabled)::before {
+    width: 6px;
+    height: 1.15rem;
+    background: var(--accent);
+}
+
+.quotes__legend {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-faint);
+}
+
+/* The timeline: where each falls on the left, ruled, and the passage beside it. */
+.quotes__list {
+    margin: 0;
+    padding: 0.4rem 0 0;
+    list-style: none;
+}
+
+.quotes__row {
+    display: grid;
+    grid-template-columns: 3.2rem minmax(0, 1fr);
+    column-gap: 0.8rem;
+}
+
+.quotes__at {
+    padding: 0.8rem 0.8rem 0 0;
+    border-right: 2px solid var(--line);
+    text-align: right;
+    font-size: 0.82rem;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-faint);
+}
+
+/* Deleted, a row folds its height away rather than leaving a gap for a frame (js/motion.js). */
+.quotes__row.is-leaving {
+    overflow: hidden;
+    interpolate-size: allow-keywords;
+    animation: fold 220ms var(--ease-out) forwards;
+}
+
+.quotes__row--open .quotes__at {
+    border-right-color: var(--accent);
+    color: var(--accent);
+}
+
+.quotes__body {
+    min-width: 0;
+    padding: 0.7rem 0;
+}
+
+/* Folded, the whole row is the way to open it. */
+.quotes__pick,
+.quotes__pick:hover:not(:disabled) {
+    display: block;
+    width: calc(100% + 1.4rem);
+    margin: -0.6rem -0.7rem;
+    padding: 0.6rem 0.7rem;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: inherit;
+    font-weight: 400;
+    text-align: left;
+}
+
+.quotes__pick:hover:not(:disabled) {
+    background: var(--fill);
+}
+
+.quotes__row--open .quotes__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin: 0.2rem 0;
+    padding: 0.75rem 0.85rem;
+    border-radius: var(--radius-sm);
+    background: var(--fill);
+    animation: unfold 240ms var(--ease-out) backwards;
+}
+
+/* The Book's words, in the face the Book page gives prose; quotes hung so the text aligns. */
+.quote__text {
+    margin: 0;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1.02rem;
+    line-height: 1.6;
+    quotes: "\201C" "\201D";
+}
+
+.quote__text::before {
+    content: open-quote;
+}
+
+.quote__text::after {
+    content: close-quote;
+}
+
+.quotes__pick .quote__text {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* The reader's own words: the system face, a step quieter than the Book's. */
+.quote__note {
+    margin: 0;
+    font-size: 0.87rem;
+    line-height: 1.45;
+    white-space: pre-line;
+    color: var(--ink-soft);
+}
+
+.quote__meta {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--ink-faint);
+}
+
+.quote__ops {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.1rem;
+    margin-left: -0.6rem;
+    font-size: 0.82rem;
+}
+
+.quote__copied {
+    color: var(--accent);
+}
+
+.quote__edit {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.quote__edit label {
+    font-size: 0.78rem;
+    color: var(--ink-faint);
+}
+
+/* The field is every other field (app.css); only its size is its own. */
+.quote__edit textarea {
+    width: 100%;
+    min-height: 4.2rem;
+    font-size: 0.9rem;
+    resize: vertical;
+}
+
+.quote__edit-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.4rem;
+}
+
+.quotes__problem {
+    margin: 0.8rem 0 0;
+}
+
+@media (max-width: 560px) {
+    .preview--quotes {
+        --sheet-peek: 150px;
+    }
+
+    /* Close stands at the right of the grip's strip, over the title's row: room is kept for it. */
+    .quotes__title {
+        padding: 0.35rem 4rem 0.6rem 1rem;
+    }
+
+    .preview--quotes .preview__body {
+        padding: 0 1rem 1rem;
+    }
+
+    /* Peeked, the map is the sheet: the list under it would only be a cut-off edge. */
+    .preview--quotes[data-sheet="peek"] .quotes__list {
+        visibility: hidden;
+    }
+
+    .quotes__row {
+        grid-template-columns: 2.9rem minmax(0, 1fr);
+        column-gap: 0.7rem;
+    }
+
+    .quote__text {
+        font-size: 0.98rem;
+        line-height: 1.55;
+    }
+}
