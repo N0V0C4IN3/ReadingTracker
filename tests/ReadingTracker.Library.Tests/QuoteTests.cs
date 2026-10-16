@@ -252,6 +252,39 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
     }
 
     [Fact]
+    public async Task A_change_that_says_nothing_about_the_note_leaves_it()
+    {
+        var client = fixture.ClientFor("note-omitting-reader");
+        var entryId = await fixture.AddBookAsync(client);
+        var saved = (await SaveAndReadAsync(client, entryId, "hl-kept", note: "Still mine.")).Quote;
+
+        // Only an explicit null or blank takes the note away; a request without one has not asked to.
+        var response = await client.PatchAsJsonAsync($"/api/library/{entryId}/quotes/{saved.Id}", new { passage = "Other words." });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(saved, await response.Content.ReadFromJsonAsync<Quote>());
+        Assert.Equal(saved, Assert.Single(await QuotesAsync(client, entryId)));
+    }
+
+    [Theory]
+    [InlineData("""{"note":42}""")]
+    [InlineData("""[]""")]
+    [InlineData("""null""")]
+    public async Task Refuses_a_note_change_that_is_not_one(string json)
+    {
+        var client = fixture.ClientFor("odd-noting-reader");
+        var entryId = await fixture.AddBookAsync(client);
+        var saved = (await SaveAndReadAsync(client, entryId, "hl-odd", note: "Untouched.")).Quote;
+
+        var response = await client.PatchAsync(
+            $"/api/library/{entryId}/quotes/{saved.Id}",
+            new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+
+        await AssertRefusedAsync(response, "note");
+        Assert.Equal("Untouched.", Assert.Single(await QuotesAsync(client, entryId)).Note);
+    }
+
+    [Fact]
     public async Task The_passage_is_the_books_words_and_nothing_changes_it()
     {
         var client = fixture.ClientFor("rewording-reader");

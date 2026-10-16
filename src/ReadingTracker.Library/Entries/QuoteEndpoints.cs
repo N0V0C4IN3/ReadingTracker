@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace ReadingTracker.Library.Entries;
 
 /// <summary>
@@ -96,11 +98,13 @@ public static class QuoteEndpoints
         .WithName("GetQuote");
 
         // The Reader's note, and only that: a PATCH because it changes one part of the Quote and
-        // leaves the rest, which no request can reach.
+        // leaves the rest, which no request can reach. Read as it came rather than bound, since a
+        // note left out and a note sent as null bind alike and mean different things: null (or
+        // blank) takes the note away, and a change that says nothing about it leaves it be.
         endpoints.MapPatch("/api/library/{entryId:guid}/quotes/{quoteId:guid}", async (
             Guid entryId,
             Guid quoteId,
-            ChangeNoteRequest body,
+            JsonElement body,
             HttpRequest request,
             ReadingLibrary library,
             CancellationToken cancellationToken) =>
@@ -110,7 +114,24 @@ public static class QuoteEndpoints
                 return LibraryProblems.NotSaidWhoIsAsking();
             }
 
-            var quote = await library.ChangeQuoteNoteAsync(readerId, entryId, quoteId, body.Note, cancellationToken);
+            if (body.ValueKind is not JsonValueKind.Object)
+            {
+                return QuoteRejected("note", "Send the change as an object, with the new note as \"note\".");
+            }
+
+            if (!body.TryGetProperty("note", out var note))
+            {
+                var unchanged = await library.FindQuoteAsync(readerId, entryId, quoteId, cancellationToken);
+
+                return unchanged is null ? Results.NotFound() : Results.Ok(QuoteResponse.From(unchanged));
+            }
+
+            if (note.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
+            {
+                return QuoteRejected("note", "A note is words, or null to take it away.");
+            }
+
+            var quote = await library.ChangeQuoteNoteAsync(readerId, entryId, quoteId, note.GetString(), cancellationToken);
 
             return quote is null ? Results.NotFound() : Results.Ok(QuoteResponse.From(quote));
         })
@@ -149,9 +170,6 @@ public static class QuoteEndpoints
         decimal? Percent,
         string? Chapter,
         DateTimeOffset? SavedAt);
-
-    /// <summary>The Reader's new note. Null or blank takes the note away.</summary>
-    private sealed record ChangeNoteRequest(string? Note);
 
     /// <summary>
     /// The Quote as it now stands, and whether this save made it or found it already there —
