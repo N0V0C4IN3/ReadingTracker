@@ -37,6 +37,38 @@
     border-bottom: 1px solid var(--line);
 }
 
+/*
+    Where the sheet has room, the map stays at the top of the list as it scrolls, so a pin can
+    still be reached from far down it; a Quote a pin brings into view stops below it rather than
+    under it (scroll-margin-top, js/sheet.js reveal). On its own glass, as the sheet is. Not on a
+    short screen — a phone with its keyboard up — where it would leave no room for the note box.
+*/
+@media (min-height: 560px) {
+    /* The map's height, for the rows under it to stop short of. */
+    .preview--quotes {
+        --quotes-head: 7.25rem;
+    }
+
+    .quotes__head {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background-color: var(--card-raised);
+    }
+
+    @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        .quotes__head {
+            background-color: var(--card-frosted);
+            -webkit-backdrop-filter: var(--blur-soft);
+            backdrop-filter: var(--blur-soft);
+        }
+    }
+
+    .preview--quotes .quotes__row {
+        scroll-margin-top: calc(var(--quotes-head) + 0.5rem);
+    }
+}
+
 /* The title shares the close button's row: the bar's, which on a phone is laid flat (display:
    contents) so the title sits under the grip and Close at the strip's right end. */
 .preview--quotes .preview__bar {
@@ -91,43 +123,44 @@
     opacity: 0.5;
 }
 
+/* What a finger finds: invisible, as tall as a finger, and as wide as the room to its neighbours
+   (QuoteSheet's PinReach). The mark it stands for is drawn after it. */
 .quotes__pin,
 .quotes__pin:hover:not(:disabled) {
     position: absolute;
     top: 0;
-    display: grid;
-    place-items: center;
-    /* A finger's width, though the mark is a few pixels: pins close together overlap, and the
-       later one in the book takes the tap. */
-    width: 2.75rem;
     height: 2.75rem;
-    margin-left: -1.375rem;
     padding: 0;
     border-radius: var(--radius-sm);
     background: transparent;
 }
 
-.quotes__pin::before {
-    content: "";
+.quotes__mark {
+    position: absolute;
+    top: 50%;
     width: 4px;
     height: 0.9rem;
+    margin: -0.45rem 0 0 -2px;
     border-radius: 2px;
     background: var(--ink-faint);
+    pointer-events: none;
     transition:
         height var(--quick) var(--ease),
         width var(--quick) var(--ease),
+        margin var(--quick) var(--ease),
         background-color var(--quick) var(--ease);
 }
 
-.quotes__pin:hover:not(:disabled)::before {
+.quotes__pin:hover:not(:disabled) + .quotes__mark {
     background: var(--ink-soft);
 }
 
 /* The open one, under the finger too: hover is not allowed to grey it back. */
-.quotes__pin[aria-current="true"]::before,
-.quotes__pin[aria-current="true"]:hover:not(:disabled)::before {
+.quotes__pin[aria-current="true"] + .quotes__mark,
+.quotes__pin[aria-current="true"]:hover:not(:disabled) + .quotes__mark {
     width: 6px;
     height: 1.15rem;
+    margin: -0.575rem 0 0 -3px;
     background: var(--accent);
 }
 

@@ -32,8 +32,9 @@
     </div>
 
     <div class="preview__body">
-        @* The map is in the scroll with the list, not above it: with a phone keyboard up the sheet
-           is short, and a map that stayed put would leave no room to see the note being written. *@
+        @* The map is in the scroll with the list and sticks to its top while there is room for it
+           (quotes.css): with a phone keyboard up the sheet is short, and a map that stayed put
+           would leave no room to see the note being written. *@
         <div class="quotes__head">
             @if (_quotes is { Count: > 0 } pinned)
             {
@@ -42,15 +43,20 @@
                     {
                         <span class="quotes__you" style="left: @MapLeft(bookmark.Percent)" aria-hidden="true"></span>
                     }
-                    @foreach (var quote in pinned)
+                    @for (var pin = 0; pin < pinned.Count; pin++)
                     {
+                        var quote = pinned[pin];
+                        @* The mark is where the Quote falls; the button round it is what a finger
+                           finds, reaching halfway to the pins either side and no further than a
+                           finger's width, so pins close together share the room between them. *@
                         <button type="button"
                                 class="quotes__pin"
-                                style="left: @MapLeft(quote.Percent)"
+                                style="@PinReach(pinned, pin)"
                                 aria-label="@($"Quote at {Figures.Trim(quote.Percent)}%")"
                                 aria-current="@(quote.Id == _open ? "true" : "false")"
                                 @onclick="() => Open(quote.Id)"
                                 @key="quote.Id"></button>
+                        <span class="quotes__mark" style="left: @MapLeft(quote.Percent)" aria-hidden="true" @key="(quote.Id, 'm')"></span>
                     }
                 </div>
                 <div class="quotes__legend">
@@ -83,7 +89,7 @@
                 @foreach (var quote in quotes)
                 {
                     var open = quote.Id == _open;
-                    <li class="quotes__row @(open ? "quotes__row--open" : null)" @key="quote.Id">
+                    <li class="quotes__row @(open ? "quotes__row--open" : null)" id="@RowId(quote.Id)" @key="quote.Id">
                         <span class="quotes__at">@Figures.Trim(quote.Percent)%</span>
                         <div class="quotes__body">
                             @if (!open)
@@ -168,6 +174,9 @@
     private bool _working;
     private bool _focusNote;
 
+    /// <summary>The Quote just opened, to be scrolled into view once it has been drawn open.</summary>
+    private Guid? _reveal;
+
     private ElementReference _close;
     private ElementReference _sheetEl;
     private ElementReference _noteBox;
@@ -182,6 +191,7 @@
         {
             _quotes = [.. listed.Value!];
             _open = _quotes.Any(q => q.Id == Opening) ? Opening : null;
+            _reveal = _open;
         }
         else
         {
@@ -201,6 +211,12 @@
             await _noteBox.FocusAsync();
         }
 
+        if (_reveal is { } reveal && _sheet is not null)
+        {
+            _reveal = null;
+            await _sheet.InvokeVoidAsync("reveal", _sheetEl, RowId(reveal));
+        }
+
         if (!firstRender)
         {
             return;
@@ -217,10 +233,19 @@
 
         _sheet = sheet;
         await _sheet.InvokeVoidAsync("attach", _sheetEl, "default");
+
+        // The Quote tapped on the page came open before the script was here to scroll to it.
+        if (_reveal is not null)
+        {
+            StateHasChanged();
+        }
     }
 
+    /// <summary>Opens a Quote, from its row or its pin, and brings it into view: a pin may be far from its row.</summary>
     private void Open(Guid id)
     {
+        _reveal = id;
+
         if (_open == id)
         {
             return;
@@ -356,6 +381,28 @@
         var day = quote.SavedAt.ToLocalTime().ToString("d MMM");
 
         return quote.Chapter is { } chapter ? $"{chapter} · saved {day}" : $"Saved {day}";
+    }
+
+    private static string RowId(Guid id) => $"quote-{id:N}";
+
+    /// <summary>Half a finger's width: the furthest a pin's button reaches either side of its mark.</summary>
+    private const string Reach = "1.375rem";
+
+    /// <summary>
+    /// Where a pin's button starts and how wide it is: from halfway back to the pin before it to
+    /// halfway on to the pin after, held to <see cref="Reach"/> either side of the mark.
+    /// </summary>
+    private static string PinReach(IReadOnlyList<QuoteView> pinned, int at)
+    {
+        var mark = MapLeft(pinned[at].Percent);
+        var start = at == 0
+            ? $"calc({mark} - {Reach})"
+            : $"max({MapLeft((pinned[at - 1].Percent + pinned[at].Percent) / 2)}, calc({mark} - {Reach}))";
+        var end = at == pinned.Count - 1
+            ? $"calc({mark} + {Reach})"
+            : $"min({MapLeft((pinned[at].Percent + pinned[at + 1].Percent) / 2)}, calc({mark} + {Reach}))";
+
+        return $"left: {start}; width: calc({end} - {start});";
     }
 
     /// <summary>A position on the map, written for a style attribute whatever the culture's decimal point.</summary>

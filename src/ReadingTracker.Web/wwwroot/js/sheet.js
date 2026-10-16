@@ -200,6 +200,21 @@ export function showTop(el) {
 }
 
 /**
+ * Brings one thing inside the sheet into view: the Quote a pin on the map was tapped for. Only as
+ * far as it takes to see the whole of it, and gliding there unless the reader asked for stillness;
+ * a sticky head over the list is cleared by the thing's own scroll-margin-top in the stylesheet.
+ */
+export function reveal(el, id) {
+    const found = id && el?.querySelector(`#${CSS.escape(id)}`);
+    if (!found) {
+        return;
+    }
+
+    const still = window.readingTracker?.prefersStillness?.() ?? false;
+    found.scrollIntoView({ block: 'nearest', behavior: still ? 'auto' : 'smooth' });
+}
+
+/**
  * Lets the sheet go. keepSize leaves it at the height and lift it has, for a sheet that is
  * leaving the page (js/motion.js plays it out) rather than staying on it at another height.
  */
