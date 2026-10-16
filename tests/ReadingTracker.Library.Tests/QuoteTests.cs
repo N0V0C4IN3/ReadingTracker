@@ -333,6 +333,48 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
     }
 
     [Fact]
+    public async Task My_shelf_says_how_many_quotes_each_book_has()
+    {
+        var client = fixture.ClientFor("counting-quoter");
+        var quoted = await fixture.AddBookAsync(client);
+        var unquoted = await fixture.AddBookAsync(client);
+        await SaveAsync(client, quoted, "hl-a");
+        await SaveAsync(client, quoted, "hl-b");
+        // Sending one again is still one.
+        await SaveAsync(client, quoted, "hl-b", note: "Changed my mind.");
+
+        var shelf = await ShelfAsync(client);
+
+        Assert.Equal(2, shelf.Single(e => e.Id == quoted).QuoteCount);
+        Assert.Equal(0, shelf.Single(e => e.Id == unquoted).QuoteCount);
+    }
+
+    [Fact]
+    public async Task The_count_follows_a_delete_down_to_none()
+    {
+        var client = fixture.ClientFor("uncounting-quoter");
+        var entryId = await fixture.AddBookAsync(client);
+        var only = (await SaveAndReadAsync(client, entryId, "hl-only")).Quote;
+
+        await client.DeleteAsync($"/api/library/{entryId}/quotes/{only.Id}");
+
+        Assert.Equal(0, (await ShelfAsync(client)).Single(e => e.Id == entryId).QuoteCount);
+    }
+
+    [Fact]
+    public async Task A_book_changed_from_its_page_still_says_how_many_quotes_it_has()
+    {
+        var client = fixture.ClientFor("changing-quoter");
+        var entryId = await fixture.AddBookAsync(client);
+        await SaveAsync(client, entryId, "hl-kept");
+
+        // Every change answers with the entry as the Book page draws it, count and all.
+        var changed = await client.PutAsJsonAsync($"/api/library/{entryId}/status", new { status = "Reading" });
+
+        Assert.Equal(1, (await changed.Content.ReadFromJsonAsync<Entry>())!.QuoteCount);
+    }
+
+    [Fact]
     public async Task Another_reader_can_neither_see_my_quotes_nor_add_to_them()
     {
         var owner = fixture.ClientFor("quote-owner");
@@ -376,6 +418,11 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
         (await (await client.PostAsJsonAsync("/api/library", new { bookId })).Content.ReadFromJsonAsync<Added>())!.Id;
 
     private sealed record Added(Guid Id);
+
+    private static async Task<IReadOnlyList<Entry>> ShelfAsync(HttpClient client) =>
+        (await client.GetFromJsonAsync<IReadOnlyList<Entry>>("/api/library"))!;
+
+    private sealed record Entry(Guid Id, int QuoteCount);
 
     private static async Task AssertRefusedAsync(HttpResponseMessage response, string field)
     {

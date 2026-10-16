@@ -71,6 +71,21 @@ public sealed partial class ReadingLibrary
     }
 
     /// <summary>
+    /// How many Quotes each entry has, for the Book page to decide whether to offer them and what
+    /// to call the button. An entry with none is left out rather than counted as zero.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<Guid, int>> QuoteCountsAsync(
+        IReadOnlyCollection<Guid> entryIds,
+        CancellationToken cancellationToken) =>
+        entryIds.Count == 0
+            ? new Dictionary<Guid, int>()
+            : await database.Quotes
+                .Where(quote => entryIds.Contains(quote.LibraryEntryId))
+                .GroupBy(quote => quote.LibraryEntryId)
+                .Select(perEntry => new { EntryId = perEntry.Key, Count = perEntry.Count() })
+                .ToDictionaryAsync(counted => counted.EntryId, counted => counted.Count, cancellationToken);
+
+    /// <summary>
     /// Changes the Reader's note on a Quote, or takes it away with null. The note is the only
     /// thing about a Quote that can change: the passage is the Book's words.
     /// </summary>

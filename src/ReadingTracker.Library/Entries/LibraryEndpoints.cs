@@ -39,24 +39,13 @@ public static class LibraryEndpoints
             var booksTask = catalog.TryFindBooksAsync(
                 [.. entries.Select(entry => entry.BookId).Distinct()],
                 cancellationToken);
-            var totalsTask = library.TotalsAsync([.. entries.Select(entry => entry.Id)], cancellationToken);
+            var tallyTask = TallyAsync(library, [.. entries.Select(entry => entry.Id)], cancellationToken);
 
-            await Task.WhenAll(booksTask, totalsTask);
+            await Task.WhenAll(booksTask, tallyTask);
             var books = await booksTask;
-            var totals = await totalsTask;
+            var tally = await tallyTask;
 
-            return Results.Ok(entries.Select(entry =>
-            {
-                var book = books.GetValueOrDefault(entry.BookId);
-
-                return LibraryEntryResponse.From(
-                    entry,
-                    book,
-                    Progress.Of(
-                        totals.GetValueOrDefault(entry.Id, ReadingTotals.Nothing),
-                        entry.TrackingMethod,
-                        entry.EffectivePageCount(book?.TotalPages)));
-            }));
+            return Results.Ok(entries.Select(entry => Describe(entry, books.GetValueOrDefault(entry.BookId), tally)));
         })
         .WithName("ListLibrary");
 
@@ -615,11 +604,11 @@ public static class LibraryEndpoints
     {
         // Neither answer depends on the other, and the Catalog round trip is the slower.
         var bookTask = catalog.TryFindBooksAsync([entry.BookId], cancellationToken);
-        var totalsTask = library.TotalsAsync([entry.Id], cancellationToken);
+        var tallyTask = TallyAsync(library, [entry.Id], cancellationToken);
 
-        await Task.WhenAll(bookTask, totalsTask);
+        await Task.WhenAll(bookTask, tallyTask);
 
-        return Describe(entry, (await bookTask).GetValueOrDefault(entry.BookId), await totalsTask);
+        return Describe(entry, (await bookTask).GetValueOrDefault(entry.BookId), await tallyTask);
     }
 
     /// <summary>The same, for a caller that has already been to Catalog for this book.</summary>
@@ -628,19 +617,34 @@ public static class LibraryEndpoints
         LibraryEntry entry,
         CatalogBook? book,
         CancellationToken cancellationToken) =>
-        Describe(entry, book, await library.TotalsAsync([entry.Id], cancellationToken));
+        Describe(entry, book, await TallyAsync(library, [entry.Id], cancellationToken));
 
-    private static LibraryEntryResponse Describe(
-        LibraryEntry entry,
-        CatalogBook? book,
-        IReadOnlyDictionary<Guid, ReadingTotals> totals) =>
+    private static LibraryEntryResponse Describe(LibraryEntry entry, CatalogBook? book, Tally tally) =>
         LibraryEntryResponse.From(
             entry,
             book,
             Progress.Of(
-                totals.GetValueOrDefault(entry.Id, ReadingTotals.Nothing),
+                tally.Totals.GetValueOrDefault(entry.Id, ReadingTotals.Nothing),
                 entry.TrackingMethod,
-                entry.EffectivePageCount(book?.TotalPages)));
+                entry.EffectivePageCount(book?.TotalPages)),
+            tally.QuoteCounts.GetValueOrDefault(entry.Id));
+
+    /// <summary>
+    /// What Library adds up about some entries from its own tables: everything read of each, and
+    /// how many Quotes each has. One after the other rather than together, because both go
+    /// through the one DbContext, which takes one query at a time — but together with Catalog.
+    /// </summary>
+    private static async Task<Tally> TallyAsync(
+        ReadingLibrary library,
+        IReadOnlyCollection<Guid> entryIds,
+        CancellationToken cancellationToken) =>
+        new(
+            await library.TotalsAsync(entryIds, cancellationToken),
+            await library.QuoteCountsAsync(entryIds, cancellationToken));
+
+    private sealed record Tally(
+        IReadOnlyDictionary<Guid, ReadingTotals> Totals,
+        IReadOnlyDictionary<Guid, int> QuoteCounts);
 
     private static IResult SessionRefused(SessionProblem problem) => problem switch
     {
@@ -680,6 +684,10 @@ public static class LibraryEndpoints
     /// which of the two applies. Null when neither the reader nor Catalog knows.
     /// </param>
     /// <param name="Bookmark">Where a device last said the reader is; null when none has said.</param>
+    /// <param name="QuoteCount">
+    /// How many Quotes the reader kept from this book, so the Book page knows whether to offer
+    /// them without asking for the list.
+    /// </param>
     private sealed record LibraryEntryResponse(
         Guid Id,
         Guid BookId,
@@ -691,12 +699,14 @@ public static class LibraryEndpoints
         int? EffectivePageCount,
         BookDetailsResponse? Book,
         ProgressResponse? Progress,
-        BookmarkResponse? Bookmark)
+        BookmarkResponse? Bookmark,
+        int QuoteCount)
     {
         public static LibraryEntryResponse From(
             LibraryEntry entry,
             CatalogBook? book = null,
-            ReadingProgress? progress = null) =>
+            ReadingProgress? progress = null,
+            int quoteCount = 0) =>
             new(
                 entry.Id,
                 entry.BookId,
@@ -708,7 +718,8 @@ public static class LibraryEndpoints
                 entry.EffectivePageCount(book?.TotalPages),
                 book is null ? null : BookDetailsResponse.From(book),
                 progress is null ? null : ProgressResponse.From(progress),
-                BookmarkResponse.Of(entry));
+                BookmarkResponse.Of(entry),
+                quoteCount);
     }
 
     private sealed record BookmarkResponse(decimal Percent, DateTimeOffset ReportedAt)
