@@ -44,6 +44,13 @@ function FakeEnv.new(options)
   env.requests = {}
   env.responses = {}
 
+  -- The plugin's own version, and what an update did: the zips it was asked to install, whether
+  -- installing works (false, or a reason, makes it fail), and the restarts it asked for.
+  env.version = options.version or "0.3.0"
+  env.installed = {}
+  env.install_fails = options.install_fails
+  env.restarts = {}
+
   return env
 end
 
@@ -158,6 +165,22 @@ end
 
 function FakeEnv:last_prompt()
   return self.prompts[#self.prompts]
+end
+
+function FakeEnv:installed_version()
+  return self.version
+end
+
+function FakeEnv:install_update(url)
+  table.insert(self.installed, url)
+  if self.install_fails then
+    return nil, self.install_fails
+  end
+  return true
+end
+
+function FakeEnv:ask_restart(text)
+  table.insert(self.restarts, text)
 end
 
 return FakeEnv

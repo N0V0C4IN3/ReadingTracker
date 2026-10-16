@@ -28,6 +28,18 @@ jobs:
         working-directory: readingtracker.koplugin
         run: sh spec/run.sh
 
+      # The updater on a device compares _meta.lua's version with the newest release's tag, so a
+      # release whose tag says one version and whose plugin says another would be offered forever.
+      - name: Check the version
+        if: startsWith(github.ref, 'refs/tags/plugin-v')
+        run: |
+          tagged="${GITHUB_REF_NAME#plugin-v}"
+          meta=$(sed -n 's/^ *version = "\(.*\)",.*$/\1/p' readingtracker.koplugin/_meta.lua)
+          if [ "$tagged" != "$meta" ]; then
+            echo "::error::The tag says $tagged but _meta.lua says $meta."
+            exit 1
+          fi
+
       # Everything a Kindle needs and nothing it does not: no specs, no Docker runner, no
       # reader's own config (gitignored, but excluded again here so a stray copy never ships).
       - name: Package

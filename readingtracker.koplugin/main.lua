@@ -22,10 +22,14 @@ local Screen = require("device").screen
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local logger = require("logger")
 local http = require("socket.http")
+local lfs = require("libs/libkoreader-lfs")
 local ltn12 = require("ltn12")
 local socketutil = require("socketutil")
+local ffiUtil = require("ffi/util")
+local util = require("util")
 
 local App = require("readingtracker.app")
+local Updater = require("readingtracker.updater")
 
 local ReadingTracker = WidgetContainer:extend {
   name = "readingtracker",
@@ -50,7 +54,9 @@ function ReadingTracker:init()
   self.config = load_config()
   -- The plugin's own settings, across documents: the sync interval and the like.
   self.preferences = LuaSettings:open(DataStorage:getSettingsDir() .. "/readingtracker.lua")
-  self.app = App.new(self:buildEnv())
+  local env = self:buildEnv()
+  self.app = App.new(env)
+  self.updater = Updater.new(env)
   self.ui.menu:registerToMainMenu(self)
   self:onDispatcherRegisterActions()
 end
@@ -67,6 +73,12 @@ function ReadingTracker:onDispatcherRegisterActions()
     event = "ReadingTrackerSync",
     title = _("ReadingTracker: sync now"),
     reader = true,
+  })
+  Dispatcher:registerAction("readingtracker_check_for_update", {
+    category = "none",
+    event = "ReadingTrackerCheckForUpdate",
+    title = _("ReadingTracker: check for updates"),
+    general = true,
   })
 end
 
@@ -113,8 +125,24 @@ function ReadingTracker:buildEnv()
   end
 
   function env:save_preference(key, value)
-    plugin.preferences:saveSetting(key, value)
+    if value == nil then
+      plugin.preferences:delSetting(key)
+    else
+      plugin.preferences:saveSetting(key, value)
+    end
     plugin.preferences:flush()
+  end
+
+  function env:installed_version()
+    return plugin:version()
+  end
+
+  function env:install_update(url)
+    return plugin:installUpdate(url)
+  end
+
+  function env:ask_restart(text)
+    UIManager:askForRestart(text)
   end
 
   function env:notify(text)
@@ -256,6 +284,158 @@ function ReadingTracker:buildEnv()
   return env
 end
 
+-- Updating ---------------------------------------------------------------------------------------
+
+-- The folder the plugin runs from: KOReader's plugin loader says, and failing that, this file.
+function ReadingTracker:folder()
+  local folder = self.path or debug.getinfo(1, "S").source:match("^@(.*)/[^/]*$")
+  return folder and folder:gsub("/+$", "") or nil
+end
+
+-- The version in _meta.lua, which the release workflow checks against the release's tag.
+function ReadingTracker:version()
+  local folder = self:folder()
+  local ok, meta = pcall(dofile, folder and (folder .. "/_meta.lua") or "")
+  return ok and type(meta) == "table" and meta.version or nil
+end
+
+-- Fetches a file, following GitHub's redirects to where it keeps release files by hand rather
+-- than trusting the HTTP library to follow them from one host to another over https.
+function ReadingTracker:download(url, path)
+  for _ = 1, 5 do
+    local file, open_err = io.open(path, "wb")
+    if not file then
+      return nil, open_err
+    end
+    socketutil:set_timeout(15, 120)
+    local _, code, headers = http.request {
+      url = url,
+      method = "GET",
+      headers = { ["User-Agent"] = "ReadingTracker-KOReader/" .. tostring(self:version()) },
+      sink = ltn12.sink.file(file),
+      redirect = false,
+    }
+    socketutil:reset_timeout()
+
+    if type(code) ~= "number" then
+      return nil, "the download did not arrive"
+    end
+    local location = headers and (headers.location or headers.Location)
+    if code >= 300 and code < 400 and location then
+      url = location
+    elseif code == 200 then
+      return true
+    else
+      return nil, "the download answered " .. code
+    end
+  end
+  return nil, "the download kept being redirected"
+end
+
+-- Unpacks a zip into a folder: with KOReader's own archiver where it has one, and the device's
+-- unzip on a KOReader from before it. A path that would land outside the folder is refused.
+function ReadingTracker:unpack(zip, into)
+  local ok, Archiver = pcall(require, "ffi/archiver")
+  if ok then
+    local archive = Archiver.Reader:new()
+    if not archive:open(zip) then
+      return nil, "the download is not a zip"
+    end
+    for entry in archive:iterate() do
+      if entry.path:find("%.%.") or entry.path:sub(1, 1) == "/" then
+        archive:close()
+        return nil, "the zip holds a path outside the plugin"
+      end
+      if not archive:extractToPath(entry.path, into .. "/" .. entry.path) then
+        break
+      end
+    end
+    local err = archive.err
+    archive:close()
+    if err then
+      return nil, tostring(err)
+    end
+    return true
+  end
+
+  local status = os.execute(string.format("unzip -o -q %q -d %q", zip, into))
+  if status == 0 or status == true then
+    return true
+  end
+  return nil, "no way to unpack a zip on this device"
+end
+
+-- Puts a release's zip in place of the plugin: unpacked beside it, checked to be a whole plugin,
+-- given the reader's config file, and only then swapped in, the old folder kept until the new
+-- one is there so a failure anywhere leaves the plugin as it was.
+function ReadingTracker:installUpdate(url)
+  local folder = self:folder()
+  local parent = folder and folder:match("^(.*)/[^/]+$")
+  if not parent then
+    return nil, "the plugin's folder could not be found"
+  end
+
+  local cache = DataStorage:getDataDir() .. "/cache"
+  util.makePath(cache)
+  local zip = cache .. "/readingtracker-update.zip"
+  local staging = parent .. "/readingtracker.koplugin.update"
+  local old = parent .. "/readingtracker.koplugin.old"
+
+  local function clean()
+    os.remove(zip)
+    if lfs.attributes(staging, "mode") then
+      ffiUtil.purgeDir(staging)
+    end
+  end
+
+  clean()
+  local ok, err = self:download(url, zip)
+  if ok then
+    util.makePath(staging)
+    ok, err = self:unpack(zip, staging)
+  end
+
+  local unpacked = staging .. "/readingtracker.koplugin"
+  if ok and not (lfs.attributes(unpacked .. "/main.lua", "mode") and lfs.attributes(unpacked .. "/_meta.lua", "mode")) then
+    ok, err = nil, "the download is not the plugin"
+  end
+
+  if ok then
+    local config = folder .. "/readingtracker_config.lua"
+    -- copyFile answers nothing when it worked, and what went wrong when it did not.
+    local copy_err = lfs.attributes(config, "mode") and ffiUtil.copyFile(config, unpacked .. "/readingtracker_config.lua")
+    if copy_err then
+      ok, err = nil, "the config file could not be carried over (" .. tostring(copy_err) .. ")"
+    end
+  end
+
+  if ok then
+    if lfs.attributes(old, "mode") then
+      ffiUtil.purgeDir(old)
+    end
+    ok, err = os.rename(folder, old)
+    if ok then
+      ok, err = os.rename(unpacked, folder)
+      if not ok then
+        os.rename(old, folder)
+      end
+    end
+  end
+
+  clean()
+  if ok and lfs.attributes(old, "mode") then
+    ffiUtil.purgeDir(old)
+  end
+  if not ok then
+    logger.warn("readingtracker: update failed", err)
+  end
+  return ok, err
+end
+
+function ReadingTracker:onReadingTrackerCheckForUpdate()
+  Trapper:wrap(function() self.updater:check(true) end)
+end
+
 function ReadingTracker:headersFor(request)
   local headers = {}
   for name, value in pairs(request.headers or {}) do
@@ -376,6 +556,8 @@ function ReadingTracker:onNetworkConnected()
   if self.config and self.ui.document then
     Trapper:wrap(function() self.app:onNetworkConnected() end)
   end
+  -- Whether or not a book is open or the plugin set up: an update is the plugin's own business.
+  Trapper:wrap(function() self.updater:onNetworkConnected() end)
 end
 
 -- KOReader's own "you reached the end" hook; its action setting is left to it, this only asks
@@ -491,6 +673,17 @@ function ReadingTracker:menuItems()
           })
         end
       end,
+    },
+    {
+      text_func = function()
+        return _("Check for updates") .. " (" .. tostring(self:version() or "?") .. ")"
+      end,
+      callback = function() self:onReadingTrackerCheckForUpdate() end,
+    },
+    {
+      text = _("Check for updates once a day on wifi"),
+      checked_func = function() return self.updater:automatic() end,
+      callback = function() self.updater:set_automatic(not self.updater:automatic()) end,
     },
   }
 end

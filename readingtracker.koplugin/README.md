@@ -15,6 +15,23 @@ cannot do one of those.
 4. Restart KOReader. While reading, **ReadingTracker** is the last entry of the first menu tab (the one
    with contents and bookmarks); in the file manager it is under the tools tab.
 
+## Updating
+
+From 0.3.0 the plugin updates itself over wifi; this install by hand is the last one.
+
+- **Check for updates** in the plugin's menu asks GitHub for the newest plugin release and says
+  which version you have. If there is a newer one, you are asked: *Update now*, *Later* or
+  *Skip this version*.
+- **Once a day**, when the device is already on wifi, it checks by itself and only speaks up when
+  there is something new it has not been told to skip. Turn that off with **Check for updates
+  once a day on wifi**. Like everything else here, it never turns wifi on.
+- **Update now** downloads the release's zip, unpacks it beside the plugin, checks that it is a
+  whole plugin, carries your `readingtracker_config.lua` over, and only then swaps the folders.
+  If anything fails on the way, the plugin is left as it was and you are told where to get the
+  release by hand. Restart KOReader when it asks, and the new version is the one running.
+- Unpacking uses KOReader's own archiver, or the device's `unzip` on an older KOReader. If the
+  device has neither, the plugin says so, and installing by hand still works.
+
 ## What it does
 
 - **Opening a book with an ISBN** in its metadata looks the book up. If it is already on your
@@ -49,3 +66,7 @@ spec/run.sh
 ```
 
 CI runs the same suite and builds the release zip.
+
+To release, set `version` in `_meta.lua` and push a matching `plugin-v<version>` tag: CI builds
+the zip and attaches it to a GitHub release, which is what the updater looks for. A tag that
+does not match `_meta.lua` is refused, so the version a device reports is always the release's.
