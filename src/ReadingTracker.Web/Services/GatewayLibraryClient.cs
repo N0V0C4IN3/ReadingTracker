@@ -8,7 +8,6 @@ namespace ReadingTracker.Web.Services;
 /// <summary>A LibraryEntry as the Gateway (by way of Library) describes it.</summary>
 /// <param name="Progress">Library's answer as it came; read through <see cref="AmountRead"/>, not field by field.</param>
 /// <param name="Bookmark">Where a device last said the reader is; null when no device has said.</param>
-/// <param name="QuoteCount">How many Quotes the reader has sent from a device for this book.</param>
 public sealed record LibraryEntry(
     Guid Id,
     Guid BookId,
@@ -20,8 +19,7 @@ public sealed record LibraryEntry(
     int? EffectivePageCount,
     BookDetails? Book,
     Progress? Progress,
-    Bookmark? Bookmark,
-    int QuoteCount = 0)
+    Bookmark? Bookmark)
 {
     /// <summary>How much of the book the reader has read, as a case a display can tell apart.</summary>
     [JsonIgnore]

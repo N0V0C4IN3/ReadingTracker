@@ -90,32 +90,23 @@
         them, and the way into the rest. Tapping one opens the sheet on it. A book with none has
         no section, since there is nothing here to open (ADR-0017: they come from a device).
     *@
-    @if (QuoteCount > 0)
+    @if (_quotes is { Count: > 0 } quotes)
     {
         <section class="quotes-preview">
-            <h2 class="group history__eyebrow">Quotes <span>· @QuoteCount</span></h2>
-            @if (_preview is { Count: > 0 } preview)
-            {
-                <ol class="quotes__list">
-                    @foreach (var quote in preview.Take(Previewed))
-                    {
-                        <li class="quotes__row" @key="quote.Id">
-                            <span class="quotes__at">@Figures.Trim(quote.Percent)%</span>
-                            <div class="quotes__body">
-                                <button type="button" class="quotes__pick" aria-haspopup="dialog" @onclick="() => OpenQuotes(quote.Id)">
-                                    <p class="quote__text">@quote.Passage.Trim()</p>
-                                </button>
-                            </div>
-                        </li>
-                    }
-                </ol>
-            }
+            <h2 class="group history__eyebrow">Quotes <span>· @quotes.Count</span></h2>
+            <ol class="quotes__list">
+                @foreach (var quote in quotes.Take(Previewed))
+                {
+                    <QuoteRow Quote="quote" OpensSheet PickId="@PickId(quote.Id)" OnPick="() => OpenQuotes(quote.Id)" @key="quote.Id" />
+                }
+            </ol>
             <button type="button"
+                    id="@AllId"
                     class="link-button book__more quotes-preview__all"
                     aria-haspopup="dialog"
                     aria-expanded="@(_quotesOpen ? "true" : "false")"
                     @onclick="() => OpenQuotes(null)">
-                @AllQuotes
+                @AllQuotes(quotes.Count)
             </button>
         </section>
     }
@@ -168,12 +159,15 @@
 
 @* Beside the reading rather than in it: the reading fades while a change is in flight, and a
    sheet inside something faded is laid out against it instead of the screen. *@
-@if (_quotesOpen)
+@if (_quotesOpen && _quotes is { Count: > 0 } open)
 {
     <QuoteSheet Entry="Entry"
+                Quotes="open"
                 Opening="_opening"
+                OpenerId="@(_opening is { } quote ? PickId(quote) : AllId)"
                 OnClose="CloseQuotes"
-                OnCountChanged="KeepQuoteCount"
+                OnChanged="KeepQuote"
+                OnDeleted="DropQuote"
                 OnSignedOut="OnSignedOut" />
 }
 
@@ -193,30 +187,28 @@
     private bool _quotesOpen;
 
     /// <summary>
-    /// How many Quotes are left after one was deleted in the sheet. A delete does not send the
-    /// entry back, so the count is kept here until the next change that does.
+    /// The book's Quotes in book order, read once with the page, and kept in step with what the
+    /// sheet changes. Null until they come, or if they could not: then the page has no Quotes
+    /// section, as for a book with none.
     /// </summary>
-    private int? _quotesLeft;
-
-    private LibraryEntry? _countedFrom;
-
-    private int QuoteCount => _quotesLeft ?? Entry.QuoteCount;
+    private List<QuoteView>? _quotes;
 
     /// <summary>How many Quotes the page shows before the sheet: enough to say what is there.</summary>
     private const int Previewed = 2;
 
-    /// <summary>The book's Quotes, for the page's taste of them; null until they come, or if they could not.</summary>
-    private IReadOnlyList<QuoteView>? _preview;
-
     /// <summary>The Quote the sheet opens on: the one tapped on the page, or none for the whole list.</summary>
     private Guid? _opening;
 
+    private string AllId => $"quotes-all-{Entry.Id:N}";
+
+    private static string PickId(Guid quote) => $"quote-pick-{quote:N}";
+
     /// <summary>The way into the sheet, said for what is in it: the rest, or the ones already shown.</summary>
-    private string AllQuotes => QuoteCount switch
+    private static string AllQuotes(int count) => count switch
     {
         1 => "Open the quote",
-        Previewed => "Open both quotes",
-        var count => $"All {count} quotes",
+        2 => "Open both quotes",
+        _ => $"All {count} quotes",
     };
 
     /// <summary>Whether a correction form is open in the history, which then shows the reasons itself.</summary>
@@ -232,30 +224,10 @@
 
     protected override Task OnInitializedAsync() => Task.WhenAll(LoadSessionsAsync(), LoadQuotesAsync());
 
-    /// <summary>
-    /// The page's taste of the Quotes, read when there are any to show. What could not be read
-    /// leaves the heading and the way in, and the sheet says what went wrong when it is opened.
-    /// </summary>
     private async Task LoadQuotesAsync()
     {
-        if (QuoteCount == 0)
-        {
-            _preview = null;
-            return;
-        }
-
         var listed = await Library.GetQuotesAsync(Entry.Id, CancellationToken.None);
-        _preview = listed.Ok ? listed.Value : null;
-    }
-
-    /// <summary>A fresh entry from Library carries its own count, which is the one to believe.</summary>
-    protected override void OnParametersSet()
-    {
-        if (!ReferenceEquals(_countedFrom, Entry))
-        {
-            _countedFrom = Entry;
-            _quotesLeft = null;
-        }
+        _quotes = listed.Ok ? [.. listed.Value!] : null;
     }
 
     private void OpenQuotes(Guid? quote)
@@ -264,14 +236,36 @@
         _quotesOpen = true;
     }
 
-    /// <summary>Closed, the sheet may have changed what the page shows of it: a note, a Quote gone.</summary>
-    private async Task CloseQuotes()
+    private void CloseQuotes() => _quotesOpen = false;
+
+    private void KeepQuote(QuoteView changed)
     {
-        _quotesOpen = false;
-        await LoadQuotesAsync();
+        var at = _quotes?.FindIndex(quote => quote.Id == changed.Id) ?? -1;
+
+        if (at >= 0)
+        {
+            _quotes![at] = changed;
+        }
     }
 
-    private void KeepQuoteCount(int left) => _quotesLeft = left;
+    /// <summary>
+    /// A Quote gone. Focus goes back to the way into the whole list when the one tapped is the
+    /// one that went, and the last one going closes the sheet: there is nothing left to open.
+    /// </summary>
+    private void DropQuote(Guid gone)
+    {
+        _quotes?.RemoveAll(quote => quote.Id == gone);
+
+        if (_opening == gone)
+        {
+            _opening = null;
+        }
+
+        if (_quotes is not { Count: > 0 })
+        {
+            _quotesOpen = false;
+        }
+    }
 
     private void Toggle(Panel panel)
     {

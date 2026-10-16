@@ -115,19 +115,6 @@ public sealed class GatewayLibraryClientQuoteTests
         Assert.Equal(LibraryChangeProblem.GatewayUnreachable, outcome.Problem);
     }
 
-    [Fact]
-    public async Task An_entry_says_how_many_quotes_it_has()
-    {
-        var (client, gateway) = CreateClient();
-        gateway.Respond = _ => StubHttpMessageHandler.Json(
-            $$"""[{"id":"{{EntryId}}","bookId":"{{Guid.NewGuid()}}","status":"Reading","trackingMethod":"Pages","addedAt":"2026-09-01T00:00:00+00:00","quoteCount":7}]""");
-
-        var (entries, problem) = await client.GetEntriesAsync(null, CancellationToken.None);
-
-        Assert.Null(problem);
-        Assert.Equal(7, Assert.Single(entries!).QuoteCount);
-    }
-
     private static string Quote(string highlightId, decimal percent, string? note = null, string? chapter = null) =>
         $$"""
         {"id":"{{Guid.NewGuid()}}","highlightId":"{{highlightId}}","passage":"Words.","note":{{Json(note)}},"percent":{{percent}},"chapter":{{Json(chapter)}},"savedAt":"2026-10-02T18:40:00+00:00"}

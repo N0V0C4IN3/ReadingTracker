@@ -15,7 +15,8 @@
 // A sheet whose head is more than the strip — a title under it, as the Quotes sheet has — marks
 // that head data-sheet-handle, and it drags the sheet as the grip does: the title is where a thumb
 // lands to pull the sheet up, and a head that only scrolled nothing would let the swipe go by.
-// A button in the head (Close) stays a button.
+// Only the grip takes a tap as well: a title is tapped by accident, or to read it, as often as on
+// purpose. Mark a head that holds nothing else to press.
 
 const SNAP = { default: 0.55, full: 0.92 };
 const controllers = new WeakMap();
@@ -71,11 +72,12 @@ export function attach(el, startState = 'default') {
         el.style.height = wanted + 'px';
     };
 
+    // Which handle the finger is on: the grip, or a head marked to drag with it.
+    let held = grip;
+
     const down = e => {
-        if (e.currentTarget !== grip && e.target.closest('button, a, input, textarea')) {
-            return;
-        }
         dragging = true;
+        held = e.currentTarget;
         moved = false;
         startY = e.clientY;
         startH = el.getBoundingClientRect().height;
@@ -108,10 +110,11 @@ export function attach(el, startState = 'default') {
             write();
         }
         el.style.transition = '';
-        // A tap on the handle with no drag toggles between peek and default, so the sheet can be
-        // got out of the way and back without a deliberate drag.
+        // A tap on the grip with no drag toggles between peek and default, so the sheet can be got
+        // out of the way and back without a deliberate drag. A tap on a head only stays put.
         const state = moved
             ? nearest(el, el.getBoundingClientRect().height)
+            : held !== grip ? el.dataset.sheet
             : (el.dataset.sheet === 'peek' ? 'default' : 'peek');
         setState(state);
     };
@@ -125,7 +128,7 @@ export function attach(el, startState = 'default') {
     }
 
     // The scroll area and the drag must not fight: a drag that starts on the results should scroll
-    // them, not resize the sheet, so the handle is the only drag surface and this is left alone.
+    // them, not resize the sheet, so the handles are the only drag surfaces and this is left alone.
     // The dock is pinned to the foot of the layout viewport, and on iOS the keyboard comes up
     // over that viewport without shrinking it — so a dock pinned to its foot is pinned under
     // the keyboard, field and all. The visual viewport is the part that can be seen; the dock
@@ -208,21 +211,6 @@ export function showTop(el) {
     if (found.getBoundingClientRect().top < header) {
         found.scrollIntoView({ block: 'start' });
     }
-}
-
-/**
- * Brings one thing inside the sheet into view: the Quote a pin on the map was tapped for. Only as
- * far as it takes to see the whole of it, and gliding there unless the reader asked for stillness;
- * a sticky head over the list is cleared by the thing's own scroll-margin-top in the stylesheet.
- */
-export function reveal(el, id) {
-    const found = id && el?.querySelector(`#${CSS.escape(id)}`);
-    if (!found) {
-        return;
-    }
-
-    const still = window.readingTracker?.prefersStillness?.() ?? false;
-    found.scrollIntoView({ block: 'nearest', behavior: still ? 'auto' : 'smooth' });
 }
 
 /**
