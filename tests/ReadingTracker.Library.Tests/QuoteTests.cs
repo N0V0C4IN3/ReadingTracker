@@ -278,6 +278,61 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
     }
 
     [Fact]
+    public async Task Deleting_a_quote_removes_it_and_leaves_the_rest()
+    {
+        var client = fixture.ClientFor("deleting-quoter");
+        var entryId = await fixture.AddBookAsync(client);
+        var unwanted = (await SaveAndReadAsync(client, entryId, "hl-unwanted", percent: 10m)).Quote;
+        await SaveAsync(client, entryId, "hl-kept", percent: 20m);
+
+        var response = await client.DeleteAsync($"/api/library/{entryId}/quotes/{unwanted.Id}");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal("hl-kept", Assert.Single(await QuotesAsync(client, entryId)).HighlightId);
+    }
+
+    [Fact]
+    public async Task Deleting_a_quote_twice_finds_nothing_the_second_time()
+    {
+        var client = fixture.ClientFor("double-deleting-quoter");
+        var entryId = await fixture.AddBookAsync(client);
+        var saved = (await SaveAndReadAsync(client, entryId, "hl-once")).Quote;
+        await client.DeleteAsync($"/api/library/{entryId}/quotes/{saved.Id}");
+
+        var again = await client.DeleteAsync($"/api/library/{entryId}/quotes/{saved.Id}");
+
+        Assert.Equal(HttpStatusCode.NotFound, again.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_deleted_quote_comes_back_only_if_the_device_sends_it_again()
+    {
+        var client = fixture.ClientFor("second-thoughts-quoter");
+        var entryId = await fixture.AddBookAsync(client);
+        var saved = (await SaveAndReadAsync(client, entryId, "hl-back")).Quote;
+        await client.DeleteAsync($"/api/library/{entryId}/quotes/{saved.Id}");
+
+        var resent = await SaveAsync(client, entryId, "hl-back");
+
+        // The highlight is still on the device, so sending it is a new Quote (ADR-0017).
+        Assert.Equal(HttpStatusCode.Created, resent.StatusCode);
+        Assert.Single(await QuotesAsync(client, entryId));
+    }
+
+    [Fact]
+    public async Task Another_reader_cannot_delete_my_quote()
+    {
+        var owner = fixture.ClientFor("deleted-quote-owner");
+        var entryId = await fixture.AddBookAsync(owner);
+        var saved = (await SaveAndReadAsync(owner, entryId, "hl-safe")).Quote;
+
+        var response = await fixture.ClientFor("deleted-quote-stranger").DeleteAsync($"/api/library/{entryId}/quotes/{saved.Id}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Single(await QuotesAsync(owner, entryId));
+    }
+
+    [Fact]
     public async Task Another_reader_can_neither_see_my_quotes_nor_add_to_them()
     {
         var owner = fixture.ClientFor("quote-owner");

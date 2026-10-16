@@ -85,6 +85,29 @@ public sealed partial class ReadingLibrary
             : null;
 
     /// <summary>
+    /// Removes a Quote, at once, as deleting a ReadingSession does. It can come back only if its
+    /// highlight is still on the device to send again (ADR-0017).
+    /// </summary>
+    public async Task<bool> DeleteQuoteAsync(
+        string readerId,
+        Guid entryId,
+        Guid quoteId,
+        CancellationToken cancellationToken)
+    {
+        var quote = await FindQuoteAsync(readerId, entryId, quoteId, cancellationToken);
+
+        if (quote is null)
+        {
+            return false;
+        }
+
+        database.Quotes.Remove(quote);
+        await database.SaveChangesAsync(cancellationToken);
+
+        return true;
+    }
+
+    /// <summary>
     /// Finds one Quote, but only through its own entry and only for the reader who owns it.
     /// Another reader's Quote is not found rather than forbidden: it is not theirs to know about.
     /// </summary>

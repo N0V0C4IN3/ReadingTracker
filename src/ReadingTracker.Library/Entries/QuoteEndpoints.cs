@@ -122,6 +122,24 @@ public static class QuoteEndpoints
             return quote is null ? Results.NotFound() : Results.Ok(QuoteResponse.From(quote));
         })
         .WithName("NoteQuote");
+
+        endpoints.MapDelete("/api/library/{entryId:guid}/quotes/{quoteId:guid}", async (
+            Guid entryId,
+            Guid quoteId,
+            HttpRequest request,
+            ReadingLibrary library,
+            CancellationToken cancellationToken) =>
+        {
+            if (Reader.From(request) is not { } readerId)
+            {
+                return LibraryProblems.NotSaidWhoIsAsking();
+            }
+
+            return await library.DeleteQuoteAsync(readerId, entryId, quoteId, cancellationToken)
+                ? Results.NoContent()
+                : Results.NotFound();
+        })
+        .WithName("DeleteQuote");
     }
 
     /// <summary>A blank note or chapter is none: there is nothing in it to show.</summary>
