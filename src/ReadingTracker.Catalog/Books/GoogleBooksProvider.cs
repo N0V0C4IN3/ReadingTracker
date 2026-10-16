@@ -126,7 +126,8 @@ public sealed class GoogleBooksProvider(HttpClient httpClient, IOptions<GoogleBo
         identifiers?.FirstOrDefault(id => id.Type == "ISBN_13")?.Identifier
         ?? identifiers?.FirstOrDefault(id => id.Type == "ISBN_10")?.Identifier;
 
-    // Google Books' response shape, narrowed to the fields Catalog actually uses.
+    // Google Books' response shape, narrowed to the fields Catalog uses: a search reads only the
+    // Book's own, and the single volume's lookup reads the details too (see ToSearchResult).
     private sealed record VolumesResponse(IReadOnlyList<VolumeItem>? Items);
 
     private sealed record VolumeItem(string? Id, VolumeInfo? VolumeInfo);

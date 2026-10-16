@@ -104,6 +104,10 @@
         a card rising in, the deck turning, a bar growing — because those should leave fast and
         settle slowly, the way a thing that has been set down does. Put the symmetric curve on an
         arrival and the first third of it is spent getting going, which reads as hesitation.
+
+        One exception: a height that travels a screen or more — the book's description folding
+        open and shut — takes --ease. --ease-out covers most of so long a way in its first frames,
+        and what should read as a glide reads as a jump.
     */
     --ease: cubic-bezier(0.4, 0, 0.2, 1);
     --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
@@ -816,6 +820,11 @@ header > a:first-child:hover {
 
 /* The description reads like a jacket flap: a serif, a measure, room between paragraphs. */
 .book__about {
+    /* The fold's timing, said once: the box, the clamp and the paragraphs' space move together. */
+    --fold-open: 560ms;
+    --fold-shut: 460ms;
+    --fold-curve: var(--ease);
+
     max-width: 62ch;
     margin: 1.1rem 0 0;
     font-family: Georgia, "Times New Roman", serif;
@@ -826,8 +835,8 @@ header > a:first-child:hover {
 .book__about p {
     margin: 0 0 0.7rem;
     transition:
-        margin 420ms var(--ease-out),
-        text-indent 420ms var(--ease-out);
+        margin var(--fold-open) var(--fold-curve),
+        text-indent var(--fold-open) var(--fold-curve);
 }
 
 .book__about p:last-child {
@@ -858,10 +867,8 @@ header > a:first-child:hover {
     overflow: hidden;
     interpolate-size: allow-keywords;
     height: auto;
-    /* --ease, not --ease-out: a long description travels a screen or more, and a curve that
-       front-loads the move covers most of it in the first frames, which reads as a jump. */
     transition:
-        height 560ms var(--ease),
+        height var(--fold-open) var(--fold-curve),
         -webkit-line-clamp 0s allow-discrete,
         line-clamp 0s allow-discrete;
 }
@@ -871,13 +878,16 @@ header > a:first-child:hover {
     line-clamp: 7;
     height: 7lh;
     transition:
-        height 460ms var(--ease),
-        -webkit-line-clamp 0s 460ms allow-discrete,
-        line-clamp 0s 460ms allow-discrete;
+        height var(--fold-shut) var(--fold-curve),
+        -webkit-line-clamp 0s var(--fold-shut) allow-discrete,
+        line-clamp 0s var(--fold-shut) allow-discrete;
 }
 
 .book__about--folded p {
     margin: 0;
+    transition:
+        margin var(--fold-shut) var(--fold-curve),
+        text-indent var(--fold-shut) var(--fold-curve);
 }
 
 .book__about--folded p + p {

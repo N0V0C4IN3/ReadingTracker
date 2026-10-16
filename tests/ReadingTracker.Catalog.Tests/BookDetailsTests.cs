@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using ReadingTracker.Catalog.Persistence;
 
 namespace ReadingTracker.Catalog.Tests;
 
@@ -151,6 +154,47 @@ public sealed class BookDetailsTests(CatalogApiFixture fixture)
         await client.GetFromJsonAsync<BookDetail>($"/api/books/{found.Id}");
 
         Assert.Equal(callsAfterSearch + 2, fixture.OpenLibrary.RequestCount);
+    }
+
+    [Fact]
+    public async Task Keeps_what_a_book_has_when_it_is_asked_about_again_and_the_volume_has_gone()
+    {
+        const string isbn = "9780345539793";
+        var volumeGone = false;
+        fixture.GoogleBooks.Respond = request =>
+            !request.RequestUri!.AbsolutePath.EndsWith("/volumes/golden-son", StringComparison.Ordinal)
+                ? StubHttpMessageHandler.Json(GoogleVolumes(isbn, "golden-son"))
+                : volumeGone
+                    ? new HttpResponseMessage(HttpStatusCode.NotFound)
+                    : StubHttpMessageHandler.Json(GoogleVolume(isbn, "golden-son"));
+        var client = fixture.CreateClient();
+        var found = Assert.Single((await client.GetFromJsonAsync<SearchResponse>($"/api/books/search?isbn={isbn}"))!.Results);
+        var had = await client.GetFromJsonAsync<BookDetail>($"/api/books/{found.Id}");
+
+        // As the migration that looks again at descriptions from searches leaves a Book.
+        await ForgetTheLookupAsync(found.Id);
+        volumeGone = true;
+        var callsBefore = fixture.GoogleBooks.RequestCount;
+
+        var book = await client.GetFromJsonAsync<BookDetail>($"/api/books/{found.Id}");
+        await client.GetFromJsonAsync<BookDetail>($"/api/books/{found.Id}");
+
+        Assert.NotNull(had!.Description);
+        Assert.Equal(had.Description, book!.Description);
+        Assert.Equal(had.Publisher, book.Publisher);
+        Assert.Equal(had.Categories, book.Categories);
+        Assert.False(book.DetailsUnavailable);
+        // Asked once, and the look recorded: not asked again at the next visit.
+        Assert.Equal(callsBefore + 1, fixture.GoogleBooks.RequestCount);
+    }
+
+    private async Task ForgetTheLookupAsync(Guid bookId)
+    {
+        using var scope = fixture.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();
+        await database.Books
+            .Where(book => book.Id == bookId)
+            .ExecuteUpdateAsync(set => set.SetProperty(book => book.DetailsLookedAt, (DateTimeOffset?)null));
     }
 
     [Fact]

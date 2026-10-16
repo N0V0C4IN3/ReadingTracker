@@ -26,11 +26,22 @@ builder.Services.PostConfigure<GoogleBooksOptions>(googleBooks =>
 builder.Services.Configure<OpenLibraryOptions>(
     builder.Configuration.GetSection(OpenLibraryOptions.SectionName));
 
+// Ten seconds, not the default hundred: a Book opened for the first time — or added to a shelf,
+// which looks it up — waits on its provider, and a provider that is slow is one that is out of
+// reach (BookProviderChain), so the Book is answered as it is and asked about next time.
+var providerTimeout = TimeSpan.FromSeconds(10);
+
 builder.Services.AddHttpClient<GoogleBooksProvider>((serviceProvider, client) =>
-    client.BaseAddress = serviceProvider.GetRequiredService<IOptions<GoogleBooksOptions>>().Value.BaseAddress);
+{
+    client.BaseAddress = serviceProvider.GetRequiredService<IOptions<GoogleBooksOptions>>().Value.BaseAddress;
+    client.Timeout = providerTimeout;
+});
 
 builder.Services.AddHttpClient<OpenLibraryProvider>((serviceProvider, client) =>
-    client.BaseAddress = serviceProvider.GetRequiredService<IOptions<OpenLibraryOptions>>().Value.BaseAddress);
+{
+    client.BaseAddress = serviceProvider.GetRequiredService<IOptions<OpenLibraryOptions>>().Value.BaseAddress;
+    client.Timeout = providerTimeout;
+});
 
 // Order matters: Google Books has the more consistent metadata, so it answers first and
 // Open Library covers its gaps and outages.

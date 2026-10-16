@@ -149,7 +149,17 @@ public sealed class BookCatalog(
             return new BookLookup(book, PageFor(book), DetailsUnavailable: true);
         }
 
-        book.Fill(answer.Details ?? BookDetails.None, clock.GetUtcNow());
+        // No volume any more is a look that found nothing, not a reason to forget what the Book
+        // already had — a Book asked about again keeps its description when its volume has gone.
+        if (answer.Details is { } details)
+        {
+            book.Fill(details, clock.GetUtcNow());
+        }
+        else
+        {
+            book.DetailsLookedAt = clock.GetUtcNow();
+        }
+
         await database.SaveChangesAsync(cancellationToken);
 
         return new BookLookup(book, PageFor(book), DetailsUnavailable: false);

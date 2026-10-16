@@ -11,8 +11,8 @@ namespace ReadingTracker.Catalog.Books;
 /// <param name="TotalPages">Page count, where the provider knows it.</param>
 /// <param name="Source">Which provider produced this result.</param>
 /// <param name="ExternalId">
-/// The provider's own identifier for the volume, by which the longer details are looked for the
-/// first time somebody asks: no provider's search carries them as the volume has them.
+/// The provider's own identifier for the volume. The longer details are fetched by it later, the
+/// first time somebody asks: no provider's search returns them intact.
 /// </param>
 public sealed record BookSearchResult(
     string Title,

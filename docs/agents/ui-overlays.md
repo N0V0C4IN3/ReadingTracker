@@ -57,7 +57,7 @@ All the values below are tokens that already exist on `:root`. Never hard-code a
 
   Without this, Blazor removes the surface in one frame. A panel in a card folds its height away (`fold`).
 - **Items in a list.** A history's unfolded days (`.day--more`) are in `GROWS` and `LEAVES` too, with keyframes of their own (`day-grow`, `day-fold`) that close the list's gap as well. A list that unfolds the same way does the same.
-- **Curves.** Use `var(--ease-out)` for anything arriving or coming to rest, and `var(--ease)` for state changes under the pointer. `var(--quick)` (160ms) is for hover and fill changes.
+- **Curves.** Use `var(--ease-out)` for anything arriving or coming to rest, and `var(--ease)` for state changes under the pointer. The one exception is a height that travels a screen or more, like the book description's fold (`--fold-curve` in `app.css`): it takes `var(--ease)`, since `--ease-out` covers most of so long a way in its first frames and reads as a jump. `var(--quick)` (160ms) is for hover and fill changes.
 - **Reduced motion.** `prefers-reduced-motion` is handled globally. Don't add motion that bypasses it.
 
 ## Type and colour
