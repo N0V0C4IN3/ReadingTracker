@@ -1375,13 +1375,15 @@ main {
 
 button,
 input,
-select {
+select,
+textarea {
     font: inherit;
     color: inherit;
 }
 
 input,
-select {
+select,
+textarea {
     padding: 0.45rem 0.7rem;
     border: 1px solid var(--line-strong);
     border-radius: var(--radius-sm);
@@ -1394,7 +1396,8 @@ select {
         color var(--quick) var(--ease);
 }
 
-input::placeholder {
+input::placeholder,
+textarea::placeholder {
     color: var(--ink-faint);
 }
 
@@ -1430,12 +1433,14 @@ select option {
 }
 
 input:hover:not(:disabled),
-select:hover:not(:disabled) {
+select:hover:not(:disabled),
+textarea:hover:not(:disabled) {
     border-color: var(--ink-faint);
 }
 
 input:focus-visible,
 select:focus-visible,
+textarea:focus-visible,
 button:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
@@ -2345,39 +2350,39 @@ button.danger:hover:not(:disabled) {
     color: var(--ink-soft);
 }
 
-.quote {
+.saying {
     margin: 0;
 }
 
-.quote__text {
+.saying__text {
     margin: 0;
     font-style: italic;
     quotes: "\201C" "\201D";
 }
 
 /* Typographer's quotes round the words, hung so the text still aligns with what is above. */
-.quote__text::before {
+.saying__text::before {
     content: open-quote;
     margin-left: -0.45em;
 }
 
-.quote__text::after {
+.saying__text::after {
     content: close-quote;
 }
 
-/* The quote itself is what is set large; the name is a footnote, upright and smaller. */
-.quote__author {
+/* The saying itself is what is set large; the name is a footnote, upright and smaller. */
+.saying__author {
     margin-top: 0.7rem;
     font-size: 0.7em;
     letter-spacing: 0.02em;
     color: var(--ink);
 }
 
-.quote__author cite {
+.saying__author cite {
     font-style: normal;
 }
 
-.quote__author::before {
+.saying__author::before {
     content: "— ";
 }
 
