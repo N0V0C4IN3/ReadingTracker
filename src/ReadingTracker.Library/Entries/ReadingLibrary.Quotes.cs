@@ -1,4 +1,6 @@
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace ReadingTracker.Library.Entries;
 
@@ -7,32 +9,48 @@ public sealed partial class ReadingLibrary
 {
     /// <summary>
     /// Keeps a passage a device sent, or finds the one it already sent under the same
-    /// <paramref name="highlightId"/> and takes its <paramref name="note"/> — the one way an edit
-    /// made on the device reaches the tracker, so no note on the device is no note here. The
-    /// passage, where it is and when it was first saved stand as first sent: the Book's words do
-    /// not change, and a retried request must not be able to move them.
+    /// <paramref name="highlightId"/> and replaces its note with <paramref name="note"/>: the one
+    /// way an edit made on the device reaches the tracker, so no note on the device is no note
+    /// here. The passage, where it is and when it was first saved stand as first sent: the Book's
+    /// words do not change, and a retried request must not be able to move them.
     /// </summary>
-    public async Task<(Quote? Quote, QuoteSaveOutcome Outcome, QuoteProblem? Problem)> SaveQuoteAsync(
+    public async Task<(SavedQuote? Saved, QuoteProblem? Problem)> SaveQuoteAsync(
         string readerId,
         Guid entryId,
         string highlightId,
-        string passage,
+        string? passage,
         string? note,
-        decimal percent,
+        decimal? percent,
         string? chapter,
         DateTimeOffset? savedAt,
         CancellationToken cancellationToken)
     {
+        if (!HighlightIdentity().IsMatch(highlightId))
+        {
+            return (null, QuoteProblem.NotAHighlightId);
+        }
+
+        if (string.IsNullOrWhiteSpace(passage))
+        {
+            return (null, QuoteProblem.NoPassage);
+        }
+
+        // Missing is refused too, rather than read as the start of the book.
+        if (percent is not { } position || position is < 0m or > 100m)
+        {
+            return (null, QuoteProblem.NotAPercentage);
+        }
+
         var entry = await FindAsync(readerId, entryId, cancellationToken);
 
         if (entry is null)
         {
-            return (null, default, QuoteProblem.NoSuchEntry);
+            return (null, QuoteProblem.NoSuchEntry);
         }
 
         if (await FindQuoteByHighlightAsync(entry.Id, highlightId, cancellationToken) is { } sent)
         {
-            return (await TakeNoteAsync(sent, note, cancellationToken), QuoteSaveOutcome.Updated, null);
+            return (await SentAgainAsync(sent, note, cancellationToken), null);
         }
 
         var quote = new Quote
@@ -42,7 +60,7 @@ public sealed partial class ReadingLibrary
             HighlightId = highlightId,
             Passage = passage,
             Note = note,
-            Percent = percent,
+            Percent = position,
             Chapter = chapter,
             // UTC for the same reason as a session's time: see LogSessionAsync.
             SavedAt = (savedAt ?? clock.GetUtcNow()).ToUniversalTime(),
@@ -54,7 +72,8 @@ public sealed partial class ReadingLibrary
         {
             await database.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             // The same highlight arrived twice at once — a device retrying a request that had not
             // actually failed — and the other got there first; the unique index said so. This one
@@ -64,11 +83,25 @@ public sealed partial class ReadingLibrary
             var first = await FindQuoteByHighlightAsync(entry.Id, highlightId, cancellationToken)
                 ?? throw new InvalidOperationException("A Quote refused as a duplicate could not be found.");
 
-            return (await TakeNoteAsync(first, note, cancellationToken), QuoteSaveOutcome.Updated, null);
+            return (await SentAgainAsync(first, note, cancellationToken), null);
         }
 
-        return (quote, QuoteSaveOutcome.Created, null);
+        return (new SavedQuote(quote, QuoteSaveOutcome.Created), null);
     }
+
+    /// <summary>
+    /// An entry's Quotes in book order: by where each is in the Book, and two at the same place by
+    /// when each was saved — and two saved at the same moment by which arrived first, so the
+    /// order never shuffles between one look and the next. The caller must have found the entry
+    /// for this reader.
+    /// </summary>
+    public Task<List<Quote>> ListQuotesAsync(Guid entryId, CancellationToken cancellationToken) =>
+        database.Quotes
+            .Where(quote => quote.LibraryEntryId == entryId)
+            .OrderBy(quote => quote.Percent)
+            .ThenBy(quote => quote.SavedAt)
+            .ThenBy(quote => quote.Id)
+            .ToListAsync(cancellationToken);
 
     /// <summary>
     /// How many Quotes each entry has, for the Book page to decide whether to offer them and what
@@ -89,14 +122,14 @@ public sealed partial class ReadingLibrary
     /// Changes the Reader's note on a Quote, or takes it away with null. The note is the only
     /// thing about a Quote that can change: the passage is the Book's words.
     /// </summary>
-    public async Task<Quote?> NoteQuoteAsync(
+    public async Task<Quote?> ChangeQuoteNoteAsync(
         string readerId,
         Guid entryId,
         Guid quoteId,
         string? note,
         CancellationToken cancellationToken) =>
         await FindQuoteAsync(readerId, entryId, quoteId, cancellationToken) is { } quote
-            ? await TakeNoteAsync(quote, note, cancellationToken)
+            ? await ReplaceNoteAsync(quote, note, cancellationToken)
             : null;
 
     /// <summary>
@@ -123,6 +156,18 @@ public sealed partial class ReadingLibrary
     }
 
     /// <summary>
+    /// What a highlight's identity may be made of: the characters that mean the same thing
+    /// escaped or not, so it reaches Library exactly as the device made it, through the Gateway
+    /// and anything else in front of it. A slash is the one that matters — a KOReader position is
+    /// full of them, and an escaped one is left escaped by one hop and decoded by another. The
+    /// device hashes or encodes what it builds the identity from. At most 200 characters, which is
+    /// far more than an identity needs and well inside what the index keeping a highlight one
+    /// Quote can hold.
+    /// </summary>
+    [GeneratedRegex("^[A-Za-z0-9._~-]{1,200}$")]
+    private static partial Regex HighlightIdentity();
+
+    /// <summary>
     /// Finds one Quote, but only through its own entry and only for the reader who owns it.
     /// Another reader's Quote is not found rather than forbidden: it is not theirs to know about.
     /// </summary>
@@ -142,22 +187,15 @@ public sealed partial class ReadingLibrary
             quote => quote.LibraryEntryId == entryId && quote.HighlightId == highlightId,
             cancellationToken);
 
-    private async Task<Quote> TakeNoteAsync(Quote quote, string? note, CancellationToken cancellationToken)
+    /// <summary>A highlight the device had already sent: the same Quote, with the note it has now.</summary>
+    private async Task<SavedQuote> SentAgainAsync(Quote quote, string? note, CancellationToken cancellationToken) =>
+        new(await ReplaceNoteAsync(quote, note, cancellationToken), QuoteSaveOutcome.Updated);
+
+    private async Task<Quote> ReplaceNoteAsync(Quote quote, string? note, CancellationToken cancellationToken)
     {
         quote.Note = note;
         await database.SaveChangesAsync(cancellationToken);
 
         return quote;
     }
-
-    /// <summary>
-    /// An entry's Quotes in book order: by where each is in the Book, and two at the same place by
-    /// when each was saved. The caller must have found the entry for this reader.
-    /// </summary>
-    public Task<List<Quote>> ListQuotesAsync(Guid entryId, CancellationToken cancellationToken) =>
-        database.Quotes
-            .Where(quote => quote.LibraryEntryId == entryId)
-            .OrderBy(quote => quote.Percent)
-            .ThenBy(quote => quote.SavedAt)
-            .ToListAsync(cancellationToken);
 }

@@ -182,6 +182,34 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
         await AssertRefusedAsync(response, "highlightId");
     }
 
+    [Theory]
+    [InlineData("/body/DocFragment[12]/p[3]")]
+    [InlineData("2026-10-12 21:40:00")]
+    public async Task Refuses_a_highlight_identity_that_does_not_travel_safely_in_an_address(string highlightId)
+    {
+        var client = fixture.ClientFor("unsafe-identity-reader");
+        var entryId = await fixture.AddBookAsync(client);
+
+        // Escaped, a slash would come back still escaped and another proxy might decode it; the
+        // device is told plainly to send something that stays the same all the way.
+        var response = await SaveAsync(client, entryId, highlightId);
+
+        await AssertRefusedAsync(response, "highlightId");
+        Assert.Empty(await QuotesAsync(client, entryId));
+    }
+
+    [Fact]
+    public async Task Takes_any_identity_made_of_letters_digits_and_dot_dash_underscore_tilde()
+    {
+        var client = fixture.ClientFor("safe-identity-reader");
+        var entryId = await fixture.AddBookAsync(client);
+        var highlightId = "AZaz09._~-" + new string('x', 190);
+
+        var saved = await SaveAndReadAsync(client, entryId, highlightId);
+
+        Assert.Equal(highlightId, saved.Quote.HighlightId);
+    }
+
     [Fact]
     public async Task Saving_to_a_book_not_on_my_shelf_is_not_found()
     {

@@ -48,12 +48,21 @@ public enum QuoteSaveOutcome
     Updated,
 }
 
-/// <summary>Why a Quote could not be saved or changed as asked.</summary>
+/// <summary>A Quote as a device's save left it, and whether the save made it or found it already there.</summary>
+public sealed record SavedQuote(Quote Quote, QuoteSaveOutcome Outcome);
+
+/// <summary>Why a device's save could not be kept as a Quote.</summary>
 public enum QuoteProblem
 {
     /// <summary>The reader has no such entry — including because it is someone else's.</summary>
     NoSuchEntry,
 
-    /// <summary>The entry has no such Quote — including because it was already deleted.</summary>
-    NoSuchQuote,
+    /// <summary>The highlight's identity is not one that travels safely in an address, or is far too long to be one.</summary>
+    NotAHighlightId,
+
+    /// <summary>No words were sent. A Quote is a passage of the Book.</summary>
+    NoPassage,
+
+    /// <summary>A position in a book is somewhere between its start and its end.</summary>
+    NotAPercentage,
 }
