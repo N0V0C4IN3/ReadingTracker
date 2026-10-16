@@ -191,6 +191,93 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
     }
 
     [Fact]
+    public async Task I_can_write_a_note_on_a_quote()
+    {
+        var client = fixture.ClientFor("noting-reader");
+        var entryId = await fixture.AddBookAsync(client);
+        var saved = (await SaveAndReadAsync(client, entryId, "hl-bare", passage: "Unremarked.", percent: 20m, chapter: "Two", savedAt: SavedAt)).Quote;
+
+        var response = await NoteAsync(client, entryId, saved.Id, "Remarked on, now.");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var noted = (await response.Content.ReadFromJsonAsync<Quote>())!;
+        Assert.Equal(saved with { Note = "Remarked on, now." }, noted);
+        Assert.Equal(noted, Assert.Single(await QuotesAsync(client, entryId)));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  \n ")]
+    public async Task A_blank_note_takes_my_note_away(string? note)
+    {
+        var client = fixture.ClientFor($"unnoting-reader-{note?.Length}");
+        var entryId = await fixture.AddBookAsync(client);
+        var saved = (await SaveAndReadAsync(client, entryId, "hl-noted", note: "A second thought.")).Quote;
+
+        var noted = (await (await NoteAsync(client, entryId, saved.Id, note)).Content.ReadFromJsonAsync<Quote>())!;
+
+        Assert.Null(noted.Note);
+        Assert.Null(Assert.Single(await QuotesAsync(client, entryId)).Note);
+    }
+
+    [Fact]
+    public async Task The_passage_is_the_books_words_and_nothing_changes_it()
+    {
+        var client = fixture.ClientFor("rewording-reader");
+        var entryId = await fixture.AddBookAsync(client);
+        var saved = (await SaveAndReadAsync(client, entryId, "hl-words", passage: "As the author wrote it.", percent: 40m)).Quote;
+
+        // Neither editing the note nor saving the highlight again can put other words in.
+        await client.PatchAsJsonAsync(
+            $"/api/library/{entryId}/quotes/{saved.Id}",
+            new { note = "Mine.", passage = "As I would have put it.", percent = 90 });
+        await SaveAsync(client, entryId, "hl-words", passage: "Something else entirely.", note: "Mine.", percent: 90m);
+
+        var quote = Assert.Single(await QuotesAsync(client, entryId));
+        Assert.Equal("As the author wrote it.", quote.Passage);
+        Assert.Equal(40m, quote.Percent);
+    }
+
+    [Fact]
+    public async Task Noting_a_quote_that_is_not_there_is_not_found()
+    {
+        var client = fixture.ClientFor("noting-nothing-reader");
+        var entryId = await fixture.AddBookAsync(client);
+
+        var response = await NoteAsync(client, entryId, Guid.NewGuid(), "To nobody.");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Noting_a_quote_through_another_of_my_books_is_not_found()
+    {
+        var client = fixture.ClientFor("crossed-books-reader");
+        var oneBook = await fixture.AddBookAsync(client);
+        var anotherBook = await fixture.AddBookAsync(client);
+        var saved = (await SaveAndReadAsync(client, oneBook, "hl-here")).Quote;
+
+        var response = await NoteAsync(client, anotherBook, saved.Id, "Wrong book.");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Null(Assert.Single(await QuotesAsync(client, oneBook)).Note);
+    }
+
+    [Fact]
+    public async Task Another_reader_cannot_note_my_quote()
+    {
+        var owner = fixture.ClientFor("noted-quote-owner");
+        var entryId = await fixture.AddBookAsync(owner);
+        var saved = (await SaveAndReadAsync(owner, entryId, "hl-private")).Quote;
+
+        var response = await NoteAsync(fixture.ClientFor("noted-quote-stranger"), entryId, saved.Id, "Not yours.");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Null(Assert.Single(await QuotesAsync(owner, entryId)).Note);
+    }
+
+    [Fact]
     public async Task Another_reader_can_neither_see_my_quotes_nor_add_to_them()
     {
         var owner = fixture.ClientFor("quote-owner");
@@ -226,6 +313,9 @@ public sealed class QuoteTests(LibraryApiFixture fixture)
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/library/{entryId}/quotes")).StatusCode);
         Assert.Empty(await QuotesAsync(client, again));
     }
+
+    private static Task<HttpResponseMessage> NoteAsync(HttpClient client, Guid entryId, Guid quoteId, string? note) =>
+        client.PatchAsJsonAsync($"/api/library/{entryId}/quotes/{quoteId}", new { note });
 
     private static async Task<Guid> AddAsync(HttpClient client, Guid bookId) =>
         (await (await client.PostAsJsonAsync("/api/library", new { bookId })).Content.ReadFromJsonAsync<Added>())!.Id;

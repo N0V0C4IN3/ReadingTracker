@@ -101,6 +101,27 @@ public static class QuoteEndpoints
             return Results.Ok(quotes.Select(QuoteResponse.From));
         })
         .WithName("ListQuotes");
+
+        // The Reader's note, and only that: a PATCH because it changes one part of the Quote and
+        // leaves the rest, which no request can reach.
+        endpoints.MapPatch("/api/library/{entryId:guid}/quotes/{quoteId:guid}", async (
+            Guid entryId,
+            Guid quoteId,
+            NoteQuoteRequest body,
+            HttpRequest request,
+            ReadingLibrary library,
+            CancellationToken cancellationToken) =>
+        {
+            if (Reader.From(request) is not { } readerId)
+            {
+                return LibraryProblems.NotSaidWhoIsAsking();
+            }
+
+            var quote = await library.NoteQuoteAsync(readerId, entryId, quoteId, NoneIfBlank(body.Note), cancellationToken);
+
+            return quote is null ? Results.NotFound() : Results.Ok(QuoteResponse.From(quote));
+        })
+        .WithName("NoteQuote");
     }
 
     /// <summary>A blank note or chapter is none: there is nothing in it to show.</summary>
@@ -117,6 +138,9 @@ public static class QuoteEndpoints
         decimal? Percent,
         string? Chapter,
         DateTimeOffset? SavedAt);
+
+    /// <summary>The Reader's new note. Null or blank takes the note away.</summary>
+    private sealed record NoteQuoteRequest(string? Note);
 
     /// <summary>The Quote as it now stands, and whether this save made it or found it already there.</summary>
     private sealed record SavedQuoteResponse(string Outcome, QuoteResponse Quote);

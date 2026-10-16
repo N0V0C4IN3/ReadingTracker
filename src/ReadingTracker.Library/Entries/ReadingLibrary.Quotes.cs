@@ -70,6 +70,35 @@ public sealed partial class ReadingLibrary
         return (quote, QuoteSaveOutcome.Created, null);
     }
 
+    /// <summary>
+    /// Changes the Reader's note on a Quote, or takes it away with null. The note is the only
+    /// thing about a Quote that can change: the passage is the Book's words.
+    /// </summary>
+    public async Task<Quote?> NoteQuoteAsync(
+        string readerId,
+        Guid entryId,
+        Guid quoteId,
+        string? note,
+        CancellationToken cancellationToken) =>
+        await FindQuoteAsync(readerId, entryId, quoteId, cancellationToken) is { } quote
+            ? await TakeNoteAsync(quote, note, cancellationToken)
+            : null;
+
+    /// <summary>
+    /// Finds one Quote, but only through its own entry and only for the reader who owns it.
+    /// Another reader's Quote is not found rather than forbidden: it is not theirs to know about.
+    /// </summary>
+    private Task<Quote?> FindQuoteAsync(
+        string readerId,
+        Guid entryId,
+        Guid quoteId,
+        CancellationToken cancellationToken) =>
+        database.Quotes
+            .Where(quote => quote.Id == quoteId && quote.LibraryEntryId == entryId)
+            .Where(quote => database.LibraryEntries
+                .Any(entry => entry.Id == entryId && entry.ReaderId == readerId))
+            .FirstOrDefaultAsync(cancellationToken);
+
     private Task<Quote?> FindQuoteByHighlightAsync(Guid entryId, string highlightId, CancellationToken cancellationToken) =>
         database.Quotes.FirstOrDefaultAsync(
             quote => quote.LibraryEntryId == entryId && quote.HighlightId == highlightId,
