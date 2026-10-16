@@ -12,6 +12,11 @@
 // sheet can be dragged; a grip that is not shown means the search is not a sheet here, and
 // nothing is attached.
 
+// A sheet whose head is more than the strip — a title under it, as the Quotes sheet has — marks
+// that head data-sheet-handle, and it drags the sheet as the grip does: the title is where a thumb
+// lands to pull the sheet up, and a head that only scrolled nothing would let the swipe go by.
+// A button in the head (Close) stays a button.
+
 const SNAP = { default: 0.55, full: 0.92 };
 const controllers = new WeakMap();
 
@@ -67,6 +72,9 @@ export function attach(el, startState = 'default') {
     };
 
     const down = e => {
+        if (e.currentTarget !== grip && e.target.closest('button, a, input, textarea')) {
+            return;
+        }
         dragging = true;
         moved = false;
         startY = e.clientY;
@@ -75,7 +83,7 @@ export function attach(el, startState = 'default') {
         // The dock arrives with a short slide; a drag begun inside it would be fighting that
         // slide for the same element. The finger wins.
         el.style.animation = 'none';
-        grip.setPointerCapture(e.pointerId);
+        e.currentTarget.setPointerCapture(e.pointerId);
     };
 
     const move = e => {
@@ -108,10 +116,13 @@ export function attach(el, startState = 'default') {
         setState(state);
     };
 
-    grip.addEventListener('pointerdown', down);
-    grip.addEventListener('pointermove', move);
-    grip.addEventListener('pointerup', up);
-    grip.addEventListener('pointercancel', up);
+    const handles = [grip, ...el.querySelectorAll('[data-sheet-handle]')];
+    for (const handle of handles) {
+        handle.addEventListener('pointerdown', down);
+        handle.addEventListener('pointermove', move);
+        handle.addEventListener('pointerup', up);
+        handle.addEventListener('pointercancel', up);
+    }
 
     // The scroll area and the drag must not fight: a drag that starts on the results should scroll
     // them, not resize the sheet, so the handle is the only drag surface and this is left alone.
@@ -144,7 +155,7 @@ export function attach(el, startState = 'default') {
     vv?.addEventListener('resize', follow);
     vv?.addEventListener('scroll', follow);
 
-    controllers.set(el, { grip, down, move, up, follow, cancel: () => cancelAnimationFrame(settling) });
+    controllers.set(el, { handles, down, move, up, follow, cancel: () => cancelAnimationFrame(settling) });
     // The keyboard may already be up by the time this runs — the + raises it inside the tap,
     // and the sheet is attached after the render that follows — so the lift is taken now rather
     // than waited for.
@@ -223,10 +234,12 @@ export function detach(el, keepSize = false) {
     if (!c) {
         return;
     }
-    c.grip.removeEventListener('pointerdown', c.down);
-    c.grip.removeEventListener('pointermove', c.move);
-    c.grip.removeEventListener('pointerup', c.up);
-    c.grip.removeEventListener('pointercancel', c.up);
+    for (const handle of c.handles) {
+        handle.removeEventListener('pointerdown', c.down);
+        handle.removeEventListener('pointermove', c.move);
+        handle.removeEventListener('pointerup', c.up);
+        handle.removeEventListener('pointercancel', c.up);
+    }
     window.removeEventListener('resize', c.follow);
     window.visualViewport?.removeEventListener('resize', c.follow);
     window.visualViewport?.removeEventListener('scroll', c.follow);

@@ -326,9 +326,13 @@
         --sheet-peek: 150px;
     }
 
-    /* Close stands at the right of the grip's strip, over the title's row: room is kept for it. */
+    /* Close stands at the right of the grip's strip, over the title's row: room is kept for it.
+       The title drags the sheet with the grip (js/sheet.js), so it takes the grip's touch rules. */
     .quotes__title {
         padding: 0.35rem 4rem 0.6rem 1rem;
+        cursor: grab;
+        touch-action: none;
+        user-select: none;
     }
 
     .preview--quotes .preview__body {

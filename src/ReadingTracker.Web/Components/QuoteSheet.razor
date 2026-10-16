@@ -22,7 +22,8 @@
 <aside class="preview preview--quotes" role="dialog" aria-modal="true" aria-labelledby="@_titleId" @onkeydown="CloseOnEscape" @ref="_sheetEl">
     <button type="button" class="search__grip" aria-label="Resize the quotes"></button>
     <div class="preview__bar">
-        <div class="quotes__title">
+        @* On a phone the title is part of the handle (js/sheet.js): it is what a thumb takes hold of. *@
+        <div class="quotes__title" data-sheet-handle>
             <h2 class="group" id="@_titleId">Quotes <span>@(_quotes?.Count ?? Entry.QuoteCount)</span></h2>
             <span class="quotes__caption">Where they fall in @(Entry.Book?.Title ?? "the book")</span>
         </div>
