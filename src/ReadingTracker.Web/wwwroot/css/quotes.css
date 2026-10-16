@@ -12,16 +12,17 @@
     be done with it.
 */
 
-/* The way in, beside Log reading on the Book page: a quiet button with the count in a quieter voice. */
-.reading__quotes span {
-    margin-left: 0.15rem;
-    font-weight: 500;
-    color: var(--ink-faint);
+/* On the Book page: the first two, as the sheet's timeline draws them, and the way into the rest. */
+.quotes-preview {
+    margin-top: 1.1rem;
 }
 
-.reading__quotes[aria-expanded="true"] {
-    background: var(--fill);
-    color: var(--ink);
+.quotes-preview .quotes__list {
+    padding-top: 0;
+}
+
+.quotes-preview__all {
+    margin-top: 0.6rem;
 }
 
 .preview--quotes .preview__body {

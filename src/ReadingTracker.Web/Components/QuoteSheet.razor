@@ -141,6 +141,10 @@
     [Parameter, EditorRequired]
     public required LibraryEntry Entry { get; set; }
 
+    /// <summary>The Quote to open on, when the reader tapped one on the page; none for the whole list.</summary>
+    [Parameter]
+    public Guid? Opening { get; set; }
+
     [Parameter]
     public EventCallback OnClose { get; set; }
 
@@ -177,6 +181,7 @@
         if (listed.Ok)
         {
             _quotes = [.. listed.Value!];
+            _open = _quotes.Any(q => q.Id == Opening) ? Opening : null;
         }
         else
         {

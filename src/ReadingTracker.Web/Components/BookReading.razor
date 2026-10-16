@@ -42,28 +42,13 @@
         </p>
     }
 
-    @* The Quotes sit beside the log, as the other thing done with a book in hand; a book with
-       none has no button, since there is nothing here to open (ADR-0017: they come from a device). *@
-    @if (Logging || QuoteCount > 0)
+    @if (Logging)
     {
         <div class="reading__actions">
-            @if (Logging)
-            {
-                <LogButton Open="_panel == Panel.Log"
-                           Starting="NotBegun"
-                           Disabled="Working"
-                           OnClick="() => Toggle(Panel.Log)" />
-            }
-            @if (QuoteCount > 0)
-            {
-                <button type="button"
-                        class="link-button reading__quotes"
-                        aria-haspopup="dialog"
-                        aria-expanded="@(_quotesOpen ? "true" : "false")"
-                        @onclick="OpenQuotes">
-                    Quotes <span>· @QuoteCount</span>
-                </button>
-            }
+            <LogButton Open="_panel == Panel.Log"
+                       Starting="NotBegun"
+                       Disabled="Working"
+                       OnClick="() => Toggle(Panel.Log)" />
         </div>
     }
 
@@ -99,6 +84,41 @@
     }
 
     <PagesChart Sessions="Sessions" />
+
+    @*
+        The Quotes, a taste of them: the first two the book holds, as the sheet's timeline draws
+        them, and the way into the rest. Tapping one opens the sheet on it. A book with none has
+        no section, since there is nothing here to open (ADR-0017: they come from a device).
+    *@
+    @if (QuoteCount > 0)
+    {
+        <section class="quotes-preview">
+            <h2 class="group history__eyebrow">Quotes <span>· @QuoteCount</span></h2>
+            @if (_preview is { Count: > 0 } preview)
+            {
+                <ol class="quotes__list">
+                    @foreach (var quote in preview.Take(Previewed))
+                    {
+                        <li class="quotes__row" @key="quote.Id">
+                            <span class="quotes__at">@Figures.Trim(quote.Percent)%</span>
+                            <div class="quotes__body">
+                                <button type="button" class="quotes__pick" aria-haspopup="dialog" @onclick="() => OpenQuotes(quote.Id)">
+                                    <p class="quote__text">@quote.Passage.Trim()</p>
+                                </button>
+                            </div>
+                        </li>
+                    }
+                </ol>
+            }
+            <button type="button"
+                    class="link-button book__more quotes-preview__all"
+                    aria-haspopup="dialog"
+                    aria-expanded="@(_quotesOpen ? "true" : "false")"
+                    @onclick="() => OpenQuotes(null)">
+                @AllQuotes
+            </button>
+        </section>
+    }
 
     <section class="history">
         <h2 class="group history__eyebrow">
@@ -151,6 +171,7 @@
 @if (_quotesOpen)
 {
     <QuoteSheet Entry="Entry"
+                Opening="_opening"
                 OnClose="CloseQuotes"
                 OnCountChanged="KeepQuoteCount"
                 OnSignedOut="OnSignedOut" />
@@ -181,6 +202,23 @@
 
     private int QuoteCount => _quotesLeft ?? Entry.QuoteCount;
 
+    /// <summary>How many Quotes the page shows before the sheet: enough to say what is there.</summary>
+    private const int Previewed = 2;
+
+    /// <summary>The book's Quotes, for the page's taste of them; null until they come, or if they could not.</summary>
+    private IReadOnlyList<QuoteView>? _preview;
+
+    /// <summary>The Quote the sheet opens on: the one tapped on the page, or none for the whole list.</summary>
+    private Guid? _opening;
+
+    /// <summary>The way into the sheet, said for what is in it: the rest, or the ones already shown.</summary>
+    private string AllQuotes => QuoteCount switch
+    {
+        1 => "Open the quote",
+        Previewed => "Open both quotes",
+        var count => $"All {count} quotes",
+    };
+
     /// <summary>Whether a correction form is open in the history, which then shows the reasons itself.</summary>
     private bool _correcting;
 
@@ -192,7 +230,23 @@
     /// <summary>The classes that colour a book set aside or read to the end — see the card.</summary>
     private string? Standing => Parked ? "entry--parked" : Finished ? "entry--finished" : null;
 
-    protected override Task OnInitializedAsync() => LoadSessionsAsync();
+    protected override Task OnInitializedAsync() => Task.WhenAll(LoadSessionsAsync(), LoadQuotesAsync());
+
+    /// <summary>
+    /// The page's taste of the Quotes, read when there are any to show. What could not be read
+    /// leaves the heading and the way in, and the sheet says what went wrong when it is opened.
+    /// </summary>
+    private async Task LoadQuotesAsync()
+    {
+        if (QuoteCount == 0)
+        {
+            _preview = null;
+            return;
+        }
+
+        var listed = await Library.GetQuotesAsync(Entry.Id, CancellationToken.None);
+        _preview = listed.Ok ? listed.Value : null;
+    }
 
     /// <summary>A fresh entry from Library carries its own count, which is the one to believe.</summary>
     protected override void OnParametersSet()
@@ -204,9 +258,18 @@
         }
     }
 
-    private void OpenQuotes() => _quotesOpen = true;
+    private void OpenQuotes(Guid? quote)
+    {
+        _opening = quote;
+        _quotesOpen = true;
+    }
 
-    private void CloseQuotes() => _quotesOpen = false;
+    /// <summary>Closed, the sheet may have changed what the page shows of it: a note, a Quote gone.</summary>
+    private async Task CloseQuotes()
+    {
+        _quotesOpen = false;
+        await LoadQuotesAsync();
+    }
 
     private void KeepQuoteCount(int left) => _quotesLeft = left;
 
