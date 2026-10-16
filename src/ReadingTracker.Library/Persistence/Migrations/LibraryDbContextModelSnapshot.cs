@@ -18,7 +18,7 @@ namespace ReadingTracker.Library.Persistence.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("library")
-                .HasAnnotation("ProductVersion", "10.0.11")
+                .HasAnnotation("ProductVersion", "10.0.12")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -67,6 +67,43 @@ namespace ReadingTracker.Library.Persistence.Migrations
                     b.HasIndex("ReaderId", "FinishedOn");
 
                     b.ToTable("LibraryEntries", "library");
+                });
+
+            modelBuilder.Entity("ReadingTracker.Library.Entries.Quote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Chapter")
+                        .HasColumnType("text");
+
+                    b.Property<string>("HighlightId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("LibraryEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Passage")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("Percent")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTimeOffset>("SavedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LibraryEntryId", "HighlightId")
+                        .IsUnique();
+
+                    b.ToTable("Quotes", "library");
                 });
 
             modelBuilder.Entity("ReadingTracker.Library.Entries.ReadingGoal", b =>
@@ -119,6 +156,15 @@ namespace ReadingTracker.Library.Persistence.Migrations
                     b.HasIndex("LibraryEntryId", "OccurredAt");
 
                     b.ToTable("ReadingSessions", "library");
+                });
+
+            modelBuilder.Entity("ReadingTracker.Library.Entries.Quote", b =>
+                {
+                    b.HasOne("ReadingTracker.Library.Entries.LibraryEntry", null)
+                        .WithMany()
+                        .HasForeignKey("LibraryEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("ReadingTracker.Library.Entries.ReadingSession", b =>

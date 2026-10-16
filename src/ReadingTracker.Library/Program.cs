@@ -53,6 +53,7 @@ if (app.Environment.IsDevelopment())
 app.MapHealthChecks("/health");
 app.MapLibraryEndpoints();
 app.MapReadingHistoryEndpoints();
+app.MapQuoteEndpoints();
 
 app.Run();
 

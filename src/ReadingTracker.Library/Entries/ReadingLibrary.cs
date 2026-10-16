@@ -17,7 +17,7 @@ public enum AddToLibraryFailure
 /// One reader's collection of books. Holds the reader's relationship to a Book — status and
 /// tracking method — and never a copy of the Book itself, which stays Catalog's to own.
 /// </summary>
-public sealed class ReadingLibrary(LibraryDbContext database, ILibraryEvents events, TimeProvider clock)
+public sealed partial class ReadingLibrary(LibraryDbContext database, ILibraryEvents events, TimeProvider clock)
 {
     public Task<List<LibraryEntry>> ListAsync(
         string readerId,
