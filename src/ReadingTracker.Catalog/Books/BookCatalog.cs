@@ -149,7 +149,17 @@ public sealed class BookCatalog(
             return new BookLookup(book, PageFor(book), DetailsUnavailable: true);
         }
 
-        book.Fill(answer.Details ?? BookDetails.None, clock.GetUtcNow());
+        // No volume any more is a look that found nothing, not a reason to forget what the Book
+        // already had — a Book asked about again keeps its description when its volume has gone.
+        if (answer.Details is { } details)
+        {
+            book.Fill(details, clock.GetUtcNow());
+        }
+        else
+        {
+            book.DetailsLookedAt = clock.GetUtcNow();
+        }
+
         await database.SaveChangesAsync(cancellationToken);
 
         return new BookLookup(book, PageFor(book), DetailsUnavailable: false);
@@ -262,11 +272,8 @@ public sealed class BookCatalog(
               && book.Source == result.Source
               && book.ExternalId == result.ExternalId;
 
-    private Book ToBook(BookSearchResult result)
-    {
-        var now = clock.GetUtcNow();
-
-        var book = new Book
+    private Book ToBook(BookSearchResult result) =>
+        new()
         {
             Id = Guid.CreateVersion7(),
             Title = result.Title,
@@ -276,17 +283,8 @@ public sealed class BookCatalog(
             TotalPages = result.TotalPages,
             Source = result.Source,
             ExternalId = result.ExternalId,
-            CreatedAt = now,
+            CreatedAt = clock.GetUtcNow(),
         };
-
-        // A search that carried the details has answered the question a later lookup would ask.
-        if (result.Details is { } details)
-        {
-            book.Fill(details, now);
-        }
-
-        return book;
-    }
 }
 
 /// <summary>
