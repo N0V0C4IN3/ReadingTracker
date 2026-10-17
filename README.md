@@ -6,58 +6,58 @@ Built as a portfolio project, with the weight on the back end: several small ser
 
 ## Status
 
-**Catalog**, **Library**, the **Gateway** and **Web** are built, and run for real on a Raspberry Pi behind Tailscale Funnel (ADR-0012). A reader signs in, finds a book, puts it on their shelf, records what they read, and watches their progress move — end to end, through the real services. A [KOReader plugin](readingtracker.koplugin/) puts an e-reader on the same shelf: it reports how far through the book the device is, saves highlighted passages as Quotes, and can update itself over wifi.
+**Catalog**, **Library**, the **Gateway** and **Web** are built, and run for real on a Raspberry Pi behind Tailscale Funnel (ADR-0012, ADR-0016). A reader signs in, finds a book, puts it on their shelf, records what they read, and watches their progress move — end to end, through the real services. A [KOReader plugin](readingtracker.koplugin/) puts an e-reader on the same shelf: it reports how far through the book the device is, sends a passage the reader highlights and picks as a Quote, and can update itself over wifi.
 
 | Service | What it does | Status |
 | --- | --- | --- |
 | Catalog | Finds books via Google Books and Open Library, caches them, gives them stable ids | Built |
 | Library | A reader's own books: reading status, progress, reading history, the year's goal, and Quotes | Built |
-| Gateway | Single entry point; verifies the caller's token and names the reader | Built |
+| Gateway | Single entry point; verifies the caller's Google sign-in or DeviceToken and names the reader | Built |
 | Web | Blazor WebAssembly front end: the shelf, and everything a reader does to it | Built |
 | Identity | Maps a Google account to an internal reader | Designed |
 
-On the shelf, each book carries its reading status, a progress bar derived from what the reader has actually logged, and — behind one click each — reading history, the reader's own page count and tracking method, and removal. Each book also has a page of its own: its description, its pace, the last three weeks of reading, and the passages the reader kept from it. Progress is never stored: Library works it out from the latest ReadingSession every time it is asked, so the number and the history behind it cannot disagree.
+On the shelf, each book carries its reading status, a progress bar derived from what the reader has actually logged, and — behind one click each — reading history, the reader's own page count and tracking method, and removal. Each book also has a page of its own, with its Quotes. Progress is never stored: Library adds up the book's ReadingSessions every time it is asked (ADR-0010), so the number and the history behind it cannot disagree.
 
-> **Everything through the Gateway now needs a verified token.** It verifies the token against Google's published keys, discards whatever `X-Reader-Id` the caller sent, and sets that header itself from the token's subject. `/health` is the only route that answers without one. Locally you sign in without a Google account at all — see [Signing in locally](#signing-in-locally-without-a-google-account).
+> **Everything through the Gateway now needs a verified token.** It verifies a Google token against Google's published keys, or a DeviceToken against the ones it minted (ADR-0014), discards whatever `X-Reader-Id` the caller sent, and sets that header itself from the token's subject. `/health` is the only route that answers without one. Locally you sign in without a Google account at all — see [Signing in locally](#signing-in-locally-without-a-google-account).
 
 ## What it looks like
 
 The shelf, grouped by status with what is being read at the top, and the year's goal in the header. A book read on an e-reader also shows where the device last reported it:
 
-![The shelf on the All tab: each book a card with its cover, a status pill and a progress bar, Reading at the top and then Want to read, each group under its own heading; Piranesi says it is at 63% on the device, and the header shows 14 of 24 books towards the year's goal](docs/screenshots/shelf.png)
+![The shelf on the All tab: each book a card with its cover, a status pill and a progress bar, the books being read at the top and then the ones wanted, each group under its own heading; one card also says how far through the book the e-reader is; the header shows the books finished against the year's goal](docs/screenshots/shelf.png)
 
-Logging a session is one form on the card — say where you stopped — and the sessions behind the bar are a click away:
+Logging a session is one form on the card: say where you stopped.
 
-![A shelf card with the Log reading form open: stopped at page 141 of 231 on a slider, logged for today, with a link to change the day or add the time it took](docs/screenshots/log-reading.png)
+![A shelf card with the Log reading form open: the page reached on a slider with buttons either side, logged for today, with a link to change the day or add the time it took](docs/screenshots/log-reading.png)
 
-![The same card with its History open: 23 pages today, 7 yesterday and 15 on Wednesday, each with Correct and Delete](docs/screenshots/history.png)
+Each book has a page of its own: the description, the pace and when it will be done at it, the last three weeks of reading, its Quotes, and the sessions behind its progress, each to correct or delete.
 
-Each book has its own page — the description, how fast it is going and when it will be done at that pace, the last three weeks of reading, its Quotes and its history:
+![A book's page: cover, author, publisher and genres, the description, then how far through, pages a day, days reading and the day it will be finished at this pace, a bar chart of pages a day, the first Quotes, and the history of sessions](docs/screenshots/book.png)
 
-![The Piranesi page: cover, author, publisher and genres, the description, then 61%, 7.4 pages a day, 19 days reading and finishing on 30 Oct at this pace, a bar chart of pages a day, the first two of five Quotes, and the history](docs/screenshots/book.png)
-
-A Quote is a passage highlighted on the e-reader and sent from KOReader's highlight menu with **Save to ReadingTracker**. The book's Quotes open in a sheet, in book order, with a line showing where each falls and where the reader is now; one opened shows its note, chapter and day, with Copy, Edit note and Delete:
+A Quote is a passage highlighted on the e-reader and sent from KOReader's highlight menu with **Save to ReadingTracker**. A book's Quotes open in a sheet, in book order, under a line marking where each falls and where the reader is now. An opened Quote shows its note, chapter and day, with Copy, Edit note and Delete:
 
 <p>
-  <img src="docs/screenshots/quotes.png" width="560" alt="The Quotes side sheet over the Piranesi page on a wide screen: a line from Start to End with a mark for each of the five Quotes, then the passages with their percentages" />
-  <img src="docs/screenshots/quotes-phone.png" width="260" alt="The same Quotes as a sheet from the foot of a phone, one Quote opened: its passage, the note 'This is the whole book in one line.', Part 2, saved 3 Oct, and Copy, Edit note and Delete" />
+  <img src="docs/screenshots/quotes.png" width="520" alt="The Quotes side sheet over a book's page on a wide screen: a line from Start to End with a mark where each Quote falls, then the passages with how far into the book each is" />
+  <img src="docs/screenshots/quotes-phone.png" width="300" alt="The same Quotes as a sheet from the foot of a phone, one Quote opened: its passage, the reader's note under it, its chapter and the day it was saved, and Copy, Edit note and Delete" />
 </p>
 
 The year of reading, a square a day, with the runs and the reader's day of the week:
 
-![Your reading: a year of squares from January to December, greener for more pages; Saturday 17 October picked, with the three books read that day; Saturdays the reader's day; now 2 days in a row, the longest run 8 days, 174 of 290 days read, and the biggest day 209 pages](docs/screenshots/reading.png)
+![Your reading: a year of squares, greener for more pages; a picked day with the books read on it; which day of the week the reader reads most; the current run, the longest run, how many days had any reading, and the biggest day](docs/screenshots/reading.png)
 
 Finished books say when, and sit in that order; the year's goal opens from the header:
 
 ![The Finished tab: cards each saying Read, with the day it was finished, newest first](docs/screenshots/finished.png)
 
-![The goal popover: 14 of 24 books in 2026, 6 behind pace, and a field to change the goal](docs/screenshots/goal.png)
+![The goal popover: books finished against the year's goal, how far ahead of or behind pace that is, and a field to change the goal](docs/screenshots/goal.png)
 
-A device token puts an e-reader on the shelf without a Google sign-in, and an export from Hardcover, Goodreads or StoryGraph lands in one go — the shelf goes back out the same way, as one CSV all three take in:
+A device token puts an e-reader on the shelf without a Google sign-in:
 
 ![Your devices: a freshly minted token for a Kindle Paperwhite, shown once, and the device listed below with Never used](docs/screenshots/devices.png)
 
-![Import and export, with Goodreads picked: the steps to export, the file's 14 books counted by status and one button; on the right the books grouped by status with their authors and finish dates](docs/screenshots/import.png)
+An export from Hardcover, Goodreads or StoryGraph lands in one go, and the shelf goes back out as one CSV all three take in:
+
+![Import and export, with Goodreads picked: the steps to export, the file's books counted by status and one button to import them, then the export; on the right the file's books grouped by status with their authors and finish days](docs/screenshots/import.png)
 
 The shelf on a phone, and the account menu:
 
@@ -66,9 +66,13 @@ The shelf on a phone, and the account menu:
   <img src="docs/screenshots/account-menu.png" width="420" alt="The account menu: signed in as, Your reading, Devices, Import and export, a Dark mode switch, Sign out" />
 </p>
 
+Turned on its side, a phone shows the shelf as a row of covers to swipe through, the one in front named below:
+
+![The shelf on a phone held sideways: the covers of the books being read and wanted in a curved row with their reflections, one in front and its title and author under it](docs/screenshots/phone-landscape.png)
+
 Signed out, the welcome page keeps a reader company with a saying about reading:
 
-![The welcome page: a greeting, the dev sign-in, a fan of book covers with Jane Eyre in front, and a saying by Harper Lee](docs/screenshots/welcome.png)
+![The welcome page: a greeting, the dev sign-in, a fan of classic book covers with one in front and named, and a saying about books](docs/screenshots/welcome.png)
 
 The pictures are of a local run with the dev sign-in and a made-up shelf; the token shown was revoked as soon as the picture was taken.
 
@@ -213,5 +217,5 @@ packages, the Dockerfiles' base images and the workflows' Actions weekly.
 
 ## Design documentation
 
-- [`CONTEXT.md`](./CONTEXT.md) — the domain glossary. Worth reading first: it defines `Book`, `LibraryEntry`, `ReadingSession`, `ReadingStatus`, `TrackingMethod`, `Bookmark` and `Quote`, and is deliberately free of implementation detail.
+- [`CONTEXT.md`](./CONTEXT.md) — the domain glossary. Worth reading first: it defines every term used here, from `Book` and `LibraryEntry` to `Bookmark` and `Quote`, and is deliberately free of implementation detail.
 - [`docs/adr/`](./docs/adr/) — architectural decisions and, more usefully, why the alternatives were rejected.
