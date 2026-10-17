@@ -30,11 +30,12 @@ From 0.3.0 the plugin updates itself over wifi; this install by hand is the last
   If anything fails on the way, the plugin is left as it was and you are told where to get the
   release by hand. Restart KOReader when it asks, and the new version is the one running.
 - **Only GitHub's own release is installed.** KOReader does not check certificates, so the
-  plugin does it for its update requests: GitHub's certificate is checked against the roots in
-  `readingtracker/certs/github.pem` and must be for the host asked, and the zip must be this
-  repository's release file, fetched over https all the way. Someone on the same wifi cannot
-  pass off a release. If GitHub ever moves to another certificate authority, a check says it
-  could not reach GitHub, and installing by hand still works; the next release adds the root.
+  plugin does it for its update requests: GitHub's certificate must chain to an authority in
+  Mozilla's bundle (`readingtracker/certs/roots.pem`) and must be for the host asked, and the
+  zip must be this repository's release file, fetched over https all the way. Someone on the
+  same wifi cannot pass off a release. Refresh the bundle from curl.se in a release now and then.
+- A proxy set in KOReader's network settings cannot carry these requests; with one set, the
+  plugin says so, and installing by hand still works.
 - A zip holding a link, or a path that would land outside the plugin, is refused whole.
 - Unpacking uses KOReader's own archiver. On a KOReader too old to have one, the plugin says so,
   and installing by hand still works.

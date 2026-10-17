@@ -56,6 +56,7 @@ function FakeEnv.new(options)
   env.failing = {}
   env.restarts = {}
   env.working_on = {}
+  env.told = {}
 
   return env
 end
@@ -177,6 +178,13 @@ function FakeEnv:ask_restart(text)
   table.insert(self.restarts, text)
 end
 
+-- A message that stays up: recorded with the passing notices, since a spec reads what was said,
+-- and in told, for a spec that cares that it stays.
+function FakeEnv:tell(text)
+  table.insert(self.notices, text)
+  table.insert(self.told, text)
+end
+
 function FakeEnv:working(text)
   local shown = { text = text, open = true }
   table.insert(self.working_on, shown)
@@ -242,28 +250,60 @@ function FakeEnv:copy(from, to)
   return true
 end
 
-function FakeEnv:fetch(url, path)
+-- GitHub: a download into a file from env.downloads, anything else answered like send, from
+-- the scripted responses, and recorded with the requests.
+function FakeEnv:fetch(url, options)
+  options = options or {}
+  if not options.into then
+    table.insert(self.requests, { method = "GET", url = url, headers = options.headers or {} })
+    if self.fetch_fails then
+      return nil, self.fetch_fails
+    end
+    for _, scripted in ipairs(self.responses) do
+      if scripted.method == "GET" and url:find(scripted.url, 1, true) then
+        local body = scripted.body
+        if type(body) == "table" then
+          body = json.encode(body)
+        end
+        return scripted.status, { body = body }
+      end
+    end
+    return 404, { body = "" }
+  end
+
   table.insert(self.fetched, url)
   local download = self.downloads[url]
   if not download then
-    return 404
+    return 404, {}
   end
   if download.zip then
-    self.files[path] = { zip = download.zip }
-    return 200
+    self.files[options.into] = { zip = download.zip }
+    return 200, {}
   end
-  return download.status, download.location
+  return download.status, { location = download.location }
 end
 
-function FakeEnv:unpack(zip, dir)
-  if self.failing["unpack"] then
-    return nil, self.failing["unpack"]
-  end
+-- A zip's entries are its files; one whose contents are FakeEnv.LINK is a link.
+function FakeEnv:entries(zip)
   local archive = self.files[zip]
   if type(archive) ~= "table" or not archive.zip then
     return nil, "the download is not a zip"
   end
-  for relative, contents in pairs(archive.zip) do
+  local list = {}
+  for relative in pairs(archive.zip) do
+    table.insert(list, { path = relative, mode = archive.zip[relative] == FakeEnv.LINK and "link" or "file" })
+  end
+  table.sort(list, function(a, b) return a.path < b.path end)
+  return list
+end
+
+FakeEnv.LINK = {}
+
+function FakeEnv:extract(zip, dir)
+  if self.failing["extract"] then
+    return nil, self.failing["extract"]
+  end
+  for relative, contents in pairs(self.files[zip].zip) do
     self.files[dir .. "/" .. relative] = contents
   end
   return true

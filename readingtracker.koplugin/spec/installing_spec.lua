@@ -121,12 +121,41 @@ describe("installing an update", function()
 
   it("leaves the plugin as it was when the zip cannot be unpacked", function()
     local env, installer = device()
-    env.failing["unpack"] = "the zip holds something that is not the plugin's (x)"
+    env.failing["extract"] = "could not unpack readingtracker.koplugin/main.lua"
 
     local ok, reason = installer:install(URL)
 
     assert.is_nil(ok)
-    assert.are.equal("the zip holds something that is not the plugin's (x)", reason)
+    assert.are.equal("could not unpack readingtracker.koplugin/main.lua", reason)
+    as_it_was(env)
+  end)
+
+  it("refuses a zip holding a link before unpacking anything", function()
+    local env, installer = device()
+    local zip = FakeEnv.plugin_zip("0.3.0")
+    zip["readingtracker.koplugin/books"] = FakeEnv.LINK
+    env.downloads[HOST] = { zip = zip }
+    local extracted = false
+    function env:extract() extracted = true return true end
+
+    local ok, reason = installer:install(URL)
+
+    assert.is_nil(ok)
+    assert.are.equal("the zip holds something that is not the plugin's (readingtracker.koplugin/books)", reason)
+    assert.is_false(extracted)
+    as_it_was(env)
+  end)
+
+  it("refuses a zip with a path that climbs out of the folder", function()
+    local env, installer = device()
+    local zip = FakeEnv.plugin_zip("0.3.0")
+    zip["readingtracker.koplugin/../../escaped.txt"] = "out"
+    env.downloads[HOST] = { zip = zip }
+
+    local ok, reason = installer:install(URL)
+
+    assert.is_nil(ok)
+    assert.are.equal("the zip holds something that is not the plugin's (readingtracker.koplugin/../../escaped.txt)", reason)
     as_it_was(env)
   end)
 
@@ -194,7 +223,49 @@ describe("reading a redirect", function()
     assert.are.equal("https://a.test/x?q=1", Installer.resolve("https://a.test/y/z", "/x?q=1"))
   end)
 
-  it("is nothing for a location relative to a path", function()
+  it("puts one from the scheme on the scheme that sent it", function()
+    assert.are.equal("https://b.test/x", Installer.resolve("https://a.test/y", "//b.test/x"))
+  end)
+
+  it("is nothing for a location relative to a path, and the download says it could not follow", function()
     assert.is_nil(Installer.resolve("https://a.test/y/z", "x"))
+
+    local env, installer = device()
+    env.downloads[URL] = { status = 302, location = "elsewhere.zip" }
+    local _, reason = installer:install(URL)
+    assert.are.equal("the download was redirected somewhere it could not follow", reason)
+  end)
+end)
+
+describe("what a plugin's zip may hold", function()
+  it("is files and folders inside it", function()
+    assert.is_nil(Installer.refused({
+      { path = "readingtracker.koplugin", mode = "directory" },
+      { path = "readingtracker.koplugin/main.lua", mode = "file" },
+      { path = "readingtracker.koplugin/a..b.lua", mode = "file" },
+    }))
+  end)
+
+  it("is not a link, a device, an absolute path, a climb out or an empty name", function()
+    assert.are.equal("x", Installer.refused({ { path = "x", mode = "link" } }))
+    assert.are.equal("x", Installer.refused({ { path = "x", mode = "other" } }))
+    assert.are.equal("/etc/x", Installer.refused({ { path = "/etc/x", mode = "file" } }))
+    assert.are.equal("a/../../x", Installer.refused({ { path = "a/../../x", mode = "file" } }))
+    assert.are.equal("..", Installer.refused({ { path = "..", mode = "directory" } }))
+    assert.are.equal("", Installer.refused({ { path = "", mode = "file" } }))
+  end)
+end)
+
+describe("which file is a release's", function()
+  it("is this repository's release download, whatever its case", function()
+    assert.is_true(Installer.from_release(URL, REPO))
+    assert.is_true(Installer.from_release(URL, "n0v0c4in3/readingtracker"))
+  end)
+
+  it("is not another repository's, another host's, or one over http", function()
+    assert.is_false(Installer.from_release("https://github.com/someone/else/releases/download/x.zip", REPO))
+    assert.is_false(Installer.from_release("https://github.com.evil.test/N0V0C4IN3/ReadingTracker/releases/download/x.zip", REPO))
+    assert.is_false(Installer.from_release((URL:gsub("^https", "http")), REPO))
+    assert.is_false(Installer.from_release(nil, REPO))
   end)
 end)

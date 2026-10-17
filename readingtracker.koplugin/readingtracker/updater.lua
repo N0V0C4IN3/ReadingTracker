@@ -7,12 +7,12 @@
 -- device is already online: the plugin never turns wifi on by itself. A check of its own says
 -- nothing unless there is something new; one the reader asked for always answers.
 --
--- env provides, besides what installer.lua lists:
---   version                     the installed version, read once at start ("0.3.0"), or nil
+-- env provides, besides what installer.lua lists (fetch among them):
+--   version                     the running version, from _meta.lua at KOReader's start, or nil
 --   config                      { update_repo = "owner/name" }, optional
 --   clock(), is_online(), read_preference(key), save_preference(key, value), notify(text),
 --   prompt(prompt, on_answer)   as for the app (readingtracker/app.lua)
---   send(request)               request.trusted = true checks GitHub's certificate
+--   tell(text)                  a message that stays until dismissed, for one too long to pass
 --   working(text)               a notice that stays up while the update downloads; returns done()
 --   ask_restart(text)           KOReader's offer to restart
 
@@ -33,6 +33,7 @@ Updater.AUTO = "update_check_automatically"   -- false turns the daily check off
 Updater.LAST_CHECKED = "update_last_checked"  -- os.time() of the last answer from GitHub
 Updater.LAST_FAILED = "update_last_failed"    -- os.time() of the last check that got none
 Updater.SKIPPED = "update_skipped_version"    -- a version the reader said not to offer again
+Updater.INSTALLED = "update_installed"        -- a version installed and waiting for a restart
 
 Updater.CHECK_EVERY = 24 * 60 * 60
 -- After a check that got no answer — a captive portal, wifi up before DNS — wait this long
@@ -89,6 +90,17 @@ function Updater.latest(releases, repo)
   return best
 end
 
+-- The version installed and waiting for KOReader to restart, or nil once it is the one running.
+-- A preference, not a field: the file manager and the reader each have their own plugin.
+function Updater:pending()
+  local installed = self.env:read_preference(Updater.INSTALLED)
+  local parts, running = Updater.parse_version(installed), Updater.parse_version(self.env.version)
+  if parts and running and Updater.newer(parts, running) then
+    return installed
+  end
+  return nil
+end
+
 function Updater:automatic()
   return self.env:read_preference(Updater.AUTO) ~= false
 end
@@ -130,8 +142,9 @@ end
 -- From the menu: every outcome is said, and a skipped version is offered again, since they asked.
 function Updater:check()
   local env = self.env
-  if self.installed then
-    env:ask_restart("ReadingTracker " .. self.installed .. " is installed. Restart KOReader to use it.")
+  local pending = self:pending()
+  if pending then
+    env:ask_restart("ReadingTracker " .. pending .. " is installed. Restart KOReader to use it.")
     return
   end
 
@@ -143,9 +156,9 @@ function Updater:check()
   elseif found.kind == "offline" then
     env:notify("Connect to wifi to check for updates")
   elseif found.kind == "failed" then
-    env:notify(found.problem)
+    env:tell(found.problem)
   else
-    env:notify("This copy of ReadingTracker does not say its version, so it cannot update itself."
+    env:tell("This copy of ReadingTracker does not say its version, so it cannot update itself."
       .. " Install the latest release by hand from https://github.com/" .. self.repo .. "/releases")
   end
 end
@@ -154,7 +167,7 @@ end
 -- and quiet unless there is a version the reader has not already turned down.
 function Updater:onNetworkConnected()
   local env = self.env
-  if not self:automatic() or self.installed then
+  if not self:automatic() or self:pending() then
     return
   end
   local now = env:clock()
@@ -191,18 +204,22 @@ end
 function Updater:install(latest)
   local env = self.env
   local done = env:working("Downloading ReadingTracker " .. latest.version .. "…")
-  local ok, reason, stranded = self.installer:install(latest.url)
+  -- Whatever goes wrong inside, the notice comes down and the reader hears why.
+  local ran, ok, reason, stranded = pcall(self.installer.install, self.installer, latest.url)
   done()
+  if not ran then
+    ok, reason = nil, tostring(ok)
+  end
 
   if ok then
-    self.installed = latest.version
+    env:save_preference(Updater.INSTALLED, latest.version)
     env:ask_restart("ReadingTracker " .. latest.version .. " is installed. Restart KOReader to use it.")
   elseif stranded then
-    env:notify("The update could not be installed (" .. tostring(reason) .. "), and the plugin could not"
+    env:tell("The update could not be installed (" .. tostring(reason) .. "), and the plugin could not"
       .. " be put back. It is at " .. stranded .. ": rename it to readingtracker.koplugin, or install "
       .. latest.version .. " by hand from " .. tostring(latest.page))
   else
-    env:notify("The update could not be installed (" .. tostring(reason)
+    env:tell("The update could not be installed (" .. tostring(reason)
       .. "). The plugin is as it was; it can be installed by hand from " .. tostring(latest.page))
   end
 end
@@ -210,27 +227,18 @@ end
 -- GitHub's list of releases, or nil and what to tell the reader.
 function Updater:releases()
   local env = self.env
-  local status, text = env:send({
-    method = "GET",
-    url = "https://api.github.com/repos/" .. self.repo .. "/releases?per_page=100",
-    trusted = true,
-    headers = {
-      ["Accept"] = "application/vnd.github+json",
-      -- GitHub refuses a request that does not say what is making it.
-      ["User-Agent"] = "ReadingTracker-KOReader/" .. env.version,
-    },
+  local status, response = env:fetch("https://api.github.com/repos/" .. self.repo .. "/releases?per_page=100", {
+    headers = { ["Accept"] = "application/vnd.github+json" },
   })
 
   if status == nil then
-    -- "offline" is the usual reason; a certificate that is not GitHub's is worth saying.
-    local why = text and text ~= "offline" and (" (" .. tostring(text) .. ")") or ""
-    return nil, "GitHub could not be reached just now" .. why
+    return nil, "GitHub could not be reached just now (" .. tostring(response) .. ")"
   end
   if status ~= 200 then
     return nil, "GitHub did not answer the update check (" .. tostring(status) .. ")"
   end
 
-  local ok, decoded = pcall(json.decode, text or "")
+  local ok, decoded = pcall(json.decode, response and response.body or "")
   if not ok or type(decoded) ~= "table" then
     return nil, "GitHub's answer to the update check could not be read"
   end

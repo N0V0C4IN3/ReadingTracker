@@ -125,15 +125,17 @@ describe("checking from the menu", function()
     assert.is_false(env.working_on[1].open)
   end)
 
-  it("asks GitHub as itself, its certificate checked, with no ReadingTracker token", function()
+  it("asks GitHub through its checked fetch, never the Gateway's send, so with no token", function()
     local env, updater = on_github({ release("plugin-v0.2.1") })
+    local sent = 0
+    function env:send() sent = sent + 1 end
 
     updater:check()
 
     local request = env:requests_to("GET", RELEASES)[1]
-    assert.is_true(request.trusted)
-    assert.are.equal("ReadingTracker-KOReader/0.2.1", request.headers["User-Agent"])
+    assert.are.equal("application/vnd.github+json", request.headers["Accept"])
     assert.is_nil(request.headers["Authorization"])
+    assert.are.equal(0, sent)
   end)
 
   it("installs nothing on later", function()
@@ -183,10 +185,7 @@ describe("checking from the menu", function()
 
   it("says why GitHub could not be reached when it was not just being offline", function()
     local env, updater = on_github({})
-    function env:send(request)
-      table.insert(self.requests, request)
-      return nil, "the certificate is not for api.github.com"
-    end
+    env.fetch_fails = "the certificate is not for api.github.com"
 
     updater:check()
 
@@ -206,15 +205,28 @@ describe("checking from the menu", function()
 
   it("says where to get it by hand when the update cannot be installed", function()
     local env, updater = on_github({ release("plugin-v0.3.0") })
-    env.failing["unpack"] = "the zip is damaged"
+    env.failing["extract"] = "the zip is damaged"
     env:answer("update")
 
     updater:check()
 
     assert.are.same({}, env.restarts)
-    assert.are.equal(
+    -- Told, not flashed: a passing notice is one line for three seconds, and this has a link.
+    assert.are.same({
       "The update could not be installed (the zip is damaged). The plugin is as it was; it can be installed by hand from https://github.com/N0V0C4IN3/ReadingTracker/releases/tag/plugin-v0.3.0",
-      env.notices[#env.notices])
+    }, env.told)
+  end)
+
+  it("takes the notice down and says why when installing breaks outright", function()
+    local env, updater = on_github({ release("plugin-v0.3.0") })
+    function env:entries() error("libarchive gave no path") end
+    env:answer("update")
+
+    updater:check()
+
+    assert.is_false(env.working_on[1].open)
+    assert.are.same({}, env.restarts)
+    assert.matches("libarchive gave no path", env.told[1], 1, true)
   end)
 
   it("says where the plugin is when it could not be put back", function()
@@ -225,10 +237,10 @@ describe("checking from the menu", function()
 
     updater:check()
 
-    assert.are.equal(
+    assert.are.same({
       "The update could not be installed (the new plugin could not be put in place (busy)), and the plugin could not be put back."
         .. " It is at plugins/readingtracker.koplugin.old: rename it to readingtracker.koplugin, or install 0.3.0 by hand from https://github.com/N0V0C4IN3/ReadingTracker/releases/tag/plugin-v0.3.0",
-      env.notices[#env.notices])
+    }, env.told)
   end)
 
   it("offers a skipped version again, since the reader asked", function()
@@ -248,10 +260,35 @@ describe("checking from the menu", function()
     local asked = #env.requests
 
     updater:check()
+    -- The plugin KOReader makes for the next screen, before the restart, knows it too.
+    Updater.new(env):check()
+    Updater.new(env):onNetworkConnected()
 
     assert.are.equal(asked, #env.requests)
     assert.are.equal(1, #env.prompts)
-    assert.are.equal(2, #env.restarts)
+    assert.are.equal(3, #env.restarts)
+  end)
+
+  it("checks again once the installed version is the one running", function()
+    local env, updater = on_github({ release("plugin-v0.3.0") })
+    env:answer("update")
+    updater:check()
+
+    env.version = "0.3.0"
+    Updater.new(env):check()
+
+    assert.are.equal("ReadingTracker 0.3.0 is the latest version", env.notices[#env.notices])
+  end)
+
+  it("finds the releases whatever the case of update_repo in the config", function()
+    local env = FakeEnv.new({ version = "0.2.1" })
+    env.config.update_repo = "n0v0c4in3/readingtracker"
+    env:respond("GET", "api.github.com/repos/n0v0c4in3/readingtracker/releases", 200, { release("plugin-v0.3.0") })
+    env:answer("later")
+
+    Updater.new(env):check()
+
+    assert.are.equal(1, #env.prompts)
   end)
 
   it("looks at another repository's releases when the config says so", function()
