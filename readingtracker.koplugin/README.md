@@ -15,6 +15,33 @@ cannot do one of those.
 4. Restart KOReader. While reading, **ReadingTracker** is the last entry of the first menu tab (the one
    with contents and bookmarks); in the file manager it is under the tools tab.
 
+## Updating
+
+From 0.3.0 the plugin updates itself over wifi; this install by hand is the last one.
+
+- **Check for updates** in the plugin's menu asks GitHub for the newest plugin release and says
+  which version you have. If there is a newer one, you are asked: *Update now*, *Later* or
+  *Skip this version*.
+- **Once a day**, when the device is already on wifi, it checks by itself and only speaks up when
+  there is something new it has not been told to skip. Turn that off with **Check for updates
+  once a day on wifi**. Like everything else here, it never turns wifi on.
+- **Update now** downloads the release's zip, unpacks it beside the plugin, checks that it is a
+  whole plugin, carries your `readingtracker_config.lua` over, and only then swaps the folders.
+  If anything fails on the way, the plugin is left as it was and you are told where to get the
+  release by hand. Restart KOReader when it asks, and the new version is the one running.
+- **Only GitHub's own release is installed.** KOReader does not check certificates, so the
+  plugin does it for its update requests: GitHub's certificate must chain to an authority in
+  Mozilla's bundle (`readingtracker/certs/roots.pem`) and must be for the host asked, and the
+  zip must be this repository's release file, fetched over https all the way. Someone on the
+  same wifi cannot pass off a release. Refresh the bundle from curl.se in a release now and then.
+- A proxy set in KOReader's network settings cannot carry these requests; with one set, the
+  plugin says so, and installing by hand still works.
+- A zip holding a link, or a path that would land outside the plugin, is refused whole.
+- Unpacking uses KOReader's own archiver. On a KOReader too old to have one, the plugin says so,
+  and installing by hand still works.
+- To follow a fork's releases, set `update_repo = "owner/name"` in `readingtracker_config.lua`;
+  it works whether or not the rest of the config is filled in.
+
 ## What it does
 
 - **Opening a book with an ISBN** in its metadata looks the book up. If it is already on your
@@ -49,3 +76,7 @@ spec/run.sh
 ```
 
 CI runs the same suite and builds the release zip.
+
+To release, set `version` in `_meta.lua` and push a matching `plugin-v<version>` tag: CI builds
+the zip and attaches it to a GitHub release, which is what the updater looks for. A tag that
+does not match `_meta.lua` is refused, so the version a device reports is always the release's.

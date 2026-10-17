@@ -17,6 +17,9 @@
 --   ask_text(form, on_submit)   a form of text fields; on_submit({ id = value } or nil)
 --   pick(list, on_pick)         a list to choose from; on_pick(item_id or nil)
 --   send(request)               the network: status, body | nil, "offline"
+--
+-- The same env serves the plugin's updates; what they take besides is listed at the top of
+-- readingtracker/updater.lua and readingtracker/installer.lua.
 
 local Client = require("readingtracker.client")
 local Isbn = require("readingtracker.isbn")

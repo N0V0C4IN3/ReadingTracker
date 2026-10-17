@@ -44,6 +44,20 @@ function FakeEnv.new(options)
   env.requests = {}
   env.responses = {}
 
+  -- The plugin's own version, and what updating it touches: the device's files as a table of
+  -- path -> contents (a folder is every path under it), the downloads by url — { status,
+  -- location } or { zip = { relative path -> contents } } — the restarts asked for, the
+  -- working notices shown, and the operations that fail, as "rename:<from>" -> reason.
+  env.version = options.version == nil and "0.3.0" or options.version or nil
+  env.folder = "plugins/readingtracker.koplugin"
+  env.files = {}
+  env.downloads = {}
+  env.fetched = {}
+  env.failing = {}
+  env.restarts = {}
+  env.working_on = {}
+  env.told = {}
+
   return env
 end
 
@@ -158,6 +172,158 @@ end
 
 function FakeEnv:last_prompt()
   return self.prompts[#self.prompts]
+end
+
+function FakeEnv:ask_restart(text)
+  table.insert(self.restarts, text)
+end
+
+-- A message that stays up: recorded with the passing notices, since a spec reads what was said,
+-- and in told, for a spec that cares that it stays.
+function FakeEnv:tell(text)
+  table.insert(self.notices, text)
+  table.insert(self.told, text)
+end
+
+function FakeEnv:working(text)
+  local shown = { text = text, open = true }
+  table.insert(self.working_on, shown)
+  return function() shown.open = false end
+end
+
+-- The device's files ----------------------------------------------------------------------------
+
+function FakeEnv:plugin_folder()
+  return self.folder
+end
+
+function FakeEnv:cache_dir()
+  return "cache"
+end
+
+local function under(path, folder)
+  return path == folder or path:sub(1, #folder + 1) == folder .. "/"
+end
+
+function FakeEnv:exists(path)
+  for file in pairs(self.files) do
+    if under(file, path) then
+      return true
+    end
+  end
+  return false
+end
+
+function FakeEnv:remove(path)
+  for file in pairs(self.files) do
+    if under(file, path) then
+      self.files[file] = nil
+    end
+  end
+end
+
+function FakeEnv:rename(from, to)
+  if self.failing["rename:" .. from] then
+    return nil, self.failing["rename:" .. from]
+  end
+  if not self:exists(from) or self:exists(to) then
+    return nil, "cannot rename " .. from
+  end
+  local moved = {}
+  for file, contents in pairs(self.files) do
+    if under(file, from) then
+      moved[to .. file:sub(#from + 1)] = contents
+      self.files[file] = nil
+    end
+  end
+  for file, contents in pairs(moved) do
+    self.files[file] = contents
+  end
+  return true
+end
+
+function FakeEnv:copy(from, to)
+  if self.failing["copy:" .. from] then
+    return nil, self.failing["copy:" .. from]
+  end
+  self.files[to] = self.files[from]
+  return true
+end
+
+-- GitHub: a download into a file from env.downloads, anything else answered like send, from
+-- the scripted responses, and recorded with the requests.
+function FakeEnv:fetch(url, options)
+  options = options or {}
+  if not options.into then
+    table.insert(self.requests, { method = "GET", url = url, headers = options.headers or {} })
+    if self.fetch_fails then
+      return nil, self.fetch_fails
+    end
+    for _, scripted in ipairs(self.responses) do
+      if scripted.method == "GET" and url:find(scripted.url, 1, true) then
+        local body = scripted.body
+        if type(body) == "table" then
+          body = json.encode(body)
+        end
+        return scripted.status, { body = body }
+      end
+    end
+    return 404, { body = "" }
+  end
+
+  table.insert(self.fetched, url)
+  local download = self.downloads[url]
+  if not download then
+    return 404, {}
+  end
+  if download.zip then
+    self.files[options.into] = { zip = download.zip }
+    return 200, {}
+  end
+  return download.status, { location = download.location }
+end
+
+-- A zip's entries are its files; one whose contents are FakeEnv.LINK is a link.
+function FakeEnv:entries(zip)
+  local archive = self.files[zip]
+  if type(archive) ~= "table" or not archive.zip then
+    return nil, "the download is not a zip"
+  end
+  local list = {}
+  for relative in pairs(archive.zip) do
+    table.insert(list, { path = relative, mode = archive.zip[relative] == FakeEnv.LINK and "link" or "file" })
+  end
+  table.sort(list, function(a, b) return a.path < b.path end)
+  return list
+end
+
+FakeEnv.LINK = {}
+
+function FakeEnv:extract(zip, dir)
+  if self.failing["extract"] then
+    return nil, self.failing["extract"]
+  end
+  for relative, contents in pairs(self.files[zip].zip) do
+    self.files[dir .. "/" .. relative] = contents
+  end
+  return true
+end
+
+-- A whole plugin as a release zip holds it, at the given version.
+function FakeEnv.plugin_zip(version)
+  return {
+    ["readingtracker.koplugin/_meta.lua"] = "version " .. version,
+    ["readingtracker.koplugin/main.lua"] = "main " .. version,
+    ["readingtracker.koplugin/readingtracker/app.lua"] = "app " .. version,
+  }
+end
+
+-- The plugin as installed, with the reader's config beside it.
+function FakeEnv:install_plugin(version)
+  for relative, contents in pairs(FakeEnv.plugin_zip(version)) do
+    self.files["plugins/" .. relative] = contents
+  end
+  self.files[self.folder .. "/readingtracker_config.lua"] = "the reader's config"
 end
 
 return FakeEnv
