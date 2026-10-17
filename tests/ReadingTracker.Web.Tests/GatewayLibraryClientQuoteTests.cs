@@ -126,6 +126,6 @@ public sealed class GatewayLibraryClientQuoteTests
     {
         var gateway = new StubHttpMessageHandler();
         var httpClient = new HttpClient(gateway) { BaseAddress = new Uri("http://gateway.test/") };
-        return (new GatewayLibraryClient(httpClient, new ShelfChanges()), gateway);
+        return (new GatewayLibraryClient(httpClient, new ShelfChanges(), TimeProvider.System), gateway);
     }
 }
