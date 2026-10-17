@@ -106,7 +106,7 @@ public sealed class GatewayLibraryClientAddTests
             ? new HttpResponseMessage(HttpStatusCode.Unauthorized)
             : Entry(bookId, "WantToRead");
 
-        var shelved = await client.AddAsAsync(bookId, "Finished", CancellationToken.None);
+        var shelved = await client.AddAsFinishedAsync(bookId, new FinishedDay.Today(), CancellationToken.None);
 
         Assert.Null(shelved.Problem);
         Assert.True(shelved.StatusRefused);
@@ -139,6 +139,6 @@ public sealed class GatewayLibraryClientAddTests
     {
         var gateway = new StubHttpMessageHandler();
         var httpClient = new HttpClient(gateway) { BaseAddress = new Uri("http://gateway.test/") };
-        return (new GatewayLibraryClient(httpClient, new ShelfChanges()), gateway);
+        return (new GatewayLibraryClient(httpClient, new ShelfChanges(), TimeProvider.System), gateway);
     }
 }

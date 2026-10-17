@@ -94,6 +94,23 @@ public class GoodreadsCsvTests
         Assert.Equal(status, Assert.Single(LibraryExport.Parse(text).Books).Status);
     }
 
+    /// <summary>
+    /// A book finished on a day nobody knows goes out with no Date Read, and comes back finished
+    /// on no day. What the importer then tells Library is LibraryImporterTests' part.
+    /// </summary>
+    [Fact]
+    public void A_book_finished_on_an_unknown_day_comes_back_with_no_day()
+    {
+        var entry = OnShelf("Stoner", ["John Williams"], null, null, "Finished", finishedOn: null);
+
+        var text = Write([entry], Utc);
+        var book = Assert.Single(LibraryExport.Parse(text).Books);
+
+        Assert.Equal("", Cell(text, "Date Read"));
+        Assert.Equal("Finished", book.Status);
+        Assert.Null(book.FinishedOn);
+    }
+
     [Theory]
     [InlineData("Reading")]
     [InlineData("Dropped")]

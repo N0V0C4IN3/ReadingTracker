@@ -99,12 +99,17 @@ public abstract class EntryHost : ComponentBase
         }
 
         // Library's client announces a status that took (ShelfChanges), which is how the header's
-        // goal badge, counting finished books, hears of it.
-        await RunAsync(token => Library.SetStatusAsync(Entry.Id, status, token), async entry =>
-        {
-            StatusChanged(entry);
-            await Show(entry);
-        });
+        // goal badge, counting finished books, hears of it. A book the Reader finishes here is
+        // finished today, where they are.
+        await RunAsync(
+            token => status == "Finished"
+                ? Library.FinishAsync(Entry.Id, new FinishedDay.Today(), token)
+                : Library.SetStatusAsync(Entry.Id, status, token),
+            async entry =>
+            {
+                StatusChanged(entry);
+                await Show(entry);
+            });
     }
 
     /// <summary>Their answer to the prompt a completed book raises, which is the same change

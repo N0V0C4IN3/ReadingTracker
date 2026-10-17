@@ -82,6 +82,51 @@ public sealed class FinishedOnTests(LibraryApiFixture fixture)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    /// <summary>
+    /// An import can say a book was read without saying when. It is Finished, with no day, and
+    /// counts toward no year's goal rather than this one's.
+    /// </summary>
+    [Fact]
+    public async Task A_book_finished_on_a_day_nobody_knows_has_no_day_and_counts_toward_no_year()
+    {
+        var client = fixture.ClientFor("day-unknown-reader");
+        var entryId = await fixture.AddBookAsync(client);
+
+        var entry = await SetStatusAsync(client, entryId, new { status = "Finished", dayUnknown = true });
+
+        Assert.Equal("Finished", entry.Status);
+        Assert.Null(entry.FinishedOn);
+        var goal = await client.GetFromJsonAsync<Goal>($"/api/library/goals/{DateTime.UtcNow.Year}");
+        Assert.Equal(0, goal!.Finished);
+    }
+
+    [Fact]
+    public async Task Saying_the_day_is_unknown_on_a_finished_book_lets_its_day_go()
+    {
+        var client = fixture.ClientFor("forgot-the-day-reader");
+        var entryId = await fixture.AddBookAsync(client);
+        await SetStatusAsync(client, entryId, new { status = "Finished", finishedOn = "2025-08-09" });
+
+        var entry = await SetStatusAsync(client, entryId, new { status = "Finished", dayUnknown = true });
+
+        Assert.Null(entry.FinishedOn);
+    }
+
+    [Theory]
+    [InlineData("Reading", null)]
+    [InlineData("Finished", "2025-08-09")]
+    public async Task An_unknown_day_goes_only_with_finished_and_never_beside_a_day(string status, string? finishedOn)
+    {
+        var client = fixture.ClientFor($"unknown-day-refused-{status}");
+        var entryId = await fixture.AddBookAsync(client);
+
+        var response = await client.PutAsJsonAsync($"/api/library/{entryId}/status", new { status, finishedOn, dayUnknown = true });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<Problem>();
+        Assert.True(problem!.Errors.ContainsKey("dayUnknown"));
+    }
+
     [Fact]
     public async Task A_device_reporting_on_a_finished_book_leaves_the_day_alone()
     {
@@ -103,4 +148,8 @@ public sealed class FinishedOnTests(LibraryApiFixture fixture)
     }
 
     private sealed record Entry(Guid Id, string Status, DateOnly? FinishedOn);
+
+    private sealed record Goal(int Year, int? Books, int Finished);
+
+    private sealed record Problem(Dictionary<string, string[]> Errors);
 }

@@ -1180,7 +1180,9 @@
 
         try
         {
-            var shelved = await Gateway.AddAsAsync(bookId, status, CancellationToken.None);
+            var shelved = status == "Finished"
+                ? await Gateway.AddAsFinishedAsync(bookId, new FinishedDay.Today(), CancellationToken.None)
+                : await Gateway.AddAsAsync(bookId, status, CancellationToken.None);
 
             if (shelved.Problem is { } trouble)
             {
