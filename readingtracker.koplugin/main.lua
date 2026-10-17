@@ -65,7 +65,9 @@ end
 -- "Save to ReadingTracker" in the menu KOReader shows for selected text and, from its "…", for a
 -- highlight already made. Only while reading: the file manager has no highlights.
 function ReadingTracker:addToHighlightMenu()
-  if not (self.ui.highlight and self.ui.highlight.addToHighlightDialog) then
+  -- Annotations, with their creation time, came in KOReader 2024.07; before them the menu's
+  -- buttons were called differently too, so an older KOReader gets no button at all.
+  if not (self.ui.highlight and self.ui.highlight.addToHighlightDialog and self.ui.annotation) then
     return
   end
   local plugin = self
@@ -78,34 +80,41 @@ function ReadingTracker:addToHighlightMenu()
 end
 
 -- A selection is made a highlight first, so the Quote has a highlight on the device to stand for:
--- the same one, with the same identity, whenever it is saved again.
+-- the same one, with the same identity, whenever it is saved again. It is made the way
+-- KOReader's own Highlight button makes it.
 function ReadingTracker:saveHighlight(highlight, index)
   if not self:configured() then
     return highlight:onClose()
   end
-  index = index or highlight:saveHighlight()
+  index = index or highlight:saveHighlight(true)
   local item = index and self.ui.annotation.annotations[index]
   highlight:onClose()
   if not item then
-    return
+    return UIManager:show(Notification:new {
+      text = _("This selection could not be made a highlight, so it was not kept."),
+      timeout = 3,
+    })
   end
   local described = self:describeHighlight(item)
   Trapper:wrap(function() self.app:save_quote(described) end)
 end
 
--- An annotation as app.lua takes a highlight: where it starts as text — an xpointer, or a PDF's
--- page and point — and KOReader's own page number, creation time and chapter.
+-- An annotation as app.lua takes a highlight. The page is where it begins in the layout as it is
+-- now, as the Bookmark's page is: KOReader's own pageno goes stale after a change of font until
+-- it next saves, and a PDF's page never moves.
 function ReadingTracker:describeHighlight(item)
-  local start = item.pos0
-  if type(start) == "table" then
-    start = string.format("%s:%.2f:%.2f", tostring(start.page), tonumber(start.x) or 0, tonumber(start.y) or 0)
+  local page
+  if type(item.pos0) == "table" then
+    page = item.pos0.page
+  elseif item.pos0 and self.ui.document.getPageFromXPointer then
+    page = self.ui.document:getPageFromXPointer(item.pos0)
   end
   return {
     datetime = item.datetime,
-    position = tostring(start or ""),
+    start = item.pos0,
     passage = item.text,
     note = item.note,
-    page = tonumber(item.pageno) or (type(item.pos0) == "table" and item.pos0.page) or nil,
+    page = tonumber(page) or tonumber(item.pageno),
     chapter = item.chapter,
   }
 end
