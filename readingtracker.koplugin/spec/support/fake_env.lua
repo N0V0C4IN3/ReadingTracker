@@ -44,12 +44,18 @@ function FakeEnv.new(options)
   env.requests = {}
   env.responses = {}
 
-  -- The plugin's own version, and what an update did: the zips it was asked to install, whether
-  -- installing works (false, or a reason, makes it fail), and the restarts it asked for.
-  env.version = options.version or "0.3.0"
-  env.installed = {}
-  env.install_fails = options.install_fails
+  -- The plugin's own version, and what updating it touches: the device's files as a table of
+  -- path -> contents (a folder is every path under it), the downloads by url — { status,
+  -- location } or { zip = { relative path -> contents } } — the restarts asked for, the
+  -- working notices shown, and the operations that fail, as "rename:<from>" -> reason.
+  env.version = options.version == nil and "0.3.0" or options.version or nil
+  env.folder = "plugins/readingtracker.koplugin"
+  env.files = {}
+  env.downloads = {}
+  env.fetched = {}
+  env.failing = {}
   env.restarts = {}
+  env.working_on = {}
 
   return env
 end
@@ -167,20 +173,117 @@ function FakeEnv:last_prompt()
   return self.prompts[#self.prompts]
 end
 
-function FakeEnv:installed_version()
-  return self.version
+function FakeEnv:ask_restart(text)
+  table.insert(self.restarts, text)
 end
 
-function FakeEnv:install_update(url)
-  table.insert(self.installed, url)
-  if self.install_fails then
-    return nil, self.install_fails
+function FakeEnv:working(text)
+  local shown = { text = text, open = true }
+  table.insert(self.working_on, shown)
+  return function() shown.open = false end
+end
+
+-- The device's files ----------------------------------------------------------------------------
+
+function FakeEnv:plugin_folder()
+  return self.folder
+end
+
+function FakeEnv:cache_dir()
+  return "cache"
+end
+
+local function under(path, folder)
+  return path == folder or path:sub(1, #folder + 1) == folder .. "/"
+end
+
+function FakeEnv:exists(path)
+  for file in pairs(self.files) do
+    if under(file, path) then
+      return true
+    end
+  end
+  return false
+end
+
+function FakeEnv:remove(path)
+  for file in pairs(self.files) do
+    if under(file, path) then
+      self.files[file] = nil
+    end
+  end
+end
+
+function FakeEnv:rename(from, to)
+  if self.failing["rename:" .. from] then
+    return nil, self.failing["rename:" .. from]
+  end
+  if not self:exists(from) or self:exists(to) then
+    return nil, "cannot rename " .. from
+  end
+  local moved = {}
+  for file, contents in pairs(self.files) do
+    if under(file, from) then
+      moved[to .. file:sub(#from + 1)] = contents
+      self.files[file] = nil
+    end
+  end
+  for file, contents in pairs(moved) do
+    self.files[file] = contents
   end
   return true
 end
 
-function FakeEnv:ask_restart(text)
-  table.insert(self.restarts, text)
+function FakeEnv:copy(from, to)
+  if self.failing["copy:" .. from] then
+    return nil, self.failing["copy:" .. from]
+  end
+  self.files[to] = self.files[from]
+  return true
+end
+
+function FakeEnv:fetch(url, path)
+  table.insert(self.fetched, url)
+  local download = self.downloads[url]
+  if not download then
+    return 404
+  end
+  if download.zip then
+    self.files[path] = { zip = download.zip }
+    return 200
+  end
+  return download.status, download.location
+end
+
+function FakeEnv:unpack(zip, dir)
+  if self.failing["unpack"] then
+    return nil, self.failing["unpack"]
+  end
+  local archive = self.files[zip]
+  if type(archive) ~= "table" or not archive.zip then
+    return nil, "the download is not a zip"
+  end
+  for relative, contents in pairs(archive.zip) do
+    self.files[dir .. "/" .. relative] = contents
+  end
+  return true
+end
+
+-- A whole plugin as a release zip holds it, at the given version.
+function FakeEnv.plugin_zip(version)
+  return {
+    ["readingtracker.koplugin/_meta.lua"] = "version " .. version,
+    ["readingtracker.koplugin/main.lua"] = "main " .. version,
+    ["readingtracker.koplugin/readingtracker/app.lua"] = "app " .. version,
+  }
+end
+
+-- The plugin as installed, with the reader's config beside it.
+function FakeEnv:install_plugin(version)
+  for relative, contents in pairs(FakeEnv.plugin_zip(version)) do
+    self.files["plugins/" .. relative] = contents
+  end
+  self.files[self.folder .. "/readingtracker_config.lua"] = "the reader's config"
 end
 
 return FakeEnv
