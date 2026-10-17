@@ -57,6 +57,57 @@ function ReadingTracker:init()
   self.updater = Updater.new(env)
   self.ui.menu:registerToMainMenu(self)
   self:onDispatcherRegisterActions()
+  self:addToHighlightMenu()
+end
+
+-- Quotes ---------------------------------------------------------------------------------------
+
+-- "Save to ReadingTracker" in the menu KOReader shows for selected text and, from its "…", for a
+-- highlight already made. Only while reading: the file manager has no highlights.
+function ReadingTracker:addToHighlightMenu()
+  if not (self.ui.highlight and self.ui.highlight.addToHighlightDialog) then
+    return
+  end
+  local plugin = self
+  self.ui.highlight:addToHighlightDialog("12_readingtracker", function(highlight, index)
+    return {
+      text = _("Save to ReadingTracker"),
+      callback = function() plugin:saveHighlight(highlight, index) end,
+    }
+  end)
+end
+
+-- A selection is made a highlight first, so the Quote has a highlight on the device to stand for:
+-- the same one, with the same identity, whenever it is saved again.
+function ReadingTracker:saveHighlight(highlight, index)
+  if not self:configured() then
+    return highlight:onClose()
+  end
+  index = index or highlight:saveHighlight()
+  local item = index and self.ui.annotation.annotations[index]
+  highlight:onClose()
+  if not item then
+    return
+  end
+  local described = self:describeHighlight(item)
+  Trapper:wrap(function() self.app:save_quote(described) end)
+end
+
+-- An annotation as app.lua takes a highlight: where it starts as text — an xpointer, or a PDF's
+-- page and point — and KOReader's own page number, creation time and chapter.
+function ReadingTracker:describeHighlight(item)
+  local start = item.pos0
+  if type(start) == "table" then
+    start = string.format("%s:%.2f:%.2f", tostring(start.page), tonumber(start.x) or 0, tonumber(start.y) or 0)
+  end
+  return {
+    datetime = item.datetime,
+    position = tostring(start or ""),
+    passage = item.text,
+    note = item.note,
+    page = tonumber(item.pageno) or (type(item.pos0) == "table" and item.pos0.page) or nil,
+    chapter = item.chapter,
+  }
 end
 
 function ReadingTracker:onDispatcherRegisterActions()

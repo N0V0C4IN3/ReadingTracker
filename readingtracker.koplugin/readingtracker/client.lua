@@ -72,6 +72,17 @@ function Client:report_bookmark(entry_id, percent, occurred_at)
   })
 end
 
+-- A highlight kept as a Quote: made the first time its identity is sent, its note updated after.
+function Client:save_quote(entry_id, quote)
+  return self:request("PUT", "api/library/" .. entry_id .. "/quotes/" .. Client.escape(quote.id), {
+    passage = quote.passage,
+    note = quote.note,
+    percent = quote.percent,
+    chapter = quote.chapter,
+    savedAt = quote.saved_at,
+  })
+end
+
 function Client:set_status(entry_id, status)
   return self:request("PUT", "api/library/" .. entry_id .. "/status", { status = status })
 end

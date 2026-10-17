@@ -58,6 +58,13 @@ From 0.3.0 the plugin updates itself over wifi; this install by hand is the last
 - **Reaching the last page** asks, once, whether to mark the book finished — the same question
   the web app asks at 100%. Never asked about a book already finished; a re-read just logs
   sessions.
+- **Save to ReadingTracker**, in the menu KOReader shows when you select text, keeps the passage
+  as a Quote on the book's page in ReadingTracker: the words, your note, where it is and the
+  chapter. Selected text is made a highlight first; save a highlight again (tap it, then *…*)
+  after changing its note, and the Quote's note follows — *Updated* rather than *Saved*. On a
+  document that is not linked yet, saving links it first, the same way as opening does; back
+  out and nothing is kept. Offline, the Quote is kept and sent at the next chance. Deleting or
+  restyling the highlight afterwards changes nothing in ReadingTracker.
 - The menu shows what the document is linked to, lets you link it to a different book, unlink
   it, sync now, or change its reading status — Want to Read, Reading, On Hold, Dropped or
   Finished — the way the shelf's drop-down does.
