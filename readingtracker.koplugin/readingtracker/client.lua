@@ -72,11 +72,24 @@ function Client:report_bookmark(entry_id, percent, occurred_at)
   })
 end
 
+-- A highlight kept as a Quote: made the first time its identity is sent (201), its note updated
+-- after (200).
+function Client:save_quote(entry_id, quote)
+  return self:request("PUT", "api/library/" .. entry_id .. "/quotes/" .. Client.escape(quote.id), {
+    passage = quote.passage,
+    note = quote.note,
+    percent = quote.percent,
+    chapter = quote.chapter,
+    savedAt = quote.saved_at,
+  })
+end
+
 function Client:set_status(entry_id, status)
   return self:request("PUT", "api/library/" .. entry_id .. "/status", { status = status })
 end
 
--- Sends one request. Returns the decoded body (or an empty table for no body) and nil, or nil
+-- Sends one request. Returns the decoded body (or an empty table for no body), nil and the
+-- status — which success it was, when that says something, as 201 against 200 does — or nil
 -- and a problem { kind = ..., status = ..., reasons = { ... } }.
 function Client:request(method, path, body)
   local request = {
@@ -101,13 +114,13 @@ function Client:request(method, path, body)
 
   if status >= 200 and status < 300 then
     if text == nil or text == "" then
-      return {}, nil
+      return {}, nil, status
     end
     local ok, decoded = pcall(json.decode, text)
     if not ok then
       return nil, { kind = Client.FAILED, status = status }
     end
-    return decoded, nil
+    return decoded, nil, status
   end
 
   local problem = { kind = Client.kind_of(status), status = status, reasons = {} }
