@@ -44,6 +44,10 @@ _Avoid_: Progress (fine in prose, but ambiguous between this and the percentage 
 Where a Reader currently is in a Book, as a percentage, as last reported by a device — the "where", where ReadingSessions are the "how much". A LibraryEntry has at most one, and moving it forward is what a device's reading turns into ReadingSessions; moving it backwards is not reading and records nothing. It is a report of a position, never a source of truth for Amount read, so correcting ReadingSessions leaves it alone and vice versa.
 _Avoid_: Position, Current page, Progress (that is Amount read), Last synced
 
+**Quote**:
+A passage of a Book a Reader chose to keep, in the Book's own words, sent on purpose from the device they were reading it on. It holds the passage, the Reader's note on it if they wrote one, where in the Book it is as a percentage and the chapter when the device knows it, and when it was saved. A Quote belongs to one LibraryEntry, as private as the rest of it, and goes when the LibraryEntry goes. A Quote is a deliberate choice: what a device merely marks while reading is not a Quote until the Reader sends it.
+_Avoid_: Highlight (the device's mark on the page, of which only the ones sent become Quotes), Annotation, Clipping (Kindle's word), Note (that is the Reader's own words on a Quote)
+
 **ReadingStatus**:
 The current state of a LibraryEntry: `Want to Read`, `Reading`, `Finished`, `On Hold`, or `Dropped`. A LibraryEntry has exactly one current ReadingStatus at a time; it does not itself carry history — history lives in ReadingSessions.
 _Avoid_: State (too generic)
@@ -53,7 +57,7 @@ The day a Reader finished a Book, kept on the LibraryEntry: the Reader's own day
 _Avoid_: Completed, Read date, Date finished (Hardcover's name for it), FinishedAt
 
 **Book page**:
-One LibraryEntry in full: the Book's details — description included — and everything the Reader has done with it: status, amount read, Bookmark, every ReadingSession, and the pace they add up to. Reached from the Book on the shelf; only a Book on the Reader's shelf has one. Everything the shelf card can do, the Book page can do too.
+One LibraryEntry in full: the Book's details — description included — and everything the Reader has done with it: status, amount read, Bookmark, every ReadingSession, every Quote, and the pace they add up to. Reached from the Book on the shelf; only a Book on the Reader's shelf has one. Everything the shelf card can do, the Book page can do too.
 _Avoid_: About (reads as "about the application"), Book details (that is the Book's own metadata, without the Reader's part), Entry page
 
 **ReadingGoal**:

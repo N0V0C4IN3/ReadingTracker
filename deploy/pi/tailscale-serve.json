@@ -5,7 +5,7 @@
   "Web": {
     "${TS_CERT_DOMAIN}:443": {
       "Handlers": {
-        "/": { "Proxy": "http://gateway:8080" }
+        "/": { "Proxy": "http://web:80" }
       }
     }
   },

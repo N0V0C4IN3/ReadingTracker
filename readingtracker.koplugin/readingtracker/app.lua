@@ -17,9 +17,13 @@
 --   ask_text(form, on_submit)   a form of text fields; on_submit({ id = value } or nil)
 --   pick(list, on_pick)         a list to choose from; on_pick(item_id or nil)
 --   send(request)               the network: status, body | nil, "offline"
+--
+-- The same env serves the plugin's updates; what they take besides is listed at the top of
+-- readingtracker/updater.lua and readingtracker/installer.lua.
 
 local Client = require("readingtracker.client")
 local Isbn = require("readingtracker.isbn")
+local Quotes = require("readingtracker.quotes")
 
 local App = {}
 App.__index = App
@@ -29,6 +33,7 @@ App.ENTRY = "entry_id"          -- the LibraryEntry this document is linked to
 App.ENTRY_TITLE = "entry_title" -- so the menu can say what, without a request
 App.NEVER = "never"             -- the reader said not to ask about this document again
 App.PENDING = "pending"         -- { percent, at }: a position that could not be sent yet
+                                -- (and readingtracker/quotes.lua keeps the Quotes waiting)
 
 -- The ReadingStatuses a LibraryEntry can have, in the order the web app lists them, with the
 -- words the Reader knows them by.
@@ -51,6 +56,7 @@ function App.new(env)
   -- Set when the token is refused: nothing more is tried until the plugin is next loaded, and
   -- the reader has been told once rather than on every page turn.
   app.disabled = false
+  app.quotes = Quotes.new(app)
   return app
 end
 
@@ -89,78 +95,90 @@ function App:onReaderReady()
     return
   end
 
-  local isbn = Isbn.from_identifiers(self.env.document.identifiers)
+  self:start_linking()
+end
+
+-- The linking flow: by the document's ISBN, or a search, or a Book added by hand. Each run
+-- ends in done(entry_id) when it links, or done(nil) when it does not. Each has its own done,
+-- so linking on opening and linking for a save never end each other.
+function App:start_linking(done)
+  done = done or function() end
+  local isbn = Isbn.from_identifiers((self.env.document or {}).identifiers)
   if isbn then
-    self:link_by_isbn(isbn)
+    self:link_by_isbn(isbn, done)
   else
-    self:offer_to_search()
+    self:offer_to_search(done)
   end
+end
+
+-- A step that cannot go on: what went wrong is said, and the run ends without a link.
+function App:stop_linking(done, err)
+  self:complain(err)
+  done(nil)
 end
 
 -- An ISBN names one edition exactly, so a Book found by it is the book in the reader's hands.
 -- Already on the shelf: linked without a word. Not yet: asked once — every PDF that gets
 -- opened must not end up on the shelf.
-function App:link_by_isbn(isbn)
+function App:link_by_isbn(isbn, done)
   local books, err = self.client:search_by_isbn(isbn)
   if err then
-    return self:complain(err)
+    return self:stop_linking(done, err)
   end
 
   local book = books[1]
   if not book then
     -- An ISBN nobody has heard of is no better than none: the reader can search instead.
-    return self:offer_to_search()
+    return self:offer_to_search(done)
   end
 
-  local entry_id, found = self:shelf_entry_for(book.id)
-  if found == nil then
-    return
+  local entry_id, shelf_err = self:shelf_entry_for(book.id)
+  if shelf_err then
+    return self:stop_linking(done, shelf_err)
   end
 
   if entry_id then
-    return self:link(entry_id, book.title)
+    self:link(entry_id, book.title, done)
+  else
+    self:offer_to_add(book, done)
   end
-
-  self:offer_to_add(book)
 end
 
--- The reader's entry for a Book, if they have one: id, true; none: nil, true; could not be
--- asked: nil, nil (already complained about).
+-- The reader's entry for a Book: its id, or nil when they have none; or nil and the problem.
 function App:shelf_entry_for(book_id)
   local entries, err = self.client:library()
   if err then
-    self:complain(err)
-    return nil, nil
+    return nil, err
   end
 
   for _, entry in ipairs(entries) do
     if entry.bookId == book_id then
-      return entry.id, true
+      return entry.id, nil
     end
   end
 
-  return nil, true
+  return nil, nil
 end
 
 -- Puts a Book on the shelf if it is not there and links the document to the entry either way.
-function App:shelve_and_link(book)
-  local entry_id, found = self:shelf_entry_for(book.id)
-  if found == nil then
-    return
+function App:shelve_and_link(book, done)
+  local entry_id, err = self:shelf_entry_for(book.id)
+  if err then
+    return self:stop_linking(done, err)
   end
 
   if not entry_id then
-    local entry, err = self.client:add_to_library(book.id)
-    if err then
-      return self:complain(err)
+    local entry, add_err = self.client:add_to_library(book.id)
+    if add_err then
+      return self:stop_linking(done, add_err)
     end
     entry_id = entry.id
   end
 
-  self:link(entry_id, book.title)
+  self:link(entry_id, book.title, done)
 end
 
-function App:offer_to_add(book)
+function App:offer_to_add(book, done)
   self.env:prompt({
     text = string.format('Add "%s" to your ReadingTracker library and sync progress?', book.title),
     choices = {
@@ -172,14 +190,17 @@ function App:offer_to_add(book)
     if answer == "yes" then
       local entry, err = self.client:add_to_library(book.id)
       if err then
-        return self:complain(err)
+        return self:stop_linking(done, err)
       end
-      self:link(entry.id, book.title)
-    elseif answer == "never" then
-      self.env:save_setting(App.NEVER, true)
-      self.env:flush_settings()
+      self:link(entry.id, book.title, done)
+    else
+      if answer == "never" then
+        self.env:save_setting(App.NEVER, true)
+        self.env:flush_settings()
+      end
+      -- "Not now", or dismissed: nothing remembered, so the question comes back next opening.
+      done(nil)
     end
-    -- "Not now", or dismissed: nothing remembered, so the question comes back next opening.
   end)
 end
 
@@ -187,7 +208,7 @@ end
 
 -- No ISBN, or one the Catalog does not know: asked once, the way the ISBN flow asks, but
 -- leading into a search instead of a yes.
-function App:offer_to_search()
+function App:offer_to_search(done)
   self.env:prompt({
     text = string.format('Link "%s" to ReadingTracker?', self:document_title()),
     choices = {
@@ -197,17 +218,21 @@ function App:offer_to_search()
     },
   }, function(answer)
     if answer == "search" then
-      self:link_by_search()
-    elseif answer == "never" then
-      self.env:save_setting(App.NEVER, true)
-      self.env:flush_settings()
+      self:link_by_search(nil, nil, done)
+    else
+      if answer == "never" then
+        self.env:save_setting(App.NEVER, true)
+        self.env:flush_settings()
+      end
+      done(nil)
     end
   end)
 end
 
 -- A title/author search, filled in from the document, with the results to pick from. Also
 -- what the menu's link / re-link does, in which case any existing link is replaced.
-function App:link_by_search(title, author)
+function App:link_by_search(title, author, done)
+  done = done or function() end
   self.env:ask_text({
     title = "Find the book in the library",
     fields = {
@@ -217,23 +242,23 @@ function App:link_by_search(title, author)
     submit = "Search",
   }, function(values)
     if not values then
-      return
+      return done(nil)
     end
 
     local books, err = self.client:search(values.title, values.author)
     if err then
-      return self:complain(err)
+      return self:stop_linking(done, err)
     end
 
     if #books == 0 then
-      return self:offer_to_add_by_hand(values.title, values.author)
+      self:offer_to_add_by_hand(values.title, values.author, done)
+    else
+      self:pick_from(books, done)
     end
-
-    self:pick_from(books)
   end)
 end
 
-function App:pick_from(books)
+function App:pick_from(books, done)
   local items = {}
   for _, book in ipairs(books) do
     table.insert(items, { id = book.id, text = book.title, detail = App.describe(book) })
@@ -242,15 +267,16 @@ function App:pick_from(books)
   self.env:pick({ title = "Which book is this?", items = items }, function(picked)
     for _, book in ipairs(books) do
       if book.id == picked then
-        return self:shelve_and_link(book)
+        return self:shelve_and_link(book, done)
       end
     end
+    done(nil)
   end)
 end
 
 -- The library does not have it, so the reader can put it there: a Book made from what the
 -- document says about itself, then shelved and linked like any other.
-function App:offer_to_add_by_hand(title, author)
+function App:offer_to_add_by_hand(title, author, done)
   self.env:prompt({
     text = string.format('Nothing found for "%s". Add it to the library by hand?', title),
     choices = {
@@ -260,14 +286,16 @@ function App:offer_to_add_by_hand(title, author)
     },
   }, function(answer)
     if answer == "add" then
-      self:add_by_hand(title, author)
+      self:add_by_hand(title, author, done)
     elseif answer == "again" then
-      self:link_by_search(title, author)
+      self:link_by_search(title, author, done)
+    else
+      done(nil)
     end
   end)
 end
 
-function App:add_by_hand(title, author)
+function App:add_by_hand(title, author, done)
   self.env:ask_text({
     title = "Add a book by hand",
     fields = {
@@ -278,7 +306,7 @@ function App:add_by_hand(title, author)
     submit = "Add",
   }, function(values)
     if not values then
-      return
+      return done(nil)
     end
 
     local book, err = self.client:add_book({
@@ -287,10 +315,10 @@ function App:add_by_hand(title, author)
       totalPages = tonumber(values.pages),
     })
     if err then
-      return self:complain(err)
+      return self:stop_linking(done, err)
     end
 
-    self:shelve_and_link(book)
+    self:shelve_and_link(book, done)
   end)
 end
 
@@ -334,13 +362,17 @@ function App:document_author()
 end
 
 -- A position kept for the old entry is not the new one's, so linking forgets it either way.
-function App:link(entry_id, title)
+-- Quotes kept to send are the document's: they go to the book it is linked to now.
+function App:link(entry_id, title, done)
   self.env:save_setting(App.ENTRY, entry_id)
   self.env:save_setting(App.ENTRY_TITLE, title)
   self.env:save_setting(App.NEVER, nil)
   self.env:save_setting(App.PENDING, nil)
   self.env:flush_settings()
   self.env:notify("Linked to " .. tostring(title))
+  if done then
+    done(entry_id)
+  end
 end
 
 function App:unlink()
@@ -349,6 +381,13 @@ function App:unlink()
   self.env:save_setting(App.PENDING, nil)
   self.env:flush_settings()
   self.env:notify("Unlinked from ReadingTracker")
+end
+
+-- Quotes --------------------------------------------------------------------------------------
+
+-- The highlight menu's "Save to ReadingTracker"; readingtracker/quotes.lua decides the rest.
+function App:save_quote(highlight)
+  self.quotes:save(highlight)
 end
 
 -- Reporting -----------------------------------------------------------------------------------
@@ -579,11 +618,19 @@ function App:report(page, at)
   end
 
   self:sent(page, answer)
+  -- Through just now, so Quotes kept from before can go too, without waiting to reconnect.
+  self.quotes:send_kept()
   return true
 end
 
--- A position kept from an earlier session, sent with the time it was read at rather than now.
+-- What could not be sent before — a position, and Quotes — with the times they were made.
 function App:send_pending()
+  self:send_pending_position()
+  self.quotes:send_kept()
+end
+
+-- A position kept from an earlier session, sent with the time it was read at rather than now.
+function App:send_pending_position()
   local pending = self.env:read_setting(App.PENDING)
   if self.disabled or not pending or not self:linked_entry() or not self.env:is_online() then
     return
@@ -643,18 +690,26 @@ end
 -- Says what went wrong, once, in the reader's terms. Offline is not a problem worth a notice:
 -- an e-reader is offline most of the time, and the next chance will do.
 function App:complain(err)
+  local problem = self:problem(err)
+  if problem then
+    self.env:notify(problem)
+  end
+end
+
+-- What went wrong, in the reader's terms, or nil for offline. A refused token also stops the
+-- plugin trying until it is next loaded.
+function App:problem(err)
   if err.kind == Client.UNAUTHORIZED then
     self.disabled = true
-    self.env:notify("ReadingTracker refused this device's token. Check the token in readingtracker_config.lua, or mint a new one on the Devices page.")
+    return "ReadingTracker refused this device's token. Check the token in readingtracker_config.lua, or mint a new one on the Devices page."
   elseif err.kind == Client.RATE_LIMITED then
-    self.env:notify("ReadingTracker asked this device to wait a minute.")
+    return "ReadingTracker asked this device to wait a minute."
   elseif err.kind == Client.OFFLINE then
-    return
+    return nil
   elseif err.kind == Client.REFUSED and #err.reasons > 0 then
-    self.env:notify("ReadingTracker said no: " .. table.concat(err.reasons, " "))
-  else
-    self.env:notify("ReadingTracker could not be reached just now.")
+    return "ReadingTracker said no: " .. table.concat(err.reasons, " ")
   end
+  return "ReadingTracker could not be reached just now."
 end
 
 return App

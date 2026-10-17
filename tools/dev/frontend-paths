@@ -1,0 +1,4 @@
+# The web frontend, as regexes over changed paths, one per line. A PR that changes one of these
+# is looked at before it merges: ~/.claude/hooks reads this (review instructions, merge gate),
+# and tools/dev/shot.mjs is the way to look.
+^src/ReadingTracker\.Web/

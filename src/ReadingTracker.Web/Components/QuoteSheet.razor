@@ -1,0 +1,425 @@
+@using ReadingTracker.Web.Services
+@inject GatewayLibraryClient Library
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@*
+    A book's Quotes: the passages the reader sent from their device (ADR-0017), opened from the
+    Book page. It is the search result's sheet (.preview) — from the right on a wide screen, up
+    from the foot on a phone, dragged between a peek, the half and nearly all of it (js/sheet.js)
+    — so it arrives, layers and leaves the way that one does. What is inside is css/quotes.css.
+
+    A map of the book heads it: a pin where each Quote falls and a faint mark at the Bookmark. It
+    stands above the list rather than in its scroll, so the list never runs under it. Under it
+    the Quotes run by where they fall, each folded to two lines (QuoteRow). One is open at a time,
+    picked by its row or its pin, and only the open one says its note, chapter and day and offers
+    Copy, the note, and Delete. The passage is never edited: it is the Book's words.
+
+    The Quotes are the page's: it read them, and it is told of every change made here
+    (OnChanged, OnDeleted), so what it shows of them never needs reading again. Deleting is at
+    once, as a day of History is.
+*@
+
+<button type="button" class="preview__scrim" tabindex="-1" aria-hidden="true" @onclick="CloseAsync"></button>
+<aside class="preview preview--quotes" role="dialog" aria-modal="true" aria-labelledby="@_titleId" @onkeydown="CloseOnEscape" @ref="_sheetEl">
+    <button type="button" class="search__grip" aria-label="Resize the quotes"></button>
+    <div class="preview__bar">
+        @* On a phone the title drags the sheet with the grip (js/sheet.js): it is what a thumb takes hold of. *@
+        <div class="quotes__title" data-sheet-handle>
+            <h2 class="group" id="@_titleId">Quotes <span>@Quotes.Count</span></h2>
+            <span class="quotes__caption">Where they fall in @(Entry.Book?.Title ?? "the book")</span>
+        </div>
+        <button type="button" class="preview__close" aria-label="Close" @ref="_close" @onclick="CloseAsync">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
+        </button>
+    </div>
+
+    <div class="quotes__head">
+        <div class="quotes__map">
+            @if (Entry.Bookmark is { } bookmark)
+            {
+                <span class="quotes__you" style="left: @MapLeft(bookmark.Percent)" aria-hidden="true"></span>
+            }
+            @for (var pin = 0; pin < Quotes.Count; pin++)
+            {
+                var quote = Quotes[pin];
+                @* The mark is where the Quote falls; the button round it is what a finger finds,
+                   reaching halfway to the pins either side and no further than a finger's width,
+                   so pins close together share the room between them. *@
+                <button type="button"
+                        class="quotes__pin"
+                        style="@PinReach(Quotes, pin)"
+                        aria-label="@($"Quote at {Figures.Trim(quote.Percent)}%")"
+                        aria-current="@(quote.Id == _opened?.Quote ? "true" : "false")"
+                        @onclick="() => Open(quote.Id)"
+                        @key="quote.Id"></button>
+                <span class="quotes__mark" style="left: @MapLeft(quote.Percent)" aria-hidden="true" @key="(quote.Id, 'm')"></span>
+            }
+        </div>
+        <div class="quotes__legend">
+            <span>Start</span>
+            @if (Entry.Bookmark is { } at)
+            {
+                <span>You are at @Figures.Trim(at.Percent)%</span>
+            }
+            <span>End</span>
+        </div>
+    </div>
+
+    <div class="preview__body">
+        @if (_notice is { } notice)
+        {
+            <p class="notice notice--bad quotes__notice" role="alert">@notice</p>
+        }
+
+        <ol class="quotes__list">
+            @foreach (var quote in Quotes)
+            {
+                var open = quote.Id == _opened?.Quote;
+                <QuoteRow Quote="quote" Open="open" OnPick="() => Open(quote.Id)" @ref="_rows[quote.Id]" @key="quote.Id">
+                    @if (_opened is { Mode: Mode.Editing })
+                    {
+                        <form class="quotes__edit" @onsubmit="() => SaveNoteAsync(quote)" @onsubmit:preventDefault>
+                            <label for="@($"note-{quote.Id:N}")">Your note</label>
+                            <textarea id="@($"note-{quote.Id:N}")" rows="3" @bind="_draft" @ref="_noteBox" disabled="@_working"></textarea>
+                            <div class="quotes__edit-actions">
+                                <button type="button" class="link-button" @onclick="StopEditing" disabled="@_working">Cancel</button>
+                                <button type="submit" class="button--primary" disabled="@_working">Save</button>
+                            </div>
+                        </form>
+                    }
+                    else if (quote.Note is { } note)
+                    {
+                        <p class="quotes__note">@note</p>
+                    }
+
+                    <p class="quotes__meta">@Where(quote)</p>
+
+                    @if (_opened is not { Mode: Mode.Editing })
+                    {
+                        var copied = _opened is { Mode: Mode.Copied };
+                        <div class="quotes__ops">
+                            <button type="button" class="link-button @(copied ? "quotes__copied" : null)" @onclick="() => CopyAsync(quote)">
+                                @(copied ? "Copied" : "Copy")
+                            </button>
+                            <button type="button" class="link-button" @onclick="() => StartEditing(quote)" disabled="@_working">
+                                @(quote.Note is null ? "Add note" : "Edit note")
+                            </button>
+                            <button type="button" class="link-button link-button--danger" @onclick="() => DeleteAsync(quote)" disabled="@_working">
+                                Delete
+                            </button>
+                        </div>
+                    }
+                </QuoteRow>
+            }
+        </ol>
+    </div>
+</aside>
+
+@code {
+    [Parameter, EditorRequired]
+    public required LibraryEntry Entry { get; set; }
+
+    /// <summary>The book's Quotes in book order, as the page holds them.</summary>
+    [Parameter, EditorRequired]
+    public required IReadOnlyList<QuoteView> Quotes { get; set; }
+
+    /// <summary>The Quote to open on, when the reader tapped one on the page; none for the whole list.</summary>
+    [Parameter]
+    public Guid? Opening { get; set; }
+
+    /// <summary>What focus goes back to when the sheet closes: whatever on the page opened it.</summary>
+    [Parameter, EditorRequired]
+    public required string OpenerId { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    /// <summary>A Quote as it now stands, its note changed.</summary>
+    [Parameter]
+    public EventCallback<QuoteView> OnChanged { get; set; }
+
+    /// <summary>A Quote gone: deleted here, or found already gone.</summary>
+    [Parameter]
+    public EventCallback<Guid> OnDeleted { get; set; }
+
+    /// <summary>The session ended while the sheet was open.</summary>
+    [Parameter]
+    public EventCallback OnSignedOut { get; set; }
+
+    /// <summary>What the open Quote is showing: itself, that it was just copied, or its note being written.</summary>
+    private enum Mode { Reading, Copied, Editing }
+
+    /// <summary>The one Quote open, and what it is showing.</summary>
+    private sealed record Opened(Guid Quote, Mode Mode = Mode.Reading);
+
+    /// <summary>What the next render leaves to do in the browser: bring the open Quote into view, or put the cursor in its note.</summary>
+    private enum After { Nothing, Reveal, FocusNote }
+
+    private readonly string _titleId = $"quotes-{Guid.NewGuid():N}";
+    private readonly Dictionary<Guid, QuoteRow> _rows = [];
+
+    private Opened? _opened;
+    private string? _draft;
+    private string? _notice;
+    private bool _working;
+    private After _after;
+
+    private ElementReference _close;
+    private ElementReference _sheetEl;
+    private ElementReference _noteBox;
+    private IJSObjectReference? _sheet;
+    private IJSObjectReference? _reveal;
+    private bool _disposed;
+
+    protected override void OnInitialized()
+    {
+        if (Quotes.Any(quote => quote.Id == Opening))
+        {
+            _opened = new Opened(Opening!.Value);
+            _after = After.Reveal;
+        }
+    }
+
+    /// <summary>
+    /// Focus goes to Close when the sheet opens, as the search result's does, and on a phone the
+    /// sheet is made draggable, opening at the half. A Quote just opened is brought into view, and
+    /// a note box just opened takes the cursor.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await _close.FocusAsync();
+            var sheet = await JS.InvokeAsync<IJSObjectReference>("import", "./js/sheet.js");
+            var reveal = await JS.InvokeAsync<IJSObjectReference>("import", "./js/reveal.js");
+
+            if (_disposed)
+            {
+                await sheet.DisposeAsync();
+                await reveal.DisposeAsync();
+                return;
+            }
+
+            (_sheet, _reveal) = (sheet, reveal);
+            await _sheet.InvokeVoidAsync("attach", _sheetEl, "default");
+        }
+
+        var after = _after;
+        _after = After.Nothing;
+
+        if (after is After.FocusNote)
+        {
+            await _noteBox.FocusAsync();
+        }
+        else if (after is After.Reveal && _opened is { } opened && _rows.TryGetValue(opened.Quote, out var row) && _reveal is not null)
+        {
+            await _reveal.InvokeVoidAsync("reveal", row.Element);
+        }
+    }
+
+    /// <summary>Opens a Quote, from its row or its pin, and brings it into view: a pin may be far from its row.</summary>
+    private void Open(Guid id)
+    {
+        if (_opened?.Quote != id)
+        {
+            _opened = new Opened(id);
+            _notice = null;
+        }
+
+        _after = After.Reveal;
+    }
+
+    private void StartEditing(QuoteView quote)
+    {
+        _opened = new Opened(quote.Id, Mode.Editing);
+        _draft = quote.Note;
+        _notice = null;
+        _after = After.FocusNote;
+    }
+
+    private void StopEditing()
+    {
+        if (_opened is { } opened)
+        {
+            _opened = opened with { Mode = Mode.Reading };
+        }
+
+        _draft = null;
+    }
+
+    /// <summary>The note as written; Library decides what of it is kept, and what blank means.</summary>
+    private async Task SaveNoteAsync(QuoteView quote)
+    {
+        _working = true;
+        var saved = await Library.SetQuoteNoteAsync(Entry.Id, quote.Id, _draft, CancellationToken.None);
+        _working = false;
+
+        if (saved.Ok)
+        {
+            StopEditing();
+            await OnChanged.InvokeAsync(saved.Value!);
+            return;
+        }
+
+        await ProblemAsync(quote, saved.Problem!.Value, deleting: false);
+    }
+
+    private async Task DeleteAsync(QuoteView quote)
+    {
+        _working = true;
+        var deleted = await Library.DeleteQuoteAsync(Entry.Id, quote.Id, CancellationToken.None);
+        _working = false;
+
+        if (deleted.Ok)
+        {
+            await GoneAsync(quote);
+            return;
+        }
+
+        await ProblemAsync(quote, deleted.Problem!.Value, deleting: true);
+    }
+
+    /// <summary>
+    /// What went wrong, said once. A Quote no longer there is gone from the list whatever was
+    /// being done to it — and for a delete that is what was asked, so nothing more is said.
+    /// </summary>
+    private async Task ProblemAsync(QuoteView quote, LibraryChangeProblem problem, bool deleting)
+    {
+        if (problem is LibraryChangeProblem.NotSignedIn)
+        {
+            await OnSignedOut.InvokeAsync();
+            return;
+        }
+
+        if (problem is LibraryChangeProblem.NoLongerThere)
+        {
+            await GoneAsync(quote);
+
+            if (deleting)
+            {
+                return;
+            }
+        }
+
+        _notice = Say(problem);
+    }
+
+    /// <summary>A Quote off the list: the page drops it, and closes the sheet when it was the last.</summary>
+    private async Task GoneAsync(QuoteView quote)
+    {
+        _opened = null;
+        _draft = null;
+        _rows.Remove(quote.Id);
+        await OnDeleted.InvokeAsync(quote.Id);
+    }
+
+    private async Task CopyAsync(QuoteView quote)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync(
+                "navigator.clipboard.writeText",
+                QuoteText.ForCopy(quote.Passage, Entry.Book?.Authors, Entry.Book?.Title));
+            _opened = new Opened(quote.Id, Mode.Copied);
+            _notice = null;
+        }
+        catch (JSException)
+        {
+            // No clipboard here (an insecure origin, or the reader said no): nothing was copied,
+            // so nothing says it was.
+            _opened = new Opened(quote.Id);
+            _notice = "This browser would not let the quote be copied.";
+        }
+    }
+
+    private static string Say(LibraryChangeProblem problem) => problem switch
+    {
+        LibraryChangeProblem.GatewayUnreachable => "ReadingTracker could not be reached just now. Try again shortly.",
+        LibraryChangeProblem.NoLongerThere => "That quote is no longer there.",
+        _ => "That did not work. Try again.",
+    };
+
+    /// <summary>The chapter where the device knew it, and the day it was saved, in the reader's own time.</summary>
+    private static string Where(QuoteView quote)
+    {
+        var day = quote.SavedAt.ToLocalTime().ToString("d MMM");
+
+        return quote.Chapter is { } chapter ? $"{chapter} · saved {day}" : $"Saved {day}";
+    }
+
+    /// <summary>Half a finger's width: the furthest a pin's button reaches either side of its mark.</summary>
+    private const string Reach = "1.375rem";
+
+    /// <summary>
+    /// Where a pin's button starts and how wide it is: from halfway back to the pin before it to
+    /// halfway on to the pin after, held to <see cref="Reach"/> either side of the mark.
+    /// </summary>
+    private static string PinReach(IReadOnlyList<QuoteView> pinned, int at)
+    {
+        var mark = MapLeft(pinned[at].Percent);
+        var start = at == 0
+            ? $"calc({mark} - {Reach})"
+            : $"max({MapLeft((pinned[at - 1].Percent + pinned[at].Percent) / 2)}, calc({mark} - {Reach}))";
+        var end = at == pinned.Count - 1
+            ? $"calc({mark} + {Reach})"
+            : $"min({MapLeft((pinned[at].Percent + pinned[at + 1].Percent) / 2)}, calc({mark} + {Reach}))";
+
+        return $"left: {start}; width: calc({end} - {start});";
+    }
+
+    /// <summary>A position on the map, written for a style attribute whatever the culture's decimal point.</summary>
+    private static string MapLeft(decimal percent) =>
+        Math.Clamp(percent, 0, 100).ToString(System.Globalization.CultureInfo.InvariantCulture) + "%";
+
+    /// <summary>Closed by the reader: focus goes back to what opened the sheet, as the edition search's does.</summary>
+    private async Task CloseAsync()
+    {
+        if (_sheet is not null)
+        {
+            await _sheet.InvokeVoidAsync("focusOpener", OpenerId);
+        }
+
+        await OnClose.InvokeAsync();
+    }
+
+    /// <summary>Escape puts down a note being written first, and closes the sheet after.</summary>
+    private Task CloseOnEscape(KeyboardEventArgs key)
+    {
+        if (key.Key != "Escape")
+        {
+            return Task.CompletedTask;
+        }
+
+        if (_opened is { Mode: Mode.Editing })
+        {
+            StopEditing();
+            return Task.CompletedTask;
+        }
+
+        return CloseAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+
+        try
+        {
+            if (_sheet is not null)
+            {
+                await _sheet.InvokeVoidAsync("detach", _sheetEl, true);
+                await _sheet.DisposeAsync();
+            }
+
+            if (_reveal is not null)
+            {
+                await _reveal.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // The page went with the circuit; there is nothing to let go of.
+        }
+    }
+}

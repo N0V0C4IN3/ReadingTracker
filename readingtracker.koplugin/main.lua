@@ -26,6 +26,8 @@ local ltn12 = require("ltn12")
 local socketutil = require("socketutil")
 
 local App = require("readingtracker.app")
+local UpdateWiring = require("readingtracker.update_wiring")
+local Updater = require("readingtracker.updater")
 
 local ReadingTracker = WidgetContainer:extend {
   name = "readingtracker",
@@ -38,21 +40,83 @@ local SETTINGS_KEY = "readingtracker"
 
 -- The config file the reader copies in beside the plugin, with base_url and token. Missing is
 -- not an error at load: the plugin sits quietly until something needs it, then says so once.
+-- Whatever the file holds, even half filled in, so update_repo works before the plugin is set up.
 local function load_config()
   local ok, config = pcall(require, "readingtracker_config")
-  if ok and type(config) == "table" and config.base_url and config.token then
-    return config
-  end
-  return nil
+  return ok and type(config) == "table" and config or {}
 end
 
 function ReadingTracker:init()
-  self.config = load_config()
+  local file = load_config()
+  self.config = (file.base_url and file.token) and file or nil
+  self.update_repo = file.update_repo
   -- The plugin's own settings, across documents: the sync interval and the like.
   self.preferences = LuaSettings:open(DataStorage:getSettingsDir() .. "/readingtracker.lua")
-  self.app = App.new(self:buildEnv())
+  local env = self:buildEnv()
+  self.app = App.new(env)
+  self.updater = Updater.new(env)
   self.ui.menu:registerToMainMenu(self)
   self:onDispatcherRegisterActions()
+  self:addToHighlightMenu()
+end
+
+-- Quotes ---------------------------------------------------------------------------------------
+
+-- "Save to ReadingTracker" in the menu KOReader shows for selected text and, from its "…", for a
+-- highlight already made. Only while reading: the file manager has no highlights.
+function ReadingTracker:addToHighlightMenu()
+  -- Annotations, with their creation time, came in KOReader 2024.07; before them the menu's
+  -- buttons were called differently too, so an older KOReader gets no button at all.
+  if not (self.ui.highlight and self.ui.highlight.addToHighlightDialog and self.ui.annotation) then
+    return
+  end
+  local plugin = self
+  self.ui.highlight:addToHighlightDialog("12_readingtracker", function(highlight, index)
+    return {
+      text = _("Save to ReadingTracker"),
+      callback = function() plugin:saveHighlight(highlight, index) end,
+    }
+  end)
+end
+
+-- A selection is made a highlight first, so the Quote has a highlight on the device to stand for:
+-- the same one, with the same identity, whenever it is saved again. It is made the way
+-- KOReader's own Highlight button makes it.
+function ReadingTracker:saveHighlight(highlight, index)
+  if not self:configured() then
+    return highlight:onClose()
+  end
+  index = index or highlight:saveHighlight(true)
+  local item = index and self.ui.annotation.annotations[index]
+  highlight:onClose()
+  if not item then
+    return UIManager:show(Notification:new {
+      text = _("This selection could not be made a highlight, so it was not kept."),
+      timeout = 3,
+    })
+  end
+  local described = self:describeHighlight(item)
+  Trapper:wrap(function() self.app:save_quote(described) end)
+end
+
+-- An annotation as app.lua takes a highlight. The page is where it begins in the layout as it is
+-- now, as the Bookmark's page is: KOReader's own pageno goes stale after a change of font until
+-- it next saves, and a PDF's page never moves.
+function ReadingTracker:describeHighlight(item)
+  local page
+  if type(item.pos0) == "table" then
+    page = item.pos0.page
+  elseif item.pos0 and self.ui.document.getPageFromXPointer then
+    page = self.ui.document:getPageFromXPointer(item.pos0)
+  end
+  return {
+    datetime = item.datetime,
+    start = item.pos0,
+    passage = item.text,
+    note = item.note,
+    page = tonumber(page) or tonumber(item.pageno),
+    chapter = item.chapter,
+  }
 end
 
 function ReadingTracker:onDispatcherRegisterActions()
@@ -68,6 +132,12 @@ function ReadingTracker:onDispatcherRegisterActions()
     title = _("ReadingTracker: sync now"),
     reader = true,
   })
+  Dispatcher:registerAction("readingtracker_check_for_update", {
+    category = "none",
+    event = "ReadingTrackerCheckForUpdate",
+    title = _("ReadingTracker: check for updates"),
+    general = true,
+  })
 end
 
 -- The env: what the app takes from KOReader --------------------------------------------------
@@ -76,7 +146,7 @@ function ReadingTracker:buildEnv()
   local plugin = self
   local env = {}
 
-  env.config = self.config or {}
+  env.config = self.config or { update_repo = self.update_repo }
 
   function env:clock()
     return os.time()
@@ -253,7 +323,20 @@ function ReadingTracker:buildEnv()
     end,
   })
 
-  return env
+  -- What updating the plugin takes besides: GitHub, the plugin's files, a few dialogs.
+  return UpdateWiring.wire(env, plugin)
+end
+
+-- Updating ---------------------------------------------------------------------------------------
+
+-- The folder the plugin runs from: KOReader's plugin loader says, and failing that, this file.
+function ReadingTracker:folder()
+  local folder = self.path or debug.getinfo(1, "S").source:match("^@(.*)/[^/]*$")
+  return folder and folder:gsub("/+$", "") or nil
+end
+
+function ReadingTracker:onReadingTrackerCheckForUpdate()
+  Trapper:wrap(function() self.updater:check() end)
 end
 
 function ReadingTracker:headersFor(request)
@@ -376,6 +459,8 @@ function ReadingTracker:onNetworkConnected()
   if self.config and self.ui.document then
     Trapper:wrap(function() self.app:onNetworkConnected() end)
   end
+  -- Whether or not a book is open or the plugin set up: an update is the plugin's own business.
+  Trapper:wrap(function() self.updater:onNetworkConnected() end)
 end
 
 -- KOReader's own "you reached the end" hook; its action setting is left to it, this only asks
@@ -491,6 +576,17 @@ function ReadingTracker:menuItems()
           })
         end
       end,
+    },
+    {
+      text_func = function()
+        return _("Check for updates") .. " (" .. tostring(self.version or "?") .. ")"
+      end,
+      callback = function() self:onReadingTrackerCheckForUpdate() end,
+    },
+    {
+      text = _("Check for updates once a day on wifi"),
+      checked_func = function() return self.updater:automatic() end,
+      callback = function() self.updater:set_automatic(not self.updater:automatic()) end,
     },
   }
 end

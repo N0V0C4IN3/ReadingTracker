@@ -47,6 +47,20 @@
     /* The account menu: frosted glass. Sheer enough that the shelf under it shows as shapes, and
        blurred (--blur-soft) enough that none of it can be read. */
     --card-frosted: rgb(252 253 254 / 74%);
+    /* The phone card's band: its jacket blurred across the top (see .entry::before). Deep jacket
+       colours laid thinly on a card this pale read as grey, so on light the jacket is veiled
+       toward white and saturated into a pastel, blurred to colour without shapes, and drawn
+       --band-bleed past the card's edges so the blur is clipped before it can pale at them.
+       The fade is measured down the card. --card-on-band is the status pill on it. */
+    --band-blur: 32px;
+    --band-saturate: 1.9;
+    --band-warm-saturate: 1.2;
+    --band-veil: rgb(255 255 255 / 40%);
+    --band-opacity: 0.38;
+    --band-bleed: 4rem;
+    --band-fade-from: 3.4rem;
+    --band-fade-to: 8.9rem;
+    --card-on-band: rgb(252 253 254 / 88%);
     --line: rgb(20 30 50 / 7%);
     --line-strong: rgb(20 30 50 / 14%);
     --fill: rgb(20 30 50 / 5%);
@@ -90,6 +104,10 @@
         a card rising in, the deck turning, a bar growing — because those should leave fast and
         settle slowly, the way a thing that has been set down does. Put the symmetric curve on an
         arrival and the first third of it is spent getting going, which reads as hesitation.
+
+        One exception: a height that travels a screen or more — the book's description folding
+        open and shut — takes --ease. --ease-out covers most of so long a way in its first frames,
+        and what should read as a glide reads as a jump.
     */
     --ease: cubic-bezier(0.4, 0, 0.2, 1);
     --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
@@ -184,6 +202,15 @@
         --card-sheer: rgb(35 39 41 / 42%);
         --card-raised: rgb(28 31 33 / 72%);
         --card-frosted: rgb(28 31 33 / 50%);
+        --band-blur: 18px;
+        --band-saturate: 1.3;
+        --band-warm-saturate: 0.7;
+        --band-veil: transparent;
+        --band-opacity: 0.5;
+        --band-bleed: 0rem;
+        --band-fade-from: 4.875rem;
+        --band-fade-to: 9.75rem;
+        --card-on-band: rgb(28 31 33 / 72%);
         --line: rgb(255 255 255 / 8%);
         --line-strong: rgb(255 255 255 / 16%);
         --fill: rgb(255 255 255 / 8%);
@@ -221,6 +248,15 @@
     --card-sheer: rgb(35 39 41 / 42%);
     --card-raised: rgb(28 31 33 / 72%);
     --card-frosted: rgb(28 31 33 / 50%);
+    --band-blur: 18px;
+    --band-saturate: 1.3;
+    --band-warm-saturate: 0.7;
+    --band-veil: transparent;
+    --band-opacity: 0.5;
+    --band-bleed: 0rem;
+    --band-fade-from: 4.875rem;
+    --band-fade-to: 9.75rem;
+    --card-on-band: rgb(28 31 33 / 72%);
     --line: rgb(255 255 255 / 8%);
     --line-strong: rgb(255 255 255 / 16%);
     --fill: rgb(255 255 255 / 8%);
@@ -784,6 +820,11 @@ header > a:first-child:hover {
 
 /* The description reads like a jacket flap: a serif, a measure, room between paragraphs. */
 .book__about {
+    /* The fold's timing, said once: the box, the clamp and the paragraphs' space move together. */
+    --fold-open: 560ms;
+    --fold-shut: 460ms;
+    --fold-curve: var(--ease);
+
     max-width: 62ch;
     margin: 1.1rem 0 0;
     font-family: Georgia, "Times New Roman", serif;
@@ -794,8 +835,8 @@ header > a:first-child:hover {
 .book__about p {
     margin: 0 0 0.7rem;
     transition:
-        margin 420ms var(--ease-out),
-        text-indent 420ms var(--ease-out);
+        margin var(--fold-open) var(--fold-curve),
+        text-indent var(--fold-open) var(--fold-curve);
 }
 
 .book__about p:last-child {
@@ -827,7 +868,7 @@ header > a:first-child:hover {
     interpolate-size: allow-keywords;
     height: auto;
     transition:
-        height 420ms var(--ease-out),
+        height var(--fold-open) var(--fold-curve),
         -webkit-line-clamp 0s allow-discrete,
         line-clamp 0s allow-discrete;
 }
@@ -837,13 +878,16 @@ header > a:first-child:hover {
     line-clamp: 7;
     height: 7lh;
     transition:
-        height 360ms var(--ease-out),
-        -webkit-line-clamp 0s 360ms allow-discrete,
-        line-clamp 0s 360ms allow-discrete;
+        height var(--fold-shut) var(--fold-curve),
+        -webkit-line-clamp 0s var(--fold-shut) allow-discrete,
+        line-clamp 0s var(--fold-shut) allow-discrete;
 }
 
 .book__about--folded p {
     margin: 0;
+    transition:
+        margin var(--fold-shut) var(--fold-curve),
+        text-indent var(--fold-shut) var(--fold-curve);
 }
 
 .book__about--folded p + p {
@@ -1343,13 +1387,15 @@ main {
 
 button,
 input,
-select {
+select,
+textarea {
     font: inherit;
     color: inherit;
 }
 
 input,
-select {
+select,
+textarea {
     padding: 0.45rem 0.7rem;
     border: 1px solid var(--line-strong);
     border-radius: var(--radius-sm);
@@ -1362,7 +1408,8 @@ select {
         color var(--quick) var(--ease);
 }
 
-input::placeholder {
+input::placeholder,
+textarea::placeholder {
     color: var(--ink-faint);
 }
 
@@ -1398,12 +1445,14 @@ select option {
 }
 
 input:hover:not(:disabled),
-select:hover:not(:disabled) {
+select:hover:not(:disabled),
+textarea:hover:not(:disabled) {
     border-color: var(--ink-faint);
 }
 
 input:focus-visible,
 select:focus-visible,
+textarea:focus-visible,
 button:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
@@ -2313,39 +2362,39 @@ button.danger:hover:not(:disabled) {
     color: var(--ink-soft);
 }
 
-.quote {
+.saying {
     margin: 0;
 }
 
-.quote__text {
+.saying__text {
     margin: 0;
     font-style: italic;
     quotes: "\201C" "\201D";
 }
 
 /* Typographer's quotes round the words, hung so the text still aligns with what is above. */
-.quote__text::before {
+.saying__text::before {
     content: open-quote;
     margin-left: -0.45em;
 }
 
-.quote__text::after {
+.saying__text::after {
     content: close-quote;
 }
 
-/* The quote itself is what is set large; the name is a footnote, upright and smaller. */
-.quote__author {
+/* The saying itself is what is set large; the name is a footnote, upright and smaller. */
+.saying__author {
     margin-top: 0.7rem;
     font-size: 0.7em;
     letter-spacing: 0.02em;
     color: var(--ink);
 }
 
-.quote__author cite {
+.saying__author cite {
     font-style: normal;
 }
 
-.quote__author::before {
+.saying__author::before {
     content: "— ";
 }
 
@@ -3176,8 +3225,9 @@ button.danger:hover:not(:disabled) {
     it back with .is-leaving for as long as one of these takes, so everything goes the way it
     came. A panel in a card fades and folds its height away, so the card closes up with it
     rather than snapping shut after it (where a browser cannot animate a height to nothing, it
-    only fades, and the card closes up at the end). A menu lifts back towards its trigger. On a
-    phone, sheets drop back off the foot of the screen (the max-width: 560px rules).
+    snaps its height halfway through instead). A history's unfolded days fold away the same way.
+    A menu lifts back towards its trigger. On a phone, sheets drop back off the foot of the
+    screen (the max-width: 560px rules).
 */
 @keyframes fold {
     to {
@@ -3200,7 +3250,7 @@ button.danger:hover:not(:disabled) {
     to { transform: translateY(100%); }
 }
 
-/* Coming, the same way backwards: a panel grows its height open (js/motion.js). */
+/* Coming, the same way backwards: a panel, or a day unfolded, grows its height open (js/motion.js). */
 @keyframes grow {
     from {
         opacity: 0;
@@ -3211,7 +3261,8 @@ button.danger:hover:not(:disabled) {
 }
 
 .panel.is-entering,
-.sheet.is-entering {
+.sheet.is-entering,
+.day--more.is-entering {
     interpolate-size: allow-keywords;
     overflow: hidden;
     animation: grow 240ms var(--ease-out) backwards;
@@ -3222,7 +3273,8 @@ button.danger:hover:not(:disabled) {
 }
 
 .panel.is-leaving,
-.sheet.is-leaving {
+.sheet.is-leaving,
+.day--more.is-leaving {
     interpolate-size: allow-keywords;
     overflow: hidden;
     animation: fold 200ms var(--ease) forwards;
@@ -3237,6 +3289,37 @@ button.danger:hover:not(:disabled) {
 .status__scrim.is-leaving,
 .account__scrim.is-leaving {
     animation: clear 160ms var(--ease) forwards;
+}
+
+/*
+    A history's days past its fold, at a panel's timing (above) but with their own keyframes: the
+    list's gap and each card's border go with the height, so many days folding together close up
+    as they go rather than leaving their gaps to snap shut after them.
+*/
+@keyframes day-fold {
+    to {
+        opacity: 0;
+        height: 0;
+        margin-top: calc(-1 * var(--days-gap));
+        border-width: 0;
+    }
+}
+
+@keyframes day-grow {
+    from {
+        opacity: 0;
+        height: 0;
+        margin-top: calc(-1 * var(--days-gap));
+        border-width: 0;
+    }
+}
+
+.day--more.is-entering {
+    animation-name: day-grow;
+}
+
+.day--more.is-leaving {
+    animation-name: day-fold;
 }
 
 .field {
@@ -3508,15 +3591,23 @@ button.danger:hover:not(:disabled) {
     logs themselves — an e-reader's every few minutes — are not shown; a day is a number.
 */
 .days {
+    --days-gap: 0.5rem;
+
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: var(--days-gap);
     margin: 0;
     padding: 0;
     list-style: none;
 }
 
+/*
+    Never shrunk to fit: a day clips what overflows it, which lets a flex item go below its
+    content's height, so in the capped box (.days--scrolling) every day was squeezed to fit
+    rather than the box scrolling. Its height changes only as it folds or grows (day-fold, day-grow).
+*/
 .day {
+    flex-shrink: 0;
     border: 1px solid var(--line);
     border-radius: var(--radius-sm);
     background: var(--card-shelf);
@@ -3571,9 +3662,29 @@ button.danger:hover:not(:disabled) {
     font-size: 0.9rem;
 }
 
+/* Show more / Show less: the Book page's "Read more" pill (.book__more), under the days. */
 .days__all {
-    margin: 0.6rem 0 0 -0.6rem;
-    font-size: 0.85rem;
+    margin-top: 0.6rem;
+}
+
+/*
+    A history unfolded: every day, in a box of its own that scrolls, so a long one does not push
+    what is under it away. No taller than half the screen, so with a phone's keyboard up there is
+    still page to take hold of, and a swipe that reaches the box's end goes on to the page. The
+    day cards lie flat in it, since a box that scrolls cuts off any shadow at its edges; the
+    padding, pulled back by the same amount, is room for a focus ring.
+*/
+.days--scrolling,
+.days:has(> .day--more.is-leaving) {
+    max-height: min(22rem, 50dvh);
+    margin: -0.25rem;
+    padding: 0.25rem;
+    overflow-y: auto;
+}
+
+.days--scrolling .day,
+.days:has(> .day--more.is-leaving) .day {
+    box-shadow: none;
 }
 
 /* On the page: room above, and the count beside the heading in the eyebrow's quieter voice. */
@@ -5577,7 +5688,8 @@ main:has(.stats) {
         status on the band at the right, and the cover overlapping it at the left with the title
         and authors beside it, all inside the band's colour. The figure, the bar and the actions
         run full width beneath, so nothing is left empty under the cover. --cover is the jacket's
-        address, set on the card by ShelfEntry.
+        address, set on the card by ShelfEntry. How the band is drawn is the theme's (--band-*
+        on :root). The Devices page's cards are entries too, and have no jacket to band with.
 
         The body is display: contents so every piece sits on the card's own grid. Spacing is
         margins rather than row gaps, so a row with nothing in it (no device line) costs nothing.
@@ -5589,8 +5701,6 @@ main:has(.stats) {
         themselves; nothing else reaches the band, and the sheets the card opens are left alone.
     */
     .entry:not(.entry--pending) {
-        --band: 9.75rem;
-
         position: relative;
         display: grid;
         grid-template-columns: 4.75rem minmax(0, 1fr);
@@ -5606,26 +5716,30 @@ main:has(.stats) {
         padding: 0.7rem 0.9rem 0.9rem;
     }
 
-    .entry:not(.entry--pending)::before {
+    .entry:not(.entry--pending, .device)::before {
         content: "";
         position: absolute;
-        inset: 0 0 auto 0;
-        height: var(--band);
-        background: var(--cover, var(--accent-soft)) center / cover;
-        filter: blur(18px) saturate(1.3);
-        opacity: 0.5;
-        clip-path: inset(0 round calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0);
-        mask-image: linear-gradient(to bottom, #000 50%, transparent);
+        inset: calc(-1 * var(--band-bleed)) calc(-1 * var(--band-bleed)) auto;
+        height: calc(var(--band-bleed) + var(--band-fade-to));
+        background:
+            linear-gradient(var(--band-veil), var(--band-veil)),
+            var(--cover, var(--accent-soft)) center / cover;
+        filter: blur(var(--band-blur)) saturate(var(--band-saturate));
+        opacity: var(--band-opacity);
+        clip-path: inset(var(--band-bleed) var(--band-bleed) 0 round calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0);
+        mask-image: linear-gradient(to bottom,
+            #000 calc(var(--band-bleed) + var(--band-fade-from)),
+            transparent calc(var(--band-bleed) + var(--band-fade-to)));
         pointer-events: none;
     }
 
     /* The band takes the card's standing, as the cover does: grey set aside, warm read. */
     .entry--parked:not(.entry--pending)::before {
-        filter: blur(18px) grayscale(1);
+        filter: blur(var(--band-blur)) grayscale(1);
     }
 
     .entry--finished:not(.entry--pending)::before {
-        filter: blur(18px) sepia(0.75) saturate(0.7);
+        filter: blur(var(--band-blur)) sepia(0.75) saturate(var(--band-warm-saturate));
     }
 
     .entry:not(.entry--pending) .entry__body {
@@ -5667,7 +5781,7 @@ main:has(.stats) {
 
     /* On the band rather than on the card, so frosted enough to read against any jacket. */
     .entry:not(.entry--pending) .status__trigger {
-        background: var(--card-raised);
+        background: var(--card-on-band);
         box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
     }
 
@@ -6309,6 +6423,13 @@ main:has(.stats) {
         backdrop-filter: var(--blur-soft);
         box-shadow: var(--shadow-lifted);
         animation: dock 260ms var(--ease-out) backwards;
+    }
+
+    /* A sheet scrolls already: the days unfolded in one are carried by it, not boxed again. */
+    .sheet .days--scrolling,
+    .sheet .days:has(> .day--more.is-leaving) {
+        max-height: none;
+        overflow-y: visible;
     }
 
     .sheet::before {

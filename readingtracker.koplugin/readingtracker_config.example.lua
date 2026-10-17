@@ -7,4 +7,7 @@ return {
   -- A device token from the Devices page in the web app. Shown once, at minting; if you lose
   -- it, revoke it there and mint another.
   token = "rt_...",
+
+  -- Optional: where the plugin looks for its own updates, as "owner/repository" on GitHub.
+  -- update_repo = "N0V0C4IN3/ReadingTracker",
 }

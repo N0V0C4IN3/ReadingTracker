@@ -1,13 +1,17 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using ReadingTracker.Catalog.Persistence;
 
 namespace ReadingTracker.Catalog.Tests;
 
 /// <summary>
 /// The longer details of a Book — description, publisher, date, categories — which the single
-/// lookup answers with and the list lookups leave out. A Google Books search carries them; an
-/// Open Library one does not, so those Books are asked about once, from their provider, the
+/// lookup answers with and the list lookups leave out. Neither provider's search carries them
+/// as the Book has them — a Google Books search flattens the description to one run of text,
+/// and an Open Library one has none — so a Book is asked about once, from its provider, the
 /// first time somebody looks.
 /// </summary>
 [Collection(CatalogApiCollection.Name)]
@@ -15,6 +19,7 @@ public sealed class BookDetailsTests(CatalogApiFixture fixture)
 {
     private const string GoogleNoMatches = """{ "kind": "books#volumes", "totalItems": 0 }""";
 
+    // As Google answers a search: the description with its markup and its paragraph breaks gone.
     private static string GoogleVolumes(string isbn, string volumeId) => $$"""
         {
           "kind": "books#volumes",
@@ -29,11 +34,29 @@ public sealed class BookDetailsTests(CatalogApiFixture fixture)
                 "pageCount": 382,
                 "publisher": "Del Rey",
                 "publishedDate": "2014-01-28",
-                "description": "<p>Darrow is a Red, a member of the lowest caste.</p><p>He works <b>all day</b> &amp; believes.<br>Yet he spends his life willingly.</p>",
+                "description": "Darrow is a Red, a member of the lowest caste. He works all day & believes. Yet he spends his life willingly.",
                 "categories": ["Fiction / General", "Fiction / Science Fiction / Space Opera", "Fiction / Dystopian", "fiction"]
               }
             }
           ]
+        }
+        """;
+
+    // As Google answers for the one volume: the description as the publisher wrote it, in HTML.
+    private static string GoogleVolume(string isbn, string volumeId) => $$"""
+        {
+          "kind": "books#volume",
+          "id": "{{volumeId}}",
+          "volumeInfo": {
+            "title": "Red Rising",
+            "authors": ["Pierce Brown"],
+            "industryIdentifiers": [{ "type": "ISBN_13", "identifier": "{{isbn}}" }],
+            "pageCount": 382,
+            "publisher": "Del Rey",
+            "publishedDate": "2014-01-28",
+            "description": "<p>Darrow is a Red, a member of the lowest caste.</p><p>He works <b>all day</b> &amp; believes.<br>Yet he spends his life willingly.</p>",
+            "categories": ["Fiction / General", "Fiction / Science Fiction / Space Opera", "Fiction / Dystopian", "fiction"]
+          }
         }
         """;
 
@@ -67,10 +90,13 @@ public sealed class BookDetailsTests(CatalogApiFixture fixture)
         """;
 
     [Fact]
-    public async Task Answers_with_the_details_a_google_books_search_already_carried_without_asking_again()
+    public async Task Asks_google_books_once_for_a_book_a_search_found_and_keeps_its_paragraphs()
     {
         const string isbn = "9780345539786";
-        fixture.GoogleBooks.Respond = _ => StubHttpMessageHandler.Json(GoogleVolumes(isbn, "redrising-1"));
+        fixture.GoogleBooks.Respond = request => StubHttpMessageHandler.Json(
+            request.RequestUri!.AbsolutePath.EndsWith("/volumes/redrising-1", StringComparison.Ordinal)
+                ? GoogleVolume(isbn, "redrising-1")
+                : GoogleVolumes(isbn, "redrising-1"));
         var client = fixture.CreateClient();
 
         var found = Assert.Single((await client.GetFromJsonAsync<SearchResponse>($"/api/books/search?isbn={isbn}"))!.Results);
@@ -78,7 +104,8 @@ public sealed class BookDetailsTests(CatalogApiFixture fixture)
 
         var book = await client.GetFromJsonAsync<BookDetail>($"/api/books/{found.Id}");
 
-        Assert.Equal(callsAfterSearch, fixture.GoogleBooks.RequestCount);
+        // The volume itself, once: the search's description had lost its paragraphs.
+        Assert.Equal(callsAfterSearch + 1, fixture.GoogleBooks.RequestCount);
         // Paragraphs kept, a lone line break made a space, markup gone, entities decoded.
         Assert.Equal(
             "Darrow is a Red, a member of the lowest caste.\n\nHe works all day & believes. Yet he spends his life willingly.",
@@ -89,6 +116,10 @@ public sealed class BookDetailsTests(CatalogApiFixture fixture)
         Assert.Equal(["Fiction", "Science Fiction", "Space Opera", "Dystopian"], book.Categories);
         Assert.Equal("https://books.google.com/books?id=redrising-1", book.ProviderUrl);
         Assert.False(book.DetailsUnavailable);
+
+        await client.GetFromJsonAsync<BookDetail>($"/api/books/{found.Id}");
+
+        Assert.Equal(callsAfterSearch + 1, fixture.GoogleBooks.RequestCount);
     }
 
     [Fact]
@@ -123,6 +154,47 @@ public sealed class BookDetailsTests(CatalogApiFixture fixture)
         await client.GetFromJsonAsync<BookDetail>($"/api/books/{found.Id}");
 
         Assert.Equal(callsAfterSearch + 2, fixture.OpenLibrary.RequestCount);
+    }
+
+    [Fact]
+    public async Task Keeps_what_a_book_has_when_it_is_asked_about_again_and_the_volume_has_gone()
+    {
+        const string isbn = "9780345539793";
+        var volumeGone = false;
+        fixture.GoogleBooks.Respond = request =>
+            !request.RequestUri!.AbsolutePath.EndsWith("/volumes/golden-son", StringComparison.Ordinal)
+                ? StubHttpMessageHandler.Json(GoogleVolumes(isbn, "golden-son"))
+                : volumeGone
+                    ? new HttpResponseMessage(HttpStatusCode.NotFound)
+                    : StubHttpMessageHandler.Json(GoogleVolume(isbn, "golden-son"));
+        var client = fixture.CreateClient();
+        var found = Assert.Single((await client.GetFromJsonAsync<SearchResponse>($"/api/books/search?isbn={isbn}"))!.Results);
+        var had = await client.GetFromJsonAsync<BookDetail>($"/api/books/{found.Id}");
+
+        // As the migration that looks again at descriptions from searches leaves a Book.
+        await ForgetTheLookupAsync(found.Id);
+        volumeGone = true;
+        var callsBefore = fixture.GoogleBooks.RequestCount;
+
+        var book = await client.GetFromJsonAsync<BookDetail>($"/api/books/{found.Id}");
+        await client.GetFromJsonAsync<BookDetail>($"/api/books/{found.Id}");
+
+        Assert.NotNull(had!.Description);
+        Assert.Equal(had.Description, book!.Description);
+        Assert.Equal(had.Publisher, book.Publisher);
+        Assert.Equal(had.Categories, book.Categories);
+        Assert.False(book.DetailsUnavailable);
+        // Asked once, and the look recorded: not asked again at the next visit.
+        Assert.Equal(callsBefore + 1, fixture.GoogleBooks.RequestCount);
+    }
+
+    private async Task ForgetTheLookupAsync(Guid bookId)
+    {
+        using var scope = fixture.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();
+        await database.Books
+            .Where(book => book.Id == bookId)
+            .ExecuteUpdateAsync(set => set.SetProperty(book => book.DetailsLookedAt, (DateTimeOffset?)null));
     }
 
     [Fact]

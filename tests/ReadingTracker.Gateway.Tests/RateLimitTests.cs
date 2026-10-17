@@ -81,6 +81,42 @@ public sealed class RateLimitTests : IClassFixture<RateLimitTests.Fixture>
     }
 
     [Fact]
+    public async Task Counts_visitors_behind_the_trusted_proxy_by_the_address_it_forwards()
+    {
+        for (var n = 1; n <= Fixture.AnonymousRequestsPerMinute; n++)
+        {
+            Assert.Equal(HttpStatusCode.Unauthorized, await ThroughProxyAsync(Fixture.ProxyAddress, "203.0.113.1"));
+        }
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, await ThroughProxyAsync(Fixture.ProxyAddress, "203.0.113.1"));
+        Assert.Equal(HttpStatusCode.Unauthorized, await ThroughProxyAsync(Fixture.ProxyAddress, "203.0.113.2"));
+    }
+
+    [Fact]
+    public async Task Ignores_a_forwarded_address_from_anywhere_but_the_trusted_proxy()
+    {
+        for (var n = 1; n <= Fixture.AnonymousRequestsPerMinute; n++)
+        {
+            Assert.Equal(HttpStatusCode.Unauthorized, await ThroughProxyAsync("198.51.100.7", $"203.0.113.{100 + n}"));
+        }
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, await ThroughProxyAsync("198.51.100.7", "203.0.113.200"));
+    }
+
+    private async Task<HttpStatusCode> ThroughProxyAsync(string connectedFrom, string forwardedFor)
+    {
+        var context = await _fixture.Server.SendAsync(http =>
+        {
+            http.Request.Method = "GET";
+            http.Request.Path = "/api/library";
+            http.Request.Headers["X-Forwarded-For"] = forwardedFor;
+            http.Connection.RemoteIpAddress = IPAddress.Parse(connectedFrom);
+        });
+
+        return (HttpStatusCode)context.Response.StatusCode;
+    }
+
+    [Fact]
     public async Task Counts_a_device_as_the_reader_who_minted_it()
     {
         var reader = _fixture.ClientFor("reads-on-a-kindle");
@@ -126,6 +162,11 @@ public sealed class RateLimitTests : IClassFixture<RateLimitTests.Fixture>
 
         public const int DeviceTokensPerMinute = 2;
 
+        /// <summary>Stands for the Pi's nginx, inside <see cref="TrustedNetwork"/>.</summary>
+        public const string ProxyAddress = "10.1.2.3";
+
+        public const string TrustedNetwork = "10.0.0.0/8";
+
         public StubHttpMessageHandler Downstream { get; } = new();
 
         private readonly FakeGoogle _google = new();
@@ -163,6 +204,7 @@ public sealed class RateLimitTests : IClassFixture<RateLimitTests.Fixture>
             builder.UseSetting("RateLimits:BooksByHandPerMinute", BooksByHandPerMinute.ToString());
             builder.UseSetting("RateLimits:AnonymousRequestsPerMinute", AnonymousRequestsPerMinute.ToString());
             builder.UseSetting("RateLimits:DeviceTokensPerMinute", DeviceTokensPerMinute.ToString());
+            builder.UseSetting("ForwardedHeaders:TrustedNetwork", TrustedNetwork);
 
             _googleTransport.Respond = _google.Answer;
 

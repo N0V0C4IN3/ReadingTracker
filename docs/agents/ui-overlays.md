@@ -45,7 +45,7 @@ All the values below are tokens that already exist on `:root`. Never hard-code a
 ## Motion
 
 - **Arriving.**
-  - Menus and panels: `unfold` (240ms, `var(--ease-out)`).
+  - Menus and panels: `unfold` (240ms, `var(--ease-out)`). A panel in a card also grows its height open (`grow`, through `GROWS` in `js/motion.js`).
   - Phone sheets: `dock` (260ms).
   - Scrims: `fade` (200ms).
   - Side sheets: a short slide in from their edge.
@@ -55,8 +55,9 @@ All the values below are tokens that already exist on `:root`. Never hard-code a
   - Scrims: `clear`.
   - Side sheets: back out to their edge.
 
-  Without this, Blazor removes the surface in one frame.
-- **Curves.** Use `var(--ease-out)` for anything arriving or coming to rest, and `var(--ease)` for state changes under the pointer. `var(--quick)` (160ms) is for hover and fill changes.
+  Without this, Blazor removes the surface in one frame. A panel in a card folds its height away (`fold`).
+- **Items in a list.** A history's unfolded days (`.day--more`) are in `GROWS` and `LEAVES` too, with keyframes of their own (`day-grow`, `day-fold`) that close the list's gap as well. A list that unfolds the same way does the same.
+- **Curves.** Use `var(--ease-out)` for anything arriving or coming to rest, and `var(--ease)` for state changes under the pointer. The one exception is a height that travels a screen or more, like the book description's fold (`--fold-curve` in `app.css`): it takes `var(--ease)`, since `--ease-out` covers most of so long a way in its first frames and reads as a jump. `var(--quick)` (160ms) is for hover and fill changes.
 - **Reduced motion.** `prefers-reduced-motion` is handled globally. Don't add motion that bypasses it.
 
 ## Type and colour

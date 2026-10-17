@@ -11,6 +11,7 @@ Most review findings on `ReadingTracker.Web` PRs are a second copy of something 
 | Shelf order: grouping by status, finished books newest first | `ShelfOrder` (`ByStatus`, `Rank`) |
 | How much of a book is read (pages, percent, nothing, unknown length) | `AmountRead`. Library works it out; a display only reads it |
 | Numbers as text: "12.5", "1 page", "under a page", "3 weeks ago", durations | `Figures` |
+| A Quote as text to paste somewhere: the passage in quotes, then author and title, never the note | `QuoteText.ForCopy` |
 | Authors and imprint as a byline, the letter on a cover with no picture | `BookText` |
 | A cover URL inside a `style` attribute | `CoverCss.Url` |
 | Sessions grouped by day, one day's pages, a year of reading | `SessionDays`, `DailyPages`, `ReadingYear` |
@@ -36,13 +37,15 @@ Most review findings on `ReadingTracker.Web` PRs are a second copy of something 
 | The busy placeholder | `Settling` |
 | Asking before removing a book, prompting to finish one | `RemovePrompt`, `FinishPrompt` |
 | Exporting the shelf as a file (the Import page's foot) | `ShelfExport` |
+| A Quote on its timeline: where it falls, its words folded to two lines until open | `QuoteRow` (the Book page's preview and `QuoteSheet` both draw it) |
 
 ## Browser side (`wwwroot/`)
 
 | Job | Use |
 | --- | --- |
-| Anything leaving or arriving with an animation | `js/motion.js`: add the selector to `LEAVES`; the stylesheet plays `.is-leaving` / `.is-entering` |
-| A phone bottom sheet dragged between heights | `js/sheet.js` |
+| Anything leaving or arriving with an animation | `js/motion.js`: add the selector to `LEAVES` (put back with `.is-leaving` until its exit ends) and, to grow its height open, to `GROWS` (`.is-entering`) |
+| A phone bottom sheet dragged between heights | `js/sheet.js`. A head under the grip that should drag too (a title) is marked `data-sheet-handle`; `focusOpener(id)` puts focus back on what opened a sheet |
+| Bringing one thing in a scrolling box into view, gliding unless the reader asked for stillness | `js/reveal.js` (`reveal(el)`) |
 | A sheet kept above the phone keyboard | `js/liftSheet.js` |
 | Reduced motion, dark theme, view transitions, waiting for an element or for covers | `window.readingTracker` in `index.html` (`prefersStillness`, `isDark`/`setDark`, `transition`, `arrival`, `coversSettled`) |
 | Swiping between the shelf's status tabs | `js/shelfSwipe.js` |
@@ -63,5 +66,7 @@ Most review findings on `ReadingTracker.Web` PRs are a second copy of something 
 
   Add a new list's class to the first group's selectors (and to the ring rule under it). Don't write the colours again.
 - **Pop-ups, menus and sheets.** See `ui-overlays.md`.
-- **Size.** `tools/check-web.sh` holds every file to 1000 lines, and lets a branch grow one already past that (today `app.css` and `Home.razor`) by 50 lines at most. When a stylesheet is full, a feature gets one of its own in `wwwroot/css/`, linked from `index.html` after `app.css` and using the same tokens. When a page is full, move code out into a component.
+- **A capped, scrolling list.** An item whose `overflow` is not visible may be squeezed below its content in a flex column with a capped height, rather than the column scrolling: give the list's items `flex-shrink: 0`.
+- **Show more / Show less.** A fold toggle is the pill `.book__more` on a `link-button`: the book's description uses it ("Read more"), and so does the history (`SessionHistory`, which unfolds into `.days--scrolling` and says which way it is with `aria-expanded`). Use the same pill, not a plain link, and give a new one `aria-expanded` too.
+- **Size.** `tools/check-web.sh` holds every file to 1000 lines, and lets a branch grow one already past that (today `app.css` and `Home.razor`) by 50 lines at most. When a stylesheet is full, a feature gets one of its own in `wwwroot/css/`, linked from `index.html` after `app.css` and using the same tokens: today `quotes.css` (the Book page's Quotes and their sheet). When a page is full, move code out into a component.
 - **Dropped patterns.** These live in `tools/check-web.sh`, which fails a commit that brings one back. When you replace a pattern for good, add it there.

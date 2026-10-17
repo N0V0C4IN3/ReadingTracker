@@ -12,6 +12,12 @@
 // sheet can be dragged; a grip that is not shown means the search is not a sheet here, and
 // nothing is attached.
 
+// A sheet whose head is more than the strip — a title under it, as the Quotes sheet has — marks
+// that head data-sheet-handle, and it drags the sheet as the grip does: the title is where a thumb
+// lands to pull the sheet up, and a head that only scrolled nothing would let the swipe go by.
+// Only the grip takes a tap as well: a title is tapped by accident, or to read it, as often as on
+// purpose. Mark a head that holds nothing else to press.
+
 const SNAP = { default: 0.55, full: 0.92 };
 const controllers = new WeakMap();
 
@@ -66,8 +72,12 @@ export function attach(el, startState = 'default') {
         el.style.height = wanted + 'px';
     };
 
+    // Which handle the finger is on: the grip, or a head marked to drag with it.
+    let held = grip;
+
     const down = e => {
         dragging = true;
+        held = e.currentTarget;
         moved = false;
         startY = e.clientY;
         startH = el.getBoundingClientRect().height;
@@ -75,7 +85,7 @@ export function attach(el, startState = 'default') {
         // The dock arrives with a short slide; a drag begun inside it would be fighting that
         // slide for the same element. The finger wins.
         el.style.animation = 'none';
-        grip.setPointerCapture(e.pointerId);
+        e.currentTarget.setPointerCapture(e.pointerId);
     };
 
     const move = e => {
@@ -100,21 +110,25 @@ export function attach(el, startState = 'default') {
             write();
         }
         el.style.transition = '';
-        // A tap on the handle with no drag toggles between peek and default, so the sheet can be
-        // got out of the way and back without a deliberate drag.
+        // A tap on the grip with no drag toggles between peek and default, so the sheet can be got
+        // out of the way and back without a deliberate drag. A tap on a head only stays put.
         const state = moved
             ? nearest(el, el.getBoundingClientRect().height)
+            : held !== grip ? el.dataset.sheet
             : (el.dataset.sheet === 'peek' ? 'default' : 'peek');
         setState(state);
     };
 
-    grip.addEventListener('pointerdown', down);
-    grip.addEventListener('pointermove', move);
-    grip.addEventListener('pointerup', up);
-    grip.addEventListener('pointercancel', up);
+    const handles = [grip, ...el.querySelectorAll('[data-sheet-handle]')];
+    for (const handle of handles) {
+        handle.addEventListener('pointerdown', down);
+        handle.addEventListener('pointermove', move);
+        handle.addEventListener('pointerup', up);
+        handle.addEventListener('pointercancel', up);
+    }
 
     // The scroll area and the drag must not fight: a drag that starts on the results should scroll
-    // them, not resize the sheet, so the handle is the only drag surface and this is left alone.
+    // them, not resize the sheet, so the handles are the only drag surfaces and this is left alone.
     // The dock is pinned to the foot of the layout viewport, and on iOS the keyboard comes up
     // over that viewport without shrinking it — so a dock pinned to its foot is pinned under
     // the keyboard, field and all. The visual viewport is the part that can be seen; the dock
@@ -144,7 +158,7 @@ export function attach(el, startState = 'default') {
     vv?.addEventListener('resize', follow);
     vv?.addEventListener('scroll', follow);
 
-    controllers.set(el, { grip, down, move, up, follow, cancel: () => cancelAnimationFrame(settling) });
+    controllers.set(el, { handles, down, move, up, follow, cancel: () => cancelAnimationFrame(settling) });
     // The keyboard may already be up by the time this runs — the + raises it inside the tap,
     // and the sheet is attached after the render that follows — so the lift is taken now rather
     // than waited for.
@@ -208,10 +222,12 @@ export function detach(el, keepSize = false) {
     if (!c) {
         return;
     }
-    c.grip.removeEventListener('pointerdown', c.down);
-    c.grip.removeEventListener('pointermove', c.move);
-    c.grip.removeEventListener('pointerup', c.up);
-    c.grip.removeEventListener('pointercancel', c.up);
+    for (const handle of c.handles) {
+        handle.removeEventListener('pointerdown', c.down);
+        handle.removeEventListener('pointermove', c.move);
+        handle.removeEventListener('pointerup', c.up);
+        handle.removeEventListener('pointercancel', c.up);
+    }
     window.removeEventListener('resize', c.follow);
     window.visualViewport?.removeEventListener('resize', c.follow);
     window.visualViewport?.removeEventListener('scroll', c.follow);

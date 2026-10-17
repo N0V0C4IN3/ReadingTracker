@@ -41,6 +41,20 @@ public sealed record Bookmark(decimal Percent, DateTimeOffset ReportedAt);
 /// </summary>
 public sealed record ReadingGoal(int Year, int? Books, int Finished);
 
+/// <summary>
+/// A passage of the book the reader chose to keep, sent on purpose from their device (ADR-0017).
+/// The passage is the Book's words and is never changed here; the note is the reader's own and
+/// can be. <paramref name="Percent"/> is where it falls in the book, the way a Bookmark is said.
+/// </summary>
+public sealed record QuoteView(
+    Guid Id,
+    string HighlightId,
+    string Passage,
+    string? Note,
+    decimal Percent,
+    string? Chapter,
+    DateTimeOffset SavedAt);
+
 public sealed record BookDetails(
     string Title,
     IReadOnlyList<string> Authors,
@@ -429,6 +443,31 @@ public sealed class GatewayLibraryClient(HttpClient httpClient, ShelfChanges she
         CancellationToken cancellationToken) =>
         ChangeAsync(
             client => client.DeleteAsync($"api/library/{entryId}/sessions/{sessionId}", cancellationToken),
+            cancellationToken);
+
+    /// <summary>A book's Quotes, in the order Library keeps them: by where they fall, then when they came.</summary>
+    public Task<LibraryChange<IReadOnlyList<QuoteView>>> GetQuotesAsync(Guid entryId, CancellationToken cancellationToken) =>
+        ChangeAsync<IReadOnlyList<QuoteView>>(
+            client => client.GetAsync($"api/library/{entryId}/quotes", cancellationToken),
+            cancellationToken);
+
+    /// <summary>The reader's note on a Quote, or none to take it away. Nothing else about a Quote changes.</summary>
+    public Task<LibraryChange<QuoteView>> SetQuoteNoteAsync(
+        Guid entryId,
+        Guid quoteId,
+        string? note,
+        CancellationToken cancellationToken) =>
+        ChangeAsync<QuoteView>(
+            client => client.PatchAsJsonAsync($"api/library/{entryId}/quotes/{quoteId}", new { note }, cancellationToken),
+            cancellationToken);
+
+    /// <summary>Deletes a Quote at once, as a day of History is: it was the reader's to keep, and they chose not to.</summary>
+    public Task<LibraryChange> DeleteQuoteAsync(
+        Guid entryId,
+        Guid quoteId,
+        CancellationToken cancellationToken) =>
+        ChangeAsync(
+            client => client.DeleteAsync($"api/library/{entryId}/quotes/{quoteId}", cancellationToken),
             cancellationToken);
 
     /// <summary>
