@@ -19,7 +19,7 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The same image spec/run.sh uses locally, so CI and a developer's machine run one and
       # the same busted on one and the same LuaJIT. (luarocks straight on a runner's LuaJIT
