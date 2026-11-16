@@ -1,6 +1,6 @@
 # Built from the repo root (docker-compose.yml sets that as the build context), because the
 # project needs to be reachable without assuming where in a larger tree it sits.
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 
 # Restored before the rest of the source is copied in, so editing a .cs file doesn't invalidate
