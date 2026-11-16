@@ -5,7 +5,7 @@
 # static file server with its own MIME/compression configuration to get right. Production
 # is deploy/pi/web/Dockerfile (ADR-0016), not this image — this exists for a one-command
 # local `docker compose up`.
-FROM mcr.microsoft.com/dotnet/sdk:10.0
+FROM mcr.microsoft.com/dotnet/sdk:11.0
 WORKDIR /src
 
 COPY src/ReadingTracker.Web/ReadingTracker.Web.csproj src/ReadingTracker.Web/
