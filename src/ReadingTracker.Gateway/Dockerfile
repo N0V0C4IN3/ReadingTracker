@@ -13,7 +13,7 @@ COPY src/ReadingTracker.Gateway/ src/ReadingTracker.Gateway/
 RUN dotnet publish src/ReadingTracker.Gateway/ReadingTracker.Gateway.csproj \
     --configuration Release --no-restore --output /app
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:11.0 AS final
 WORKDIR /app
 COPY --from=build /app .
 
